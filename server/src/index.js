@@ -12,7 +12,7 @@ try {
   console.error('[kobly-api] o usuário do banco não pode assumir kobly_authenticated:', e.message);
   process.exit(1);
 }
-const { server, engine } = createApp({ pool, config });
+const { server, engine, flows } = createApp({ pool, config });
 server.listen(config.port, config.host, () => console.log(`[kobly-api] ouvindo em ${config.host}:${config.port}`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => server.close(() => pool.end().then(() => process.exit(0))));
 
@@ -26,4 +26,11 @@ if (process.env.ENGINE_ENABLED !== 'false') {
     catch (e) { console.error('[engine] tick falhou:', e.message); }
     finally { running = false; }
   }, every).unref();
+
+  // Motor de fluxos em grafo: ciclo curto (padrão 5 s) para delays/prazos; respostas do lead retomam na hora (kick).
+  const flowEvery = Number(process.env.FLOW_INTERVAL_MS) || 5000;
+  setInterval(async () => {
+    try { const st = await flows.tick(); if (st.claimed) console.log('[flows]', JSON.stringify(st)); }
+    catch (e) { console.error('[flows] tick falhou:', e.message); }
+  }, flowEvery).unref();
 }

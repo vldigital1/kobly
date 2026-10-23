@@ -158,6 +158,24 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     } catch (e) { throw metaToHttp(e); }
   }
 
+  // Texto livre a UM número (motor de fluxos). Quem chama confere a janela de 24 h antes.
+  async function sendTextTo(orgId, { to, text }) {
+    const row = await accountRow(orgId);
+    if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
+    const phone = normalizePhone(to);
+    if (!phone) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDD + número.');
+    const body = String(text || '').slice(0, 4096);
+    if (!body.trim()) throw new AuthError(422, 'empty_text', 'Mensagem vazia.');
+    try {
+      const out = await graph.sendText(row.phone_number_id, tokenOf(row), { to: phone, text: body });
+      return { ok: true, id: (out.messages && out.messages[0] && out.messages[0].id) || null, to: phone };
+    } catch (e) { throw metaToHttp(e); }
+  }
+
+  // Quem trata as mensagens recebidas (motor de fluxos). Definido depois para evitar dependência circular.
+  let inboundHandler = null;
+  const setInboundHandler = (fn) => { inboundHandler = fn; };
+
   // ---- Webhook da Meta ------------------------------------------------------
   async function verifyWebhook(publicId, mode, token, challenge) {
     const { rows } = await pool.query(`select verify_token from public.whatsapp_accounts where webhook_public_id::text = $1`, [publicId]);
@@ -176,13 +194,20 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     const expected = 'sha256=' + createHmac('sha256', secret).update(rawBody).digest('hex');
     if (!signatureHeader || !timingEq(signatureHeader, expected)) return { status: 403, reason: 'assinatura inválida' };
     let payload; try { payload = JSON.parse(rawBody.toString()); } catch { return { status: 200, ignored: 'json' }; }
-    const stats = { statuses: 0, templates: 0, optOuts: 0 };
+    const stats = { statuses: 0, templates: 0, optOuts: 0, inbound: 0 };
     for (const entry of payload.entry || []) for (const ch of entry.changes || []) {
       const v = ch.value || {};
       if (ch.field === 'messages') {
         if (v.metadata && v.metadata.phone_number_id && v.metadata.phone_number_id !== row.phone_number_id) continue; // outro número
         for (const s of v.statuses || []) stats.statuses += await recordStatus(row, s);
-        for (const m of v.messages || []) if (m.type === 'text' && OPT_OUT.test(m.text && m.text.body || '')) stats.optOuts += await optOut(row, m.from);
+        for (const m of v.messages || []) {
+          // caixa de entrada + retomada dos fluxos que aguardam resposta; falha aqui não pode derrubar o webhook
+          if (inboundHandler) {
+            try { if (await inboundHandler({ orgId: row.organization_id, accountId: row.id, message: m, contacts: v.contacts || [] })) stats.inbound++; }
+            catch (e) { console.error('[whatsapp] inbound falhou:', e.message); }
+          }
+          if (m.type === 'text' && OPT_OUT.test(m.text && m.text.body || '')) stats.optOuts += await optOut(row, m.from);
+        }
       } else if (ch.field === 'message_template_status_update') {
         const r = await pool.query(
           `update public.whatsapp_templates set status = $3, rejected_reason = $4, synced_at = now()
@@ -221,5 +246,5 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     return r.rowCount;
   }
 
-  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, verifyWebhook, receiveWebhook, view, SAFE_COLS };
+  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, setInboundHandler, verifyWebhook, receiveWebhook, view, SAFE_COLS };
 }

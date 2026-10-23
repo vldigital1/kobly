@@ -1,0 +1,153 @@
+// Fluxo em grafo: blocos ligados por saídas nomeadas.
+// Formato salvo (flow_graph_versions.graph):
+//   { version: 1, start: 'inicio', nodes: [ { ref, type, data, next: { <saida>: <ref> } } ] }
+// Este módulo é puro (sem banco): descreve os tipos de bloco e valida um grafo antes de salvar.
+
+export const MAX_NODES = 300;
+export const MAX_WAIT_MINUTES = 30 * 24 * 60; // 30 dias
+export const TIPOS_EVENTO = ['Abandono de carrinho', 'Boleto Gerado', 'Compra cancelada', 'Depósito Solicitado', 'Pix Gerado',
+  'Chargeback', 'Cancelamento de Assinatura', 'Compra Reembolsada', 'Compra Aprovada', 'Compra Recusada'];
+export const EVENTOS_RECUPERACAO = new Set(['Abandono de carrinho', 'Boleto Gerado', 'Depósito Solicitado', 'Pix Gerado', 'Compra Recusada']);
+
+const VAR_NAME = /^[a-z][a-z0-9_]{0,39}$/;
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// exits: saídas que o bloco pode ter. required: saídas que precisam estar ligadas.
+export const NODE_TYPES = {
+  trigger: { label: 'Gatilho', exits: ['default'], required: ['default'] },
+  send_template: { label: 'Modelo do WhatsApp', exits: ['sent', 'failed'], required: ['sent'] },
+  send_text: { label: 'Mensagem de texto', exits: ['sent', 'failed', 'window_closed'], required: ['sent'] },
+  delay: { label: 'Esperar', exits: ['default'], required: ['default'] },
+  wait_reply: { label: 'Aguardar resposta', exits: ['reply', 'timeout'], required: ['reply'] },
+  condition: { label: 'Condição', exits: ['yes', 'no'], required: [] },
+  tag: { label: 'Etiquetas', exits: ['default'], required: [] },
+  set_var: { label: 'Definir variável', exits: ['default'], required: [] },
+  end: { label: 'Fim', exits: [], required: [] },
+};
+
+export const CONDITION_KINDS = {
+  tag: ['has', 'not_has'],
+  var: ['eq', 'neq', 'contains', 'not_contains', 'gt', 'gte', 'lt', 'lte', 'empty', 'not_empty'],
+  purchased: [],
+  window_open: [],
+  weekday: [],
+  time_between: [],
+  country: [],
+};
+
+const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+const str = (v, max = 4096) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+
+function checkData(node, err) {
+  const d = isObj(node.data) ? node.data : {};
+  const at = `bloco "${node.ref}"`;
+  switch (node.type) {
+    case 'trigger':
+      if (!Array.isArray(d.events) || !d.events.length) err(`${at}: escolha ao menos um evento de checkout.`);
+      else for (const e of d.events) if (!TIPOS_EVENTO.includes(e)) err(`${at}: evento desconhecido "${e}".`);
+      break;
+    case 'send_template':
+      if (!str(d.template_id, 64)) err(`${at}: escolha um modelo aprovado do WhatsApp.`);
+      if (d.vars !== undefined && !Array.isArray(d.vars)) err(`${at}: variáveis do modelo devem ser uma lista.`);
+      break;
+    case 'send_text':
+      if (!str(d.text, 4096)) err(`${at}: escreva a mensagem (até 4096 caracteres).`);
+      if (d.fallback_template_id !== undefined && d.fallback_template_id !== null && !str(d.fallback_template_id, 64)) err(`${at}: modelo reserva inválido.`);
+      break;
+    case 'delay': {
+      const fixed = Number.isFinite(d.minutes);
+      const range = Number.isFinite(d.min_minutes) && Number.isFinite(d.max_minutes);
+      if (!fixed && !range) err(`${at}: informe o tempo de espera.`);
+      const vals = fixed ? [d.minutes] : [d.min_minutes, d.max_minutes];
+      if (vals.some((m) => m < 0 || m > MAX_WAIT_MINUTES)) err(`${at}: espera deve ficar entre 0 e 30 dias.`);
+      if (range && d.min_minutes > d.max_minutes) err(`${at}: o mínimo não pode passar do máximo.`);
+      break;
+    }
+    case 'wait_reply':
+      if (d.save_as !== undefined && !VAR_NAME.test(String(d.save_as))) err(`${at}: nome da variável inválido (minúsculas, números e _).`);
+      if (d.timeout_minutes !== undefined && d.timeout_minutes !== null && !(Number.isFinite(d.timeout_minutes) && d.timeout_minutes > 0 && d.timeout_minutes <= MAX_WAIT_MINUTES)) err(`${at}: prazo deve ficar entre 1 minuto e 30 dias.`);
+      break;
+    case 'condition': {
+      if (d.match !== undefined && !['all', 'any'].includes(d.match)) err(`${at}: combine as regras com "all" (E) ou "any" (OU).`);
+      if (!Array.isArray(d.rules) || !d.rules.length) { err(`${at}: adicione ao menos uma regra.`); break; }
+      for (const r of d.rules) {
+        if (!isObj(r) || !(r.kind in CONDITION_KINDS)) { err(`${at}: regra de tipo desconhecido.`); continue; }
+        const ops = CONDITION_KINDS[r.kind];
+        if (ops.length && !ops.includes(r.op)) err(`${at}: operador "${r.op}" não vale para regra "${r.kind}".`);
+        if (r.kind === 'tag' && !str(r.tag_id, 64)) err(`${at}: escolha a etiqueta da regra.`);
+        if (r.kind === 'var' && !VAR_NAME.test(String(r.name || ''))) err(`${at}: nome de variável inválido na regra.`);
+        if (r.kind === 'weekday' && !(Array.isArray(r.days) && r.days.length && r.days.every((x) => Number.isInteger(x) && x >= 0 && x <= 6))) err(`${at}: dias da semana devem ser de 0 (domingo) a 6 (sábado).`);
+        if (r.kind === 'time_between' && !(HHMM.test(String(r.from)) && HHMM.test(String(r.to)))) err(`${at}: horário no formato HH:MM.`);
+        if (r.kind === 'country' && !(Array.isArray(r.ddi) && r.ddi.length && r.ddi.every((x) => /^\d{1,4}$/.test(String(x))))) err(`${at}: informe o DDI dos países (ex.: 52).`);
+      }
+      break;
+    }
+    case 'tag': {
+      const add = d.add ?? [], remove = d.remove ?? [];
+      if (!Array.isArray(add) || !Array.isArray(remove) || (!add.length && !remove.length)) err(`${at}: escolha etiquetas para adicionar ou remover.`);
+      break;
+    }
+    case 'set_var':
+      if (!VAR_NAME.test(String(d.name || ''))) err(`${at}: nome da variável inválido (minúsculas, números e _).`);
+      if (d.op !== undefined && !['set', 'add', 'subtract', 'multiply', 'divide'].includes(d.op)) err(`${at}: operação inválida.`);
+      if (typeof d.value !== 'string' && typeof d.value !== 'number') err(`${at}: informe o valor.`);
+      break;
+    default: break;
+  }
+}
+
+// Valida um grafo. Erros impedem salvar; avisos só informam (ex.: bloco que ninguém alcança).
+export function validateGraph(graph) {
+  const errors = [], warnings = [];
+  const err = (m) => errors.push(m), warn = (m) => warnings.push(m);
+  if (!isObj(graph)) return { ok: false, errors: ['Fluxo inválido.'], warnings };
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : null;
+  if (!nodes || !nodes.length) return { ok: false, errors: ['O fluxo não tem blocos.'], warnings };
+  if (nodes.length > MAX_NODES) err(`O fluxo passou de ${MAX_NODES} blocos.`);
+
+  const byRef = new Map();
+  for (const n of nodes) {
+    if (!isObj(n) || !/^[A-Za-z0-9_-]{1,64}$/.test(String(n.ref || ''))) { err('Bloco sem identificador válido (letras, números, _ e -).'); continue; }
+    if (byRef.has(n.ref)) err(`Identificador repetido: "${n.ref}".`);
+    byRef.set(n.ref, n);
+    if (!(n.type in NODE_TYPES)) { err(`bloco "${n.ref}": tipo desconhecido "${n.type}".`); continue; }
+    checkData(n, err);
+    const spec = NODE_TYPES[n.type];
+    const next = isObj(n.next) ? n.next : {};
+    for (const [exit, target] of Object.entries(next)) {
+      if (!spec.exits.includes(exit)) err(`bloco "${n.ref}": saída "${exit}" não existe em ${spec.label}.`);
+      else if (target !== null && target !== undefined && !byRef.has(target) && !nodes.some((m) => m && m.ref === target)) err(`bloco "${n.ref}": a saída "${exit}" aponta para "${target}", que não existe.`);
+      if (target === n.ref) err(`bloco "${n.ref}": a saída "${exit}" aponta para ele mesmo.`);
+    }
+    for (const r of spec.required) if (!next[r]) err(`bloco "${n.ref}": ligue a saída "${r}".`);
+  }
+
+  const start = byRef.get(graph.start);
+  if (!start) err('Defina o bloco inicial do fluxo.');
+  else if (start.type !== 'trigger') err('O fluxo precisa começar por um Gatilho.');
+  if (nodes.filter((n) => n && n.type === 'trigger').length > 1) err('Use só um Gatilho por fluxo.');
+
+  // Alcance a partir do início + ciclos sem espera (loop infinito instantâneo).
+  if (start) {
+    const seen = new Set(); const stack = [start.ref];
+    while (stack.length) { const r = stack.pop(); if (seen.has(r)) continue; seen.add(r); const n = byRef.get(r); if (n && isObj(n.next)) for (const t of Object.values(n.next)) if (t) stack.push(t); }
+    for (const n of nodes) if (n && n.ref && !seen.has(n.ref)) warn(`O bloco "${n.ref}" não é alcançado a partir do início.`);
+    const PAUSA = new Set(['delay', 'wait_reply']);
+    const color = new Map();
+    const dfs = (r) => {
+      color.set(r, 1);
+      const n = byRef.get(r);
+      if (n && !PAUSA.has(n.type) && isObj(n.next)) for (const t of Object.values(n.next)) {
+        if (!t || !byRef.has(t)) continue;
+        if (color.get(t) === 1) { err(`Laço sem espera passando por "${t}": coloque um Esperar ou Aguardar resposta no caminho.`); continue; }
+        if (!color.get(t)) dfs(t);
+      }
+      color.set(r, 2);
+    };
+    for (const r of seen) if (!color.get(r)) dfs(r);
+  }
+  return { ok: errors.length === 0, errors: [...new Set(errors)], warnings };
+}
+
+export const nodeOf = (graph, ref) => (graph && Array.isArray(graph.nodes) ? graph.nodes.find((n) => n.ref === ref) : null) || null;
+export const nextOf = (node, exit) => (node && node.next && node.next[exit]) || null;

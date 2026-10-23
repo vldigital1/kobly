@@ -11,6 +11,8 @@ import { createFunctions } from './functions/index.js';
 import { createWhatsapp } from './whatsapp/service.js';
 import { createGraph } from './whatsapp/graph.js';
 import { parseKey } from './whatsapp/crypto.js';
+import { createFlowRuntime } from './flows/runtime.js';
+import { createFlowAdmin } from './flows/admin.js';
 
 const MAX_BODY = 64 * 1024;
 const MAX_PROXY_BODY = 5 * 1024 * 1024;
@@ -40,11 +42,14 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     secretKey: config.secretKey ? parseKey(config.secretKey) : null,
     publicBaseUrl: config.publicBaseUrl || '', globalAppSecret: config.metaAppSecret || null,
   });
-  const postback = createPostback({ pool });
+  const flows = createFlowRuntime({ pool, whatsapp });
+  whatsapp.setInboundHandler(flows.onInbound);
+  const flowAdmin = createFlowAdmin({ pool });
+  const postback = createPostback({ pool, flows });
   const invites = createInvites({ pool, auth, mailer });
   const storage = createStorage({ dir: config.storageDir || '/var/lib/kobly-storage', canAccessOrg: async (user, org) => { try { return (await whatsapp.resolveOrg(user, org)).role !== 'Suporte'; } catch { return false; } } });
   const unsub = createUnsubscribe({ pool, secret: config.unsubscribeSecret });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -162,11 +167,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       const body = req.method === 'POST' ? await readJson(req) : {};
       await handler(req, res, body);
     } catch (e) {
-      if (e instanceof AuthError) return send(res, e.status, { code: e.code, error: e.code, message: e.message });
+      if (e instanceof AuthError) return send(res, e.status, { code: e.code, error: e.code, message: e.message, ...(e.details ? { details: e.details } : {}) });
       console.error('[kobly-api]', e && e.message);
       send(res, 500, { code: 'internal', message: 'Erro interno' });
     }
   });
   const engine = createEngine({ pool, whatsapp });
-  return { server, auth, engine };
+  return { server, auth, engine, flows };
 }

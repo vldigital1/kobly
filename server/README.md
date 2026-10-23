@@ -33,6 +33,16 @@ Etapa 1 (banco + login) e Etapa 2 (front ligado: `src/api/apiClient.js`) prontas
 - Motor (`src/engine/steps.js`): a cada `ENGINE_INTERVAL_MS` (30 s; `ENGINE_ENABLED=false` desliga) pega passos vencidos com lease (`for update skip locked`), executa **WhatsApp por modelo aprovado** e tags; retry com backoff (4 tentativas), SAIR respeitado, condição comprou/não comprou, cota estornada ao desistir.
 - E-mail e SMS ainda NÃO foram portados: seus passos ficam na fila, intocados.
 
+## Motor de fluxos em grafo (fase 1)
+Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (etapas lineares) e passa a rodar aqui; as demais seguem iguais.
+- Grafo: `{ version: 1, start: 'ini', nodes: [{ ref, type, data, next: { <saída>: <ref> } }] }`, validado em `src/flows/graph.js` (tipos, saídas, alvos, laço sem espera).
+- Blocos: `trigger` (eventos de checkout; `stop_on_purchase`), `send_template`, `send_text` (janela de 24 h; com `fallback_template_id` troca sozinho para o modelo quando a janela está fechada), `delay` (fixo ou aleatório), `wait_reply` (salva em variável; saídas `reply`/`timeout`), `condition` (etiqueta, variável, comprou, janela aberta, dia, horário, país por DDI; E/OU), `tag`, `set_var` (texto ou conta), `end`.
+- Variáveis nos textos: `{{nome}}`, `{{primeiro_nome}}`, `{{produto}}`, `{{valor}}`, `{{cta_link}}`, `{{resposta}}`, `{{hora_atual}}`, `{{lead.email}}`, `{{evento.tipo}}`, `{{var.x}}`.
+- Execução por lead em `flow_executions` (uma viva por campanha+lead), trilha por bloco em `flow_execution_events`. Ciclo a cada `FLOW_INTERVAL_MS` (5 s); resposta do lead retoma na hora.
+- Caixa de entrada: o webhook da Meta grava tudo em `whatsapp_inbound_messages`, atualiza `leads.whatsapp_last_inbound_at` (janela de 24 h) e retoma quem aguardava resposta.
+- Compra aprovada encerra as execuções de recuperação do lead.
+- Rota: `POST /functions/v1/flow-graph` com `action` = validate | get | save (nova versão ativa) | activate (desfazer para uma versão) | deactivate (volta ao motor antigo) | stats (leads por bloco) | cancel_execution.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.

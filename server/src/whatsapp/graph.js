@@ -46,6 +46,12 @@ export function createGraph({ base = 'https://graph.facebook.com/v21.0', fetchIm
         messaging_product: 'whatsapp', to, type: 'template',
         template: { name, language: { code: language }, ...(components && components.length ? { components } : {}) },
       }),
+    // Texto livre: só é aceito pela Meta com a janela de 24 h aberta (lead escreveu nas últimas 24 h).
+    sendText: (phoneNumberId, token, { to, text, previewUrl = true }) =>
+      call('POST', `/${encodeURIComponent(phoneNumberId)}/messages`, token, {
+        messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text',
+        text: { body: text, preview_url: !!previewUrl },
+      }),
     subscribeApp: (wabaId, token) => call('POST', `/${encodeURIComponent(wabaId)}/subscribed_apps`, token, {}),
   };
 }

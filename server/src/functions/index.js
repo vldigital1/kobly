@@ -31,9 +31,17 @@ export function createFunctions(ctx) {
     const user = await ctx.auth.userFromAccessToken(bearerOf(req));
     return io.send(res, 200, await ctx.invites.invite(user, body));
   };
+  // Fluxo em grafo: salvar/validar/versões/métricas (ver src/flows/admin.js).
+  const flowGraph = async (req, res, io) => {
+    if (!ctx.flowAdmin) throw new AuthError(503, 'flows_unavailable', 'Motor de fluxos indisponível neste ambiente.');
+    const body = await io.readJson(req);
+    const { user, org } = await authedOrg(req, body);
+    return io.send(res, 200, await ctx.flowAdmin.handle(org, user, body));
+  };
   const handlers = {
     'whatsapp-account': () => whatsappAccount,
     'invite-client': () => inviteClient,
+    'flow-graph': () => flowGraph,
   };
   return {
     names: () => Object.keys(handlers),

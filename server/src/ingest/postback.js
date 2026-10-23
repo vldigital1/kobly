@@ -3,7 +3,7 @@
 // desconhecido ou erro interno (plataformas como a Hotmart desativam o webhook que falha) — só token/JSON inválidos.
 import { normalizePayload, extractRecoveryLink, deadLetterPayload, RATE_LIMIT_PER_MIN } from './normalize.js';
 
-export function createPostback({ pool }) {
+export function createPostback({ pool, flows = null }) {
   const deadLetter = (org, tokenId, reason, detail, raw, parsed) =>
     pool.query(`insert into public.webhook_dead_letter (organization_id, postback_token_id, provider, reason, detail, raw_payload) values ($1,$2,'postback',$3,$4,$5)`,
       [org, tokenId, reason, detail, JSON.stringify(deadLetterPayload(raw, parsed))]).catch((e) => console.error('[postback] dead-letter falhou:', e.message));
@@ -77,6 +77,7 @@ export function createPostback({ pool }) {
           coalesce(json_agg(json_build_object('id', s.id, 'tipo_card', s.tipo_card, 'tipo_evento', s.tipo_evento, 'atraso', s.atraso, 'posicao', s.posicao)) filter (where s.id is not null), '[]') as steps
         from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id left join public.flow_steps s on s.flow_id = f.id
         where c.organization_id = $1 and c.status_campanha = 'Ativa' and (c.postback_token_id is null or c.postback_token_id = $2)
+          and not exists (select 1 from public.flow_graph_versions v where v.flow_id = f.id and v.is_active)
         group by c.id, f.id`, [org, tokenId]);
       let enqueued = 0, casados = 0, falhos = 0; const acionadas = new Set(); const campIds = new Set(camps.rows.map((r) => r.id));
       for (const row of camps.rows) {
@@ -94,9 +95,16 @@ export function createPostback({ pool }) {
           enqueued += rows.length; acionadas.add(row.id);
         } catch (e) { falhos++; console.error('[postback] scheduled_steps falhou:', e.message); }
       }
+      // Motor novo (fluxo em grafo): encerra recuperações se comprou e inicia os fluxos cujo gatilho casa.
+      let fluxos = { started: [], stopped: 0 };
+      if (flows) {
+        try { fluxos = await flows.startForEvent({ orgId: org, tokenId, leadId, webhookEventId, tipo }); }
+        catch (e) { console.error('[postback] fluxos falhou:', e.message); }
+      }
+      for (const id of fluxos.started) acionadas.add(id);
       let motivo = null;
-      if (enqueued === 0) motivo = falhos ? 'insert_falhou' : campIds.size === 0 ? 'nenhuma_campanha_ativa_para_este_token' : casados === 0 ? 'nenhum_gatilho_casa_com_o_evento' : 'campanha_sem_acoes';
-      return { status: 200, body: { ok: true, event: norm.sourceEvent, tipo_evento: tipo, lead_id: leadId, webhook_event_id: webhookEventId, enqueued, campanhas_acionadas: [...acionadas], ...(motivo ? { motivo_sem_agendamento: motivo } : {}) } };
+      if (enqueued === 0 && fluxos.started.length === 0) motivo = falhos ? 'insert_falhou' : campIds.size === 0 && !fluxos.started.length ? 'nenhuma_campanha_ativa_para_este_token' : casados === 0 ? 'nenhum_gatilho_casa_com_o_evento' : 'campanha_sem_acoes';
+      return { status: 200, body: { ok: true, event: norm.sourceEvent, tipo_evento: tipo, lead_id: leadId, webhook_event_id: webhookEventId, enqueued, fluxos_iniciados: fluxos.started.length, fluxos_encerrados_por_compra: fluxos.stopped, campanhas_acionadas: [...acionadas], ...(motivo ? { motivo_sem_agendamento: motivo } : {}) } };
     } catch (e) {
       console.error('[postback] erro não tratado:', e.message);
       return { status: 200, body: { ok: true, ignored: true, reason: 'internal_error' } };

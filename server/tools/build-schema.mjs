@@ -52,6 +52,9 @@ grant select (id, organization_id, waba_id, phone_number_id, display_phone, veri
   on public.whatsapp_accounts to kobly_authenticated;
 revoke all on public.whatsapp_templates from kobly_authenticated, kobly_anon;
 grant select on public.whatsapp_templates to kobly_authenticated;
+-- Motor de fluxos (0069): grafo, execuções, trilha e caixa de entrada são escritos só pelo serviço.
+revoke all on public.flow_graph_versions, public.flow_executions, public.flow_execution_events, public.whatsapp_inbound_messages from kobly_authenticated, kobly_anon;
+grant select on public.flow_graph_versions, public.flow_executions, public.flow_execution_events, public.whatsapp_inbound_messages to kobly_authenticated;
 `;
 writeFileSync(join(out, '900_grants.sql'), grants);
 manifest.push({ file: '900_grants.sql', sha256: createHash('sha256').update(grants).digest('hex') });
