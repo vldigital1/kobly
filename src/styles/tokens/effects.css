@@ -1,0 +1,43 @@
+/* Kobly — Radius, border, shadow, glow & gradient tokens.
+   Elevação em DARK não lê com sombra preta sobre preto: aqui elevação =
+   borda + highlight interno no topo + sombra ambiente. Glows e gradientes
+   entram como "momentos de design" pontuais (primary, hero, IA). */
+
+:root {
+  /* Corner radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;   /* spec default for cards */
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* Borders */
+  --border-width: 1px; /* @kind other */
+
+  /* Shadows — elevação dark real (inset highlight + ambiente) */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.55);
+  --shadow-sm:  inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md:  inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --shadow-lg:  inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 48px -12px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 32px 80px -16px rgba(0, 0, 0, 0.8);
+
+  /* Glows — sombras COM cor para momentos de destaque (primary, seleção, hero) */
+  --glow-accent:      0 0 0 1px rgba(255, 98, 1, 0.35), 0 8px 28px -8px rgba(255, 98, 1, 0.4);
+  --glow-accent-soft: 0 4px 20px -6px rgba(255, 98, 1, 0.25);
+
+  /* Gradients */
+  --grad-accent: linear-gradient(135deg, #ff7b2a, #ff6201 60%, #e55800);
+  --grad-hero:   radial-gradient(900px 320px at 15% -10%, rgba(255, 98, 1, 0.1), transparent 60%);
+  --grad-sheen:  linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 90px);
+
+  /* Focus ring composite */
+  --ring-width: 3px; /* @kind other */
+  --shadow-focus: 0 0 0 var(--ring-width) var(--ring);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* @kind other */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+  --dur-fast: 120ms; /* @kind other */
+  --dur-med: 200ms; /* @kind other */
+}
