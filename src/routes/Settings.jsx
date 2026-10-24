@@ -3,6 +3,7 @@ import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, Icon, IconButton, Input, PageHeader, Select } from '@/ds';
 import { EmptyState, ErrorState, Modal, SkeletonForm } from '@/lib/ui.jsx';
 import { TextArea, useTargetOrg } from '@/lib/workspace.jsx';
+import { KoblyTeamCard } from '@/routes/TeamCard.jsx';
 import { useKobly } from '@/store/store.jsx';
 
 // Kobly — Configurações da automação: Empresa (nome e fuso, usado por horário comercial e
@@ -89,6 +90,8 @@ function KoblySettings() {
     ['agentes', 'bot', 'Agentes de IA', 'Atendentes de IA reaproveitáveis nos fluxos'],
     ['integracoes', 'plug', 'Integrações', 'Checkout, WhatsApp, pagamentos, Pixel, Telegram e MCP'],
     ['leads', 'tag', 'Etiquetas e leads', 'Contatos, etiquetas e histórico'],
+    ['produtos', 'package', 'Produtos', 'Catálogo e vendas por produto'],
+    ['trackeamento', 'chart-line', 'Trackeamento', 'UTMs por origem e UTMify'],
     ['fluxos', 'git-branch', 'Fluxos', 'Fluxos de conversa em grafo'],
   ];
 
@@ -109,6 +112,8 @@ function KoblySettings() {
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>O fuso vale para o bloco Horário comercial, condições de hora/dia e {'{{hora_atual}}'} nas mensagens.</div>
           </Card>
+
+          <KoblyTeamCard orgId={orgId} notify={store.notify} />
 
           <SettingsList {...common} kind="quick_reply" items={d.quick_replies || []} title="Respostas rápidas" empty="Nenhuma resposta rápida"
             help="No chat ao vivo, digite / e o atalho para inserir a mensagem."

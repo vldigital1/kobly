@@ -352,6 +352,8 @@ const NAV = {
   agentes:       { id: 'agentes',       icon: 'bot',              label: 'Agentes de IA',        section: 'Operações' },
   disparos:      { id: 'disparos',      icon: 'send',             label: 'Disparo em massa',     section: 'Operações' },
   integracoes:   { id: 'integracoes',   icon: 'plug',             label: 'Integrações',          section: 'Operações' },
+  produtos:      { id: 'produtos',      icon: 'package',          label: 'Produtos',             section: 'Operações' },
+  trackeamento:  { id: 'trackeamento',  icon: 'chart-line',       label: 'Trackeamento',         section: 'Operações' },
   relatorios:    { id: 'relatorios',    icon: 'chart-column',     label: 'Relatórios',           section: 'Operações' },
   configuracoes: { id: 'configuracoes', icon: 'settings',         label: 'Configurações',        section: 'Gestão' },
   planos:        { id: 'planos',        icon: 'credit-card',      label: 'Planos & cobrança',    section: 'Gestão' },
@@ -366,14 +368,14 @@ const roles = {
   Cliente: {
     label: 'Cliente',
     descricao: 'Dono da conta — dashboard, pipeline, campanhas, leads, integrações.',
-    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'trackeamento', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: false, createPlan: false, manageUsers: false, answerTickets: false },
   },
   Gestor: {
     label: 'Gestor',
     descricao: 'Agência — visão consolidada de várias contas.',
-    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'trackeamento', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: true, createPlan: false, manageUsers: false, answerTickets: false },
   },
@@ -393,9 +395,23 @@ const roles = {
   },
 };
 
+// Papel na equipe da empresa (Configurações → Equipe): o atendente de um Cliente só vê o atendimento.
+// O servidor aplica a mesma trava (functions/index.js → atendentePode).
+const teamRoles = {
+  atendente: {
+    label: 'Atendente',
+    descricao: 'Equipe da empresa — atende as conversas e acompanha os leads.',
+    nav: ['chats', 'leads', 'pipeline', 'ajuda', 'perfil'],
+    home: 'chats',
+    can: { editCampaign: false, viewAllAccounts: false, createPlan: false, manageUsers: false, answerTickets: false },
+  },
+};
+// Definição efetiva do perfil logado (papel da Kobly + papel na equipe).
+const roleDefFor = (role, teamRole) => (role === 'Cliente' && teamRole === 'atendente' ? teamRoles.atendente : roles[role]);
+
 // Títulos de rota (topbar)
 const routeTitle = {
-  painel: 'Dashboard', chats: 'Chats ao vivo', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
+  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', trackeamento: 'Trackeamento', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
   disparos: 'Disparo em massa',
   leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança',
   seguranca: 'Segurança', chamados: 'Chamados', ajuda: 'Central de ajuda', perfil: 'Perfil',
@@ -405,7 +421,7 @@ const routeTitle = {
 export const KoblyMockDB = {
   optionSets, eventTone, planos, empresas, users, sessionByRole, tags, templates,
   emails, dominios, webhooks, leads, campanhas, webhookEvents, conversas, transacoes,
-  historicoAcesso, sessoesAtivas, faq, NAV, roles, routeTitle,
+  historicoAcesso, sessoesAtivas, faq, NAV, roles, teamRoles, roleDefFor, routeTitle,
 
   // helpers de label
   channelIcon: { email: 'mail', SMS: 'smartphone', Whatsapp: 'message-circle' },

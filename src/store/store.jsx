@@ -68,7 +68,7 @@ function KoblyStoreProvider({ children }) {
       if (!didInit.current) {
         // Recarregar a página (ou o navegador descartar a aba) volta para a tela onde a pessoa estava,
         // desde que o perfil ainda tenha acesso a ela; senão, início do perfil.
-        const def = DB.roles[s.role] || DB.roles.Cliente;
+        const def = DB.roleDefFor(s.role, s.teamRole) || DB.roles.Cliente;
         let saved = null; try { saved = sessionStorage.getItem('kbly_view'); } catch (_) { /* noop */ }
         setView(saved && def.nav.includes(saved) ? saved : def.home);
       }
@@ -136,7 +136,7 @@ function KoblyStoreProvider({ children }) {
 
   const value = {
     phase, isDev: IS_DEV, authBusy,
-    role, roleDef: role ? DB.roles[role] : null, can: role ? DB.roles[role].can : {},
+    role, roleDef: role ? DB.roleDefFor(role, session && session.teamRole) : null, can: role ? DB.roleDefFor(role, session && session.teamRole).can : {},
     setRole, view, navigate, session, editing, setEditing, clearEditing,
     // ações de autenticação (usadas pela tela de login e pelo perfil/topbar)
     signIn: (email, pw) => KoblyApi.signIn(email, pw),

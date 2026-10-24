@@ -3,8 +3,8 @@ import { KoblyMockDB as DB } from '@/api/mockData.js';
 
 // Permissões por papel: protege contra um papel ganhar tela que não deveria ter.
 const NAV_ESPERADA = {
-  Cliente: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
-  Gestor: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
+  Cliente: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'trackeamento', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
+  Gestor: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'trackeamento', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
   Suporte: ['chamados', 'leads', 'ajuda', 'perfil'],
   Administrador: ['painel', 'clientes', 'relatorios', 'planos', 'seguranca', 'chamados', 'perfil'],
 };
@@ -14,6 +14,12 @@ describe('RBAC por papel', () => {
     for (const [papel, nav] of Object.entries(NAV_ESPERADA)) {
       expect(DB.roles[papel].nav, papel).toEqual(nav);
     }
+  });
+  it('atendente da equipe do Cliente só vê o atendimento', () => {
+    expect(DB.roleDefFor('Cliente', 'atendente').nav).toEqual(['chats', 'leads', 'pipeline', 'ajuda', 'perfil']);
+    expect(DB.roleDefFor('Cliente', 'admin')).toBe(DB.roles.Cliente);
+    expect(DB.roleDefFor('Gestor', 'atendente')).toBe(DB.roles.Gestor);
+    for (const id of DB.teamRoles.atendente.nav) expect(DB.routeTitle[id], id).toBeTruthy();
   });
   it('a home de cada papel está na própria navegação', () => {
     for (const [papel, def] of Object.entries(DB.roles)) {

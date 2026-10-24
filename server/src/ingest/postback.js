@@ -2,6 +2,7 @@
 // Portado de supabase/functions/postback-receiver. Regra de ouro: NUNCA responder 4xx/5xx por evento
 // desconhecido ou erro interno (plataformas como a Hotmart desativam o webhook que falha) — só token/JSON inválidos.
 import { normalizePayload, extractRecoveryLink, deadLetterPayload, RATE_LIMIT_PER_MIN } from './normalize.js';
+import { extractUtm } from './utm.js';
 import { verifyPostbackAuth } from './auth.js';
 
 export function createPostback({ pool, flows = null }) {
@@ -43,12 +44,13 @@ export function createPostback({ pool, flows = null }) {
       const idWebhook = norm.externalId ? `${org}:${norm.externalId}` : `pbk:${crypto.randomUUID()}`;
       const isPix = norm.isPix ?? norm.sourceEvent === 'pix_generated';
       const link = extractRecoveryLink(body);
+      const utm = extractUtm(body); // origem do tráfego (Trackeamento); no lead fica o 1º toque
 
       let webhookEventId;
       try {
-        const ins = await pool.query(`insert into public.webhook_events (organization_id, tipo_evento, provider, id_webhook, email, nome_comprador, produto, valor_produto, metodo_pagamento, pix_gerado, checkout_url, payload)
-          values ($1,$2,'postback',$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id`,
-          [org, tipo, idWebhook, norm.email, norm.name, norm.product, norm.value, norm.paymentMethod, isPix, link, JSON.stringify(body)]);
+        const ins = await pool.query(`insert into public.webhook_events (organization_id, tipo_evento, provider, id_webhook, email, nome_comprador, produto, valor_produto, metodo_pagamento, pix_gerado, checkout_url, payload, utm)
+          values ($1,$2,'postback',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) returning id`,
+          [org, tipo, idWebhook, norm.email, norm.name, norm.product, norm.value, norm.paymentMethod, isPix, link, JSON.stringify(body), utm ? JSON.stringify(utm) : null]);
         webhookEventId = ins.rows[0].id;
       } catch (e) {
         if (e.code !== '23505') await deadLetter(org, tokenId, 'insert_failed', e.message, rawBody, body);
@@ -61,11 +63,11 @@ export function createPostback({ pool, flows = null }) {
       if (ex.rows[0]) {
         leadId = ex.rows[0].id;
         await pool.query(`update public.leads set ultimo_evento = $2, produto = $3, valor_compra = $4, metodo_pagamento = $5, pix_gerado = $6,
-          telefone = coalesce($7, telefone), link_recuperacao = coalesce($8, link_recuperacao) where id = $1`,
-          [leadId, tipo, norm.product, norm.value, norm.paymentMethod, isPix, norm.phone || null, link || null]);
+          telefone = coalesce($7, telefone), link_recuperacao = coalesce($8, link_recuperacao), utm = coalesce(utm, $9::jsonb) where id = $1`,
+          [leadId, tipo, norm.product, norm.value, norm.paymentMethod, isPix, norm.phone || null, link || null, utm ? JSON.stringify(utm) : null]);
       } else {
-        const nl = await pool.query(`insert into public.leads (organization_id, email, nome, telefone, produto, valor_compra, metodo_pagamento, pix_gerado, ultimo_evento, link_recuperacao)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id`, [org, norm.email, norm.name, norm.phone, norm.product, norm.value, norm.paymentMethod, isPix, tipo, link]);
+        const nl = await pool.query(`insert into public.leads (organization_id, email, nome, telefone, produto, valor_compra, metodo_pagamento, pix_gerado, ultimo_evento, link_recuperacao, utm)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) returning id`, [org, norm.email, norm.name, norm.phone, norm.product, norm.value, norm.paymentMethod, isPix, tipo, link, utm ? JSON.stringify(utm) : null]);
         leadId = nl.rows[0].id;
       }
       await pool.query(`update public.webhook_events set lead_id = $2 where id = $1`, [webhookEventId, leadId]);

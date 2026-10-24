@@ -69,6 +69,10 @@ grant select (id, organization_id, label, token_prefix, last_used_at, revoked_at
 -- Chats ao vivo e configurações da automação (0074): escrita só pelo serviço.
 revoke all on public.whatsapp_outbound_messages, public.quick_replies, public.custom_fields, public.global_variables, public.ai_agents from kobly_authenticated, kobly_anon;
 grant select on public.whatsapp_outbound_messages, public.quick_replies, public.custom_fields, public.global_variables, public.ai_agents to kobly_authenticated;
+-- Produtos e UTMify (0075): token da UTMify não legível; escrita só pelo serviço.
+revoke all on public.products, public.tracking_integrations from kobly_authenticated, kobly_anon;
+grant select on public.products to kobly_authenticated;
+grant select (id, organization_id, provider, token_hint, status, last_error, last_sent_at, created_at, updated_at) on public.tracking_integrations to kobly_authenticated;
 `;
 writeFileSync(join(out, '900_grants.sql'), grants);
 manifest.push({ file: '900_grants.sql', sha256: createHash('sha256').update(grants).digest('hex') });

@@ -41,7 +41,7 @@ function buildSession(profile, db) {
   const org = db.empresas.find((e) => e.id === profile.organization_id);
   const plano = org ? (db.planos.find((p) => p.id === org.planoId) || {}).nome : undefined;
   const contextLabel = (org && org.nome) || role;
-  return { userId: profile.id, empresaId: profile.organization_id, contextLabel, role, name: profile.nome, email: profile.email, plano };
+  return { userId: profile.id, empresaId: profile.organization_id, contextLabel, role, teamRole: profile.team_role || 'admin', name: profile.nome, email: profile.email, plano };
 }
 
 const normUrl = (v) => { let u = String(v || '').trim(); if (!u) return null; if (!/^https?:\/\//i.test(u)) u = `https://${u}`; return u; };
@@ -1136,6 +1136,10 @@ export const KoblyApi = {
   // Configurações da automação (empresa, respostas rápidas, campos, variáveis, agentes) e Chats ao vivo.
   async workspaceSettings(action, extra = {}, empresaId = null) { return this.serviceCall('workspace-settings', action, extra, empresaId); },
   async inbox(action, extra = {}, empresaId = null) { return this.serviceCall('inbox', action, extra, empresaId); },
+  // Equipe/convites, catálogo de produtos e trackeamento (UTM + UTMify).
+  async team(action, extra = {}, empresaId = null) { return this.serviceCall('team', action, extra, empresaId); },
+  async products(action, extra = {}, empresaId = null) { return this.serviceCall('products', action, extra, empresaId); },
+  async tracking(action, extra = {}, empresaId = null) { return this.serviceCall('tracking', action, extra, empresaId); },
   async serviceCall(fn, action, extra = {}, empresaId = null) {
     const { data, error } = await supabase.functions.invoke(fn, { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
     if (error) {

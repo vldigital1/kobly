@@ -5,17 +5,22 @@ import { AuthError } from '../auth.js';
 
 const bearerOf = (req) => { const m = /^Bearer (.+)$/i.exec(req.headers.authorization || ''); return m ? m[1] : null; };
 
+// Atendente: conversa com os leads e lê o que precisa para isso; nada de configurar a conta.
+const ATENDENTE = { inbox: null, 'workspace-settings': ['get'], 'flow-graph': ['list', 'get', 'get_version', 'stats'], team: ['list'] };
+export const atendentePode = (fn, action) => Object.prototype.hasOwnProperty.call(ATENDENTE, fn) && (ATENDENTE[fn] === null || ATENDENTE[fn].includes(action));
+
 export function createFunctions(ctx) {
   const wa = ctx.whatsapp;
   // Exige usuário logado e devolve o usuário + a empresa-alvo.
-  async function authedOrg(req, body) {
+  async function authedOrg(req, body, fnName = null) {
     const user = await ctx.auth.userFromAccessToken(bearerOf(req));
     const org = await wa.resolveOrg(user, body.org_id || null);
+    if (org.teamRole === 'atendente' && !atendentePode(fnName, body.action)) throw new AuthError(403, 'forbidden', 'Seu papel na equipe (atendente) só usa os Chats ao vivo, Leads e Pipeline.');
     return { user, org };
   }
   const whatsappAccount = async (req, res, io) => {
     const body = await io.readJson(req);
-    const { org } = await authedOrg(req, body);
+    const { org } = await authedOrg(req, body, 'whatsapp-account');
     switch (body.action) {
       case 'status': return io.send(res, 200, await wa.status(org, { refresh: !!body.refresh }));
       case 'connect': return io.send(res, 200, await wa.connect(org, body));
@@ -35,33 +40,36 @@ export function createFunctions(ctx) {
   const flowGraph = async (req, res, io) => {
     if (!ctx.flowAdmin) throw new AuthError(503, 'flows_unavailable', 'Motor de fluxos indisponível neste ambiente.');
     const body = await io.readJson(req);
-    const { user, org } = await authedOrg(req, body);
+    const { user, org } = await authedOrg(req, body, 'flow-graph');
     return io.send(res, 200, await ctx.flowAdmin.handle(org, user, body));
   };
   // Credenciais do gateway de pagamento e do Pixel da Meta (segredos cifrados; só o serviço escreve).
-  const orgRoute = (svc) => async (req, res, io) => {
+  const orgRoute = (svc, fnName) => async (req, res, io) => {
     if (!ctx[svc]) throw new AuthError(503, 'unavailable', 'Recurso indisponível neste ambiente.');
     const body = await io.readJson(req);
-    const { org } = await authedOrg(req, body);
+    const { org } = await authedOrg(req, body, fnName);
     return io.send(res, 200, await ctx[svc].handle(org, body));
   };
   // Serviços que também precisam do usuário (quem enviou, quem alterou).
-  const orgUserRoute = (svc) => async (req, res, io) => {
+  const orgUserRoute = (svc, fnName) => async (req, res, io) => {
     if (!ctx[svc]) throw new AuthError(503, 'unavailable', 'Recurso indisponível neste ambiente.');
     const body = await io.readJson(req);
-    const { user, org } = await authedOrg(req, body);
+    const { user, org } = await authedOrg(req, body, fnName);
     return io.send(res, 200, await ctx[svc].handle(org, user, body));
   };
   const handlers = {
     'whatsapp-account': () => whatsappAccount,
     'invite-client': () => inviteClient,
     'flow-graph': () => flowGraph,
-    'payment-integrations': () => orgRoute('payments'),
-    'pixel-configs': () => orgRoute('pixel'),
-    'notify-channels': () => orgRoute('notifier'),
-    'mcp-tokens': () => orgRoute('mcpTokens'),
-    'workspace-settings': () => orgUserRoute('workspaceSettings'),
-    'inbox': () => orgUserRoute('inbox'),
+    'payment-integrations': () => orgRoute('payments', 'payment-integrations'),
+    'pixel-configs': () => orgRoute('pixel', 'pixel-configs'),
+    'notify-channels': () => orgRoute('notifier', 'notify-channels'),
+    'mcp-tokens': () => orgRoute('mcpTokens', 'mcp-tokens'),
+    'workspace-settings': () => orgUserRoute('workspaceSettings', 'workspace-settings'),
+    'inbox': () => orgUserRoute('inbox', 'inbox'),
+    'team': () => orgUserRoute('team', 'team'),
+    'products': () => orgUserRoute('products', 'products'),
+    'tracking': () => orgUserRoute('tracking', 'tracking'),
   };
   return {
     names: () => Object.keys(handlers),

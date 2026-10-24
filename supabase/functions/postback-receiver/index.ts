@@ -303,6 +303,33 @@ function normalizePayload(body: any): {
 // mandar (varia por provedor: checkout_url, billet_url, link em metadata, etc.).
 // Pontua por relevância da chave e ignora URLs de imagem/logo/callback. Esse link vira
 // o destino do botão do e-mail (trocado no envio pelo process-steps).
+// Parâmetros de rastreio (UTM, src, sck) — mesma regra de server/src/ingest/utm.js (Trackeamento, 0075).
+const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck"];
+const UTM_ALIAS: Record<string, string> = { xcod: "sck", source: "utm_source", medium: "utm_medium", campaign: "utm_campaign", content: "utm_content", term: "utm_term" };
+const UTM_PARENTS = /^(utm|utms|tracking|trackingparameters|tracking_parameters|origin|origem)$/i;
+const UTM_URL_KEYS = /^(checkout_url|url|link|page_url|landing_page|referrer|src_url)$/i;
+function extractUtm(body: any): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  const urls: unknown[] = [];
+  const clean = (v: unknown) => (typeof v === "string" || typeof v === "number") && String(v).trim() ? String(v).trim().slice(0, 200) : null;
+  const walk = (o: any, depth: number, parent: string | null) => {
+    if (!o || typeof o !== "object" || depth > 5) return;
+    for (const [k, v] of Object.entries(o)) {
+      const key = k.toLowerCase();
+      if (v && typeof v === "object") { walk(v, depth + 1, key); continue; }
+      if (UTM_URL_KEYS.test(key)) urls.push(v);
+      const target = UTM_KEYS.includes(key) ? key : (UTM_PARENTS.test(parent || "") ? UTM_ALIAS[key] : undefined);
+      if (target && !out[target]) { const c = clean(v); if (c) out[target] = c; }
+    }
+  };
+  walk(body, 0, null);
+  for (const raw of urls) {
+    if (typeof raw !== "string" || !/^https?:\/\//i.test(raw)) continue;
+    try { const u = new URL(raw); for (const k of UTM_KEYS) if (!out[k]) { const c = clean(u.searchParams.get(k)); if (c) out[k] = c; } } catch { /* URL inválida */ }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function extractRecoveryLink(payload: any): string | null {
   const URL_RE = /^https?:\/\/\S+/i;
   const BAD = /(image|img|photo|logo|avatar|thumb|icon|notif|webhook|callback|postback|terms|privacy|unsub|producer|affiliate|banner|cover)/i;
@@ -532,6 +559,7 @@ Deno.serve(async (req: Request) => {
     const isPix = norm.isPix ?? norm.sourceEvent === "pix_generated";
     // Link de recuperação/checkout que a plataforma mandou (se houver) → destino do botão do e-mail.
     const recoveryLink = extractRecoveryLink(body);
+    const utm = extractUtm(body); // origem do tráfego; no lead fica o 1º toque
 
     // ── 1) webhook_events (idempotente) ──
     const evt = {
@@ -547,6 +575,7 @@ Deno.serve(async (req: Request) => {
       pix_gerado: isPix,
       checkout_url: recoveryLink,
       payload: body,
+      utm,
     };
     const ins = await sb.from("webhook_events").insert(evt).select("id").single();
     if (ins.error) {
@@ -575,7 +604,7 @@ Deno.serve(async (req: Request) => {
     // ── 2) Lead por (org, email) ──
     let leadId: string | null = null;
     const { data: ex } = await sb.from("leads")
-      .select("id")
+      .select("id, utm")
       .eq("organization_id", org)
       .eq("email", norm.email)
       .maybeSingle();
@@ -591,6 +620,7 @@ Deno.serve(async (req: Request) => {
         // Só sobrescreve telefone/link se este evento trouxe um (não apaga valor válido anterior).
         ...(norm.phone ? { telefone: norm.phone } : {}),
         ...(recoveryLink ? { link_recuperacao: recoveryLink } : {}),
+        ...(utm && !ex.utm ? { utm } : {}),
       }).eq("id", leadId);
     } else {
       const { data: nl } = await sb.from("leads").insert({
@@ -604,6 +634,7 @@ Deno.serve(async (req: Request) => {
         pix_gerado: isPix,
         ultimo_evento: tipoEvento,
         link_recuperacao: recoveryLink,
+        utm,
       }).select("id").single();
       leadId = nl?.id ?? null;
     }

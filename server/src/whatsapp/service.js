@@ -42,9 +42,11 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
       const ok = await client.query(`select public.has_org_access($1::uuid) as ok`, [target]);
       if (!ok.rows[0].ok) throw new AuthError(403, 'forbidden', 'Você não tem acesso a esta empresa.');
       // quem só atende chamados (Suporte) não configura canais do cliente
-      const role = await client.query(`select tipo_user_geral from public.profiles where auth_id = auth.uid()`);
+      const role = await client.query(`select tipo_user_geral, team_role, organization_id from public.profiles where auth_id = auth.uid()`);
       await client.query('commit');
-      return { orgId: target, role: role.rows[0] && role.rows[0].tipo_user_geral };
+      const p = role.rows[0] || {};
+      // papel na equipe só vale dentro da própria empresa (Gestor/Admin da Kobly não têm)
+      return { orgId: target, role: p.tipo_user_geral, teamRole: p.organization_id === target ? p.team_role || 'admin' : null };
     } catch (e) { try { await client.query('rollback'); } catch {} throw e; } finally { client.release(); }
   }
   const requireManager = (ctx) => { if (ctx.role === 'Suporte') throw new AuthError(403, 'forbidden', 'Seu perfil não pode alterar a conexão do WhatsApp.'); };

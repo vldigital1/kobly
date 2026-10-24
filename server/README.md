@@ -95,6 +95,15 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - Mensagens dos fluxos aceitam `{{global.chave}}` (variáveis globais) e `{{campo.chave}}` (`leads.custom_fields`). O bloco Agente de IA aceita `agent_id` (agente salvo); o que o bloco preencher sobrepõe o agente.
 - Teste com banco: `test/workspace.integration.test.js`.
 
+### Equipe, Produtos e Trackeamento (migração `0075`)
+- Rota `team`: list | invite | resend | set_role | remove. `profiles.team_role` = `admin` (configura tudo) ou `atendente`. O dono (`organizations.user_fundador_id`) é sempre admin e não sai. Convite = mesmo link de "definir senha" do convite de cliente; sem provedor de e-mail, o link volta para quem convidou repassar. Remover tira a empresa do perfil e apaga as sessões.
+- Trava do atendente no servidor, num lugar só: `functions/index.js` → `atendentePode` (inbox; leitura de configurações/fluxos). Tudo que não estiver na lista é 403. O gatilho `profiles_team_role_guard` impede trocar o próprio papel pelo PostgREST. Limite: tabelas que o front grava direto pelo PostgREST (leads, pipeline, campanhas) seguem só a RLS da empresa; a tela esconde o que o atendente não usa.
+- Rota `products`: list (números do período + nomes vistos no checkout fora do catálogo) | upsert | delete. Casa por nome ou apelido (ID do checkout).
+- UTM: `src/ingest/utm.js` lê utm_*, src e sck do postback (topo, TrackingParameters, purchase.origin, utm/tracking, URL do checkout). `webhook_events.utm` guarda o do evento; `leads.utm` o 1º toque. O postback do Supabase (produção) faz o mesmo.
+- Rota `tracking`: get | report (por utm_source/campaign/medium/content/src/sck) | connect_utmify (testa a credencial com `isTest`) | disconnect_utmify.
+- UTMify (`src/tracking/utmify.js`, API `POST https://api.utmify.com.br/api-credentials/orders`): só as cobranças geradas pelo FLUXO vão (aguardando pagamento → pago), com os UTMs do lead; vendas que nascem no checkout não (a plataforma já envia). SPEI/Nequi/Bre-B/transferência entram como `pix`, OXXO como `boleto`; moeda fora da lista da UTMify é ignorada e marcada em `payment_charges.tracking_status`.
+- Testes: `test/tracking.unit.test.js`, `test/team_tracking.integration.test.js`.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.

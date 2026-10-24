@@ -22,6 +22,9 @@ import { createCopilot } from './flows/copilot.js';
 import { createMcp } from './mcp/server.js';
 import { createWorkspaceSettings } from './workspace/settings.js';
 import { createInbox } from './workspace/inbox.js';
+import { createTeam } from './workspace/team.js';
+import { createUtmify } from './tracking/utmify.js';
+import { createTracking, createProducts } from './tracking/service.js';
 import { tokenFrom } from './ingest/auth.js';
 
 const MAX_BODY = 64 * 1024;
@@ -54,9 +57,17 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   });
   const llm = createLlm({ apiKey: config.aiApiKey, baseUrl: config.aiBaseUrl, model: config.aiModel, fetchImpl });
   const secretKeyBuf = config.secretKey ? parseKey(config.secretKey) : null;
-  const payments = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
+  const paymentsCore = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
   const pixel = createPixel({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaGraphBase });
   const notifier = createNotifier({ pool, secretKey: secretKeyBuf, fetchImpl });
+  // UTMify: cobrança do fluxo vira pedido "aguardando pagamento"; confirmada, vira "pago" (nunca derruba o fluxo)
+  const utmify = createUtmify({ pool, secretKey: secretKeyBuf, fetchImpl });
+  const toUtmify = (charge, status) => utmify.onCharge(charge, status).catch((e) => console.error('[utmify]', e.message));
+  const payments = {
+    ...paymentsCore,
+    async createCharge(a) { const c = await paymentsCore.createCharge(a); if (c && c.status === 'pending') toUtmify(c, 'waiting_payment'); return c; },
+    receiveWebhook: (prov, tok, raw, onConfirmed) => paymentsCore.receiveWebhook(prov, tok, raw, async (charge) => { await toUtmify(charge, 'paid'); if (onConfirmed) await onConfirmed(charge); }),
+  };
   const flows = createFlowRuntime({ pool, whatsapp, llm, payments, pixel, notifier });
   whatsapp.setInboundHandler(flows.onInbound);
   const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }) });
@@ -67,7 +78,10 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const unsub = createUnsubscribe({ pool, secret: config.unsubscribeSecret });
   const workspaceSettings = createWorkspaceSettings({ pool });
   const inbox = createInbox({ pool, whatsapp });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox });
+  const team = createTeam({ pool, auth, mailer });
+  const tracking = createTracking({ pool, utmify });
+  const products = createProducts({ pool });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
