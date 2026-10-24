@@ -1122,6 +1122,7 @@ export const KoblyApi = {
   async paymentIntegrations(action, extra = {}, empresaId = null) { return this.serviceCall('payment-integrations', action, extra, empresaId); },
   async pixelConfigs(action, extra = {}, empresaId = null) { return this.serviceCall('pixel-configs', action, extra, empresaId); },
   async notifyChannels(action, extra = {}, empresaId = null) { return this.serviceCall('notify-channels', action, extra, empresaId); },
+  async mcpTokens(action, extra = {}, empresaId = null) { return this.serviceCall('mcp-tokens', action, extra, empresaId); },
   async serviceCall(fn, action, extra = {}, empresaId = null) {
     const { data, error } = await supabase.functions.invoke(fn, { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
     if (error) {

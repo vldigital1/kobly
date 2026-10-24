@@ -5,7 +5,7 @@ import { validateGraph } from './graph.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
-export function createFlowAdmin({ pool }) {
+export function createFlowAdmin({ pool, copilot = null }) {
   async function flowOf(orgId, campaignId) {
     if (!UUID.test(String(campaignId || ''))) throw new AuthError(422, 'validation_failed', 'Informe a campanha.');
     const { rows } = await pool.query(`select f.id as flow_id, c.id as campaign_id from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
@@ -61,36 +61,54 @@ export function createFlowAdmin({ pool }) {
       }
       case 'get': {
         const f = await flowOf(orgId, body.campaign_id);
-        const { rows } = await pool.query(`select version, is_active, created_at, case when is_active then graph end as graph from public.flow_graph_versions where flow_id = $1 order by version desc limit 50`, [f.flow_id]);
+        const { rows } = await pool.query(`select version, is_active, is_draft, source, note, created_at, case when is_active then graph end as graph from public.flow_graph_versions where flow_id = $1 order by version desc limit 50`, [f.flow_id]);
         const active = rows.find((r) => r.is_active) || null;
         return { flow_id: f.flow_id, active: active ? { version: active.version, graph: active.graph } : null, versions: rows.map(({ graph, ...r }) => r) };
       }
-      case 'save': {
+      case 'get_version': { // abre um rascunho ou versão antiga no editor (sem ativar)
+        const f = await flowOf(orgId, body.campaign_id);
+        const r = (await pool.query(`select version, is_active, is_draft, source, note, graph from public.flow_graph_versions where flow_id = $1 and version = $2`, [f.flow_id, Number(body.version)])).rows[0];
+        if (!r) throw new AuthError(404, 'not_found', 'Versão não encontrada.');
+        return r;
+      }
+      case 'save':        // editor: nova versão já publicada (ativa)
+      case 'save_draft': { // editor ou assistente de IA (MCP): só rascunho; publicar é sempre um clique de uma pessoa
         canEdit(ctx);
+        const draft = body.action === 'save_draft';
         const v = validateGraph(body.graph);
         if (!v.ok) throw Object.assign(new AuthError(422, 'invalid_graph', v.errors[0]), { details: v });
         const f = await flowOf(orgId, body.campaign_id);
         const warnings = [...v.warnings, ...(await refWarnings(orgId, body.graph))];
+        const source = ['editor', 'mcp', 'copilot'].includes(body.source) ? body.source : 'editor';
         const client = await pool.connect();
         try {
           await client.query('begin');
           await client.query(`select pg_advisory_xact_lock(hashtext($1))`, [f.flow_id]); // duas abas salvando ao mesmo tempo
           const n = (await client.query(`select coalesce(max(version), 0) + 1 as v from public.flow_graph_versions where flow_id = $1`, [f.flow_id])).rows[0].v;
-          await client.query(`update public.flow_graph_versions set is_active = false where flow_id = $1 and is_active`, [f.flow_id]);
-          await client.query(`insert into public.flow_graph_versions (organization_id, flow_id, version, graph, is_active, created_by) values ($1,$2,$3,$4::jsonb,true,$5)`,
-            [orgId, f.flow_id, n, JSON.stringify(body.graph), user.id || null]);
+          if (!draft) await client.query(`update public.flow_graph_versions set is_active = false where flow_id = $1 and is_active`, [f.flow_id]);
+          await client.query(`insert into public.flow_graph_versions (organization_id, flow_id, version, graph, is_active, is_draft, source, note, created_by) values ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9)`,
+            [orgId, f.flow_id, n, JSON.stringify(body.graph), !draft, draft, source, body.note ? String(body.note).slice(0, 500) : null, (user && user.id) || null]);
           await client.query('commit');
-          return { ok: true, version: n, warnings };
+          return { ok: true, version: n, draft, warnings };
         } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }
       }
-      case 'activate': { // desfazer: volta para uma versão anterior
+      case 'activate': { // publicar um rascunho ou desfazer para uma versão anterior — sempre revalida antes
         canEdit(ctx);
         const f = await flowOf(orgId, body.campaign_id);
         const ver = Number(body.version);
-        const ok = await pool.query(`select 1 from public.flow_graph_versions where flow_id = $1 and version = $2`, [f.flow_id, ver]);
-        if (!ok.rows[0]) throw new AuthError(404, 'not_found', 'Versão não encontrada.');
-        await pool.query(`update public.flow_graph_versions set is_active = (version = $2) where flow_id = $1`, [f.flow_id, ver]);
+        const row = (await pool.query(`select graph from public.flow_graph_versions where flow_id = $1 and version = $2`, [f.flow_id, ver])).rows[0];
+        if (!row) throw new AuthError(404, 'not_found', 'Versão não encontrada.');
+        const v = validateGraph(row.graph);
+        if (!v.ok) throw Object.assign(new AuthError(422, 'invalid_graph', `A versão ${ver} tem erros: ${v.errors[0]}`), { details: v });
+        await pool.query(`update public.flow_graph_versions set is_active = (version = $2), is_draft = case when version = $2 then false else is_draft end where flow_id = $1`, [f.flow_id, ver]);
         return { ok: true, version: ver };
+      }
+      case 'copilot': { // lê as métricas por bloco da versão ativa e sugere melhorias
+        if (!copilot) throw new AuthError(503, 'copilot_unavailable', 'Copiloto indisponível neste ambiente.');
+        const f = await flowOf(orgId, body.campaign_id);
+        const act = (await pool.query(`select graph from public.flow_graph_versions where flow_id = $1 and is_active`, [f.flow_id])).rows[0];
+        if (!act) throw new AuthError(400, 'not_published', 'Publique o fluxo antes de pedir sugestões ao copiloto.');
+        return copilot.run(f.flow_id, act.graph);
       }
       case 'deactivate': { // volta a campanha para o motor antigo (lista de etapas)
         canEdit(ctx);

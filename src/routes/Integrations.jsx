@@ -1023,8 +1023,10 @@ const SECTIONS = [
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
   { value: 'pagamentos', label: 'Pagamentos e alertas', icon: 'credit-card', help: 'Conta do gateway (XPag) para cobrar nos fluxos, Pixel da Meta (API de Conversões) e alertas no Telegram.' },
+  { value: 'mcp', label: 'Acesso de IA', icon: 'bot', help: 'Tokens para assistentes de IA (MCP) criarem rascunhos de fluxo.' },
 ];
 const KoblyPaymentsTab = React.lazy(() => import('@/routes/PaymentsTab.jsx').then((m) => ({ default: m.KoblyPaymentsTab })));
+const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
   { value: 'marca', label: 'Identidade', icon: 'palette' },
   { value: 'dominio', label: 'Remetente', icon: 'globe' },
@@ -1129,6 +1131,11 @@ function KoblyIntegrations() {
           {section === 'pagamentos' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
               <KoblyPaymentsTab empresaId={empresaId} notify={store.notify} />
+            </React.Suspense>
+          )}
+          {section === 'mcp' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <KoblyMcpTab empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
           )}
         </>

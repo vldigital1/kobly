@@ -63,6 +63,9 @@ grant select (id, organization_id, label, pixel_id, test_event_code, created_at,
 -- Canais de alerta (0071): token do bot não legível; escrita só pelo serviço.
 revoke all on public.notification_channels from kobly_authenticated, kobly_anon;
 grant select (id, organization_id, kind, label, default_chat_id, created_at, updated_at) on public.notification_channels to kobly_authenticated;
+-- Tokens do MCP (0072): só o hash fica no banco; escrita só pelo serviço.
+revoke all on public.mcp_tokens from kobly_authenticated, kobly_anon;
+grant select (id, organization_id, label, token_prefix, last_used_at, revoked_at, created_at) on public.mcp_tokens to kobly_authenticated;
 `;
 writeFileSync(join(out, '900_grants.sql'), grants);
 manifest.push({ file: '900_grants.sql', sha256: createHash('sha256').update(grants).digest('hex') });

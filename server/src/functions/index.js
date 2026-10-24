@@ -52,6 +52,7 @@ export function createFunctions(ctx) {
     'payment-integrations': () => orgRoute('payments'),
     'pixel-configs': () => orgRoute('pixel'),
     'notify-channels': () => orgRoute('notifier'),
+    'mcp-tokens': () => orgRoute('mcpTokens'),
   };
   return {
     names: () => Object.keys(handlers),

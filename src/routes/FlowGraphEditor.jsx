@@ -342,6 +342,14 @@ function Editor({ campaign, onBack, api, notify }) {
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [metrics, setMetrics] = useState(null); // ref → { leads, here } (contador por bloco)
+  const [copilot, setCopilot] = useState(null); // { leads, suggestions, summary }
+  async function runCopilot() {
+    if (copilot) { setCopilot(null); return; }
+    const r = await call('copilot', { campaign_id: campaign.id });
+    if (r.error) { notify('danger', r.error); return; }
+    setCopilot(r);
+    if (!r.suggestions.length) notify('info', r.leads ? 'O copiloto não encontrou problemas com os dados atuais.' : 'Ainda não há leads suficientes neste fluxo para analisar.');
+  }
   async function toggleMetrics() {
     if (metrics) { setMetrics(null); return; }
     const r = await call('stats', { campaign_id: campaign.id });
@@ -365,7 +373,8 @@ function Editor({ campaign, onBack, api, notify }) {
     const c = toCanvas(g.active ? g.active.graph : emptyGraph());
     setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null);
     setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [] });
-    setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [] });
+    setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null });
+    setCopilot(null);
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos
   }, [api, campaign.id, setEdges, setNodes]);
   const [canvasKey, setCanvasKey] = useState(0);
@@ -434,15 +443,39 @@ function Editor({ campaign, onBack, api, notify }) {
     setDirty(false);
     notify('success', `Versão ${r.version} publicada. Os próximos leads já usam este fluxo.`);
     const g = await api.flowGraph('get', { campaign_id: campaign.id });
-    if (!g.error) setState((s) => ({ ...s, version: g.active ? g.active.version : null, versions: g.versions || [] }));
+    if (!g.error) setState((s) => ({ ...s, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null }));
   }
+  // Publicar uma versão existente (rascunho da IA ou versão antiga). O servidor revalida antes.
   async function activate(version) {
-    if (dirty && !confirm('Há alterações não publicadas. Trocar de versão descarta essas alterações. Continuar?')) return;
-    const r = await api.flowGraph('activate', { campaign_id: campaign.id, version: Number(version) });
-    if (r.error) { notify('danger', r.error); return; }
-    notify('info', `Versão ${version} ativa.`);
+    if (dirty && !confirm('Há alterações não salvas no canvas. Publicar a versão escolhida descarta essas alterações. Continuar?')) return;
+    const r = await call('activate', { campaign_id: campaign.id, version: Number(version) });
+    if (r.error) { if (r.details) setReport({ ok: false, errors: r.details.errors || [r.error], warnings: r.details.warnings || [] }); notify('danger', r.error); return; }
+    notify('success', `Versão ${version} publicada. Os próximos leads já usam este fluxo.`);
     load();
   }
+  // Abrir uma versão no canvas para revisar (não publica nada).
+  async function openVersion(version) {
+    if (dirty && !confirm('Há alterações não salvas no canvas. Abrir outra versão descarta essas alterações. Continuar?')) return;
+    if (Number(version) === state.version && !state.viewing) return;
+    if (Number(version) === state.version) { load(); return; }
+    const r = await call('get_version', { campaign_id: campaign.id, version: Number(version) });
+    if (r.error) { notify('danger', r.error); return; }
+    const c = toCanvas(r.graph);
+    setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setCopilot(null);
+    setState((s) => ({ ...s, viewing: { version: r.version, is_draft: r.is_draft, source: r.source, note: r.note } }));
+    setCanvasKey((k) => k + 1);
+  }
+  async function saveDraft() {
+    const note = prompt('Nota do rascunho (opcional): o que mudou?') ?? null;
+    if (note === null) return;
+    const r = await call('save_draft', { campaign_id: campaign.id, graph: graph(), note: note || undefined });
+    if (r.error) { setReport(r.details ? { ok: false, errors: r.details.errors || [r.error], warnings: r.details.warnings || [] } : { ok: false, errors: [r.error], warnings: [] }); notify('danger', 'Corrija os erros antes de salvar.'); return; }
+    setDirty(false);
+    notify('success', `Rascunho salvo como versão ${r.version}. Nada mudou para os leads até publicar.`);
+    const g = await api.flowGraph('get', { campaign_id: campaign.id });
+    if (!g.error) setState((s) => ({ ...s, versions: g.versions || [], viewing: { version: r.version, is_draft: true, source: 'editor', note } }));
+  }
+  const versionLabel = (v) => `Versão ${v.version}${v.is_active ? ' (publicada)' : v.is_draft ? (v.source === 'mcp' ? ' (rascunho da IA)' : ' (rascunho)') : ''}`;
   async function deactivate() {
     if (!confirm('Desligar o fluxo em grafo? A campanha volta a usar a lista de etapas antiga. As versões ficam guardadas.')) return;
     const r = await api.flowGraph('deactivate', { campaign_id: campaign.id });
@@ -473,18 +506,29 @@ function Editor({ campaign, onBack, api, notify }) {
           <IconButton icon="arrow-left" aria-label="Voltar" onClick={back} />
           <div style={{ flex: 1, minWidth: 180 }}>
             <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{campaign.nome || 'Campanha'}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-              Fluxo em grafo · {state.version ? `versão ${state.version} ativa` : 'ainda não publicado'}{dirty ? ' · alterações não publicadas' : ''}
+            <div style={{ fontSize: 'var(--text-xs)', color: state.viewing ? 'var(--amber-600)' : 'var(--text-muted)' }}>
+              {state.viewing
+                ? `Revisando versão ${state.viewing.version}${state.viewing.is_draft ? (state.viewing.source === 'mcp' ? ' · rascunho criado pela IA' : ' · rascunho') : ' · versão antiga'}${state.viewing.note ? ` · "${state.viewing.note}"` : ''} — os leads seguem na versão ${state.version || 'publicada'}`
+                : `Fluxo em grafo · ${state.version ? `versão ${state.version} publicada` : 'ainda não publicado'}`}
+              {dirty ? ' · alterações não salvas' : ''}
             </div>
           </div>
           {state.versions.length > 0 && (
-            <Select value={String(state.version || '')} onChange={(e) => e.target.value && activate(e.target.value)} style={{ minWidth: 150 }}
-              options={[...(state.version ? [] : [{ value: '', label: 'Versões…' }]), ...state.versions.map((v) => ({ value: String(v.version), label: `Versão ${v.version}${v.is_active ? ' (ativa)' : ''}` }))]} />
+            <Select value={String((state.viewing && state.viewing.version) || state.version || '')} onChange={(e) => e.target.value && openVersion(e.target.value)} style={{ minWidth: 190 }}
+              options={[...(state.version || state.viewing ? [] : [{ value: '', label: 'Versões…' }]), ...state.versions.map((v) => ({ value: String(v.version), label: versionLabel(v) }))]} />
           )}
-          {state.version && <Button variant={metrics ? 'primary' : 'secondary'} size="sm" iconLeft="chart-column" onClick={toggleMetrics}>Métricas</Button>}
-          {state.version && <Button variant="ghost" size="sm" onClick={deactivate}>Desligar</Button>}
+          {state.viewing ? (<>
+            <Button variant="ghost" size="sm" onClick={() => openVersion(state.version || state.viewing.version)} disabled={!state.version}>Voltar à publicada</Button>
+            <Button onClick={() => activate(state.viewing.version)} loading={busy} iconLeft="send" disabled={dirty}>Publicar esta versão</Button>
+          </>) : (<>
+            {state.version && <Button variant={copilot ? 'primary' : 'secondary'} size="sm" iconLeft="sparkles" onClick={runCopilot}>Copiloto</Button>}
+            {state.version && <Button variant={metrics ? 'primary' : 'secondary'} size="sm" iconLeft="chart-column" onClick={toggleMetrics}>Métricas</Button>}
+            {state.version && <Button variant="ghost" size="sm" onClick={deactivate}>Desligar</Button>}
+          </>)}
           <Button variant="secondary" onClick={validate} loading={busy} iconLeft="check">Validar</Button>
-          <Button onClick={save} loading={busy} iconLeft="send" disabled={state.loading}>Publicar</Button>
+          <Button variant="secondary" onClick={saveDraft} loading={busy} iconLeft="file-text" disabled={state.loading}>Salvar rascunho</Button>
+          {!state.viewing && <Button onClick={save} loading={busy} iconLeft="send" disabled={state.loading}>Publicar</Button>}
+          {state.viewing && dirty && <Button onClick={save} loading={busy} iconLeft="send">Publicar alterações</Button>}
         </div>
 
         <div style={{ display: 'flex', gap: 10, flex: 1, minHeight: 0 }}>
@@ -528,6 +572,26 @@ function Editor({ campaign, onBack, api, notify }) {
               </div>
             )}
             {report && report.ok && report.errors.length === 0 && report.warnings.length === 0 && <Badge tone="success">Fluxo válido</Badge>}
+            {copilot && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: TONES.purple, display: 'flex' }}><Icon name="sparkles" size={16} /></span>
+                  <strong style={{ flex: 1, color: 'var(--text-strong)' }}>Copiloto</strong>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{copilot.leads} leads analisados</span>
+                </div>
+                {copilot.summary && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.5 }}>{copilot.summary}</div>}
+                {copilot.suggestions.map((s, i) => {
+                  const c = s.severity === 'alta' ? 'var(--red-500)' : s.severity === 'media' ? 'var(--amber-600)' : TONES.blue;
+                  return (
+                    <button key={i} type="button" onClick={() => s.ref && focusRef(`bloco "${s.ref}"`)} style={{ textAlign: 'left', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${c}`, borderRadius: 'var(--radius-sm)', padding: '8px 10px', cursor: s.ref ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{s.title}{s.ref ? <span style={{ color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', fontWeight: 400, fontSize: 10 }}> · {s.ref}</span> : null}</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{s.detail}</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>→ {s.action}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <Inspector node={selected} isStart={!!(selected && selected.data.isStart)} onChange={updateSelected} onDelete={deleteSelected} />
           </div>
         </div>

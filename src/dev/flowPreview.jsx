@@ -23,7 +23,12 @@ const exemplo = {
     { ref: 'fim', type: 'end', data: {}, next: {}, position: { x: 2400, y: 120 } },
   ],
 };
-const versions = [{ version: 1, graph: exemplo, is_active: true, created_at: new Date().toISOString() }];
+const rascunhoIA = JSON.parse(JSON.stringify(exemplo));
+rascunhoIA.nodes.find((n) => n.ref === 'esp').data.timeout_minutes = 360; // a IA sugeriu esperar 6 h
+const versions = [
+  { version: 1, graph: exemplo, is_active: true, is_draft: false, source: 'editor', created_at: new Date().toISOString() },
+  { version: 2, graph: rascunhoIA, is_active: false, is_draft: true, source: 'mcp', note: 'lembrete em 6 h para quem não respondeu', created_at: new Date().toISOString() },
+];
 const fakeApi = {
   async flowGraph(action, x) {
     await new Promise((r) => setTimeout(r, 150));
@@ -37,7 +42,23 @@ const fakeApi = {
       versions.push({ version: versions.length + 1, graph: JSON.parse(JSON.stringify(x.graph)), is_active: true, created_at: new Date().toISOString() });
       return { error: null, ok: true, version: versions.length, warnings: v.warnings };
     }
-    if (action === 'activate') { versions.forEach((y) => { y.is_active = y.version === x.version; }); return { error: null, ok: true }; }
+    if (action === 'activate') {
+      const v = versions.find((y) => y.version === x.version); const chk = validateGraph(v.graph);
+      if (!chk.ok) return { error: chk.errors[0], details: chk };
+      versions.forEach((y) => { y.is_active = y.version === x.version; if (y.is_active) y.is_draft = false; }); return { error: null, ok: true };
+    }
+    if (action === 'get_version') { const v = versions.find((y) => y.version === x.version); return v ? { error: null, ...v } : { error: 'Versão não encontrada.' }; }
+    if (action === 'save_draft') {
+      const chk = validateGraph(x.graph); if (!chk.ok) return { error: chk.errors[0], details: chk };
+      versions.push({ version: versions.length + 1, graph: JSON.parse(JSON.stringify(x.graph)), is_active: false, is_draft: true, source: 'editor', note: x.note, created_at: new Date().toISOString() });
+      return { error: null, ok: true, version: versions.length, draft: true, warnings: chk.warnings };
+    }
+    if (action === 'copilot') {
+      const { analyzeFlow } = await import('../../server/src/flows/copilot.js');
+      const byNode = [['tpl', 'sent', 212], ['esp', 'reply', 74], ['esp', 'timeout', 131], ['ia', 'out_sim', 60], ['ia', 'out_oxxo', 36], ['ia', 'out_nao', 31], ['ia', 'other', 14],
+        ['pg', 'charge_created', 90], ['pg', 'error', 6], ['pg', 'payment_approved', 41], ['ag', 'done', 12], ['ag', 'handoff', 4], ['ag', 'expiration', 22]].map(([ref, outcome, leads]) => ({ ref, outcome, leads }));
+      return { error: null, leads: 212, suggestions: analyzeFlow(active.graph, byNode), summary: 'Prioridade: 64% não respondem ao primeiro modelo — ligue "Sem resposta" a um lembrete. Depois, só 46% das cobranças OXXO são pagas: lembre em algumas horas e ofereça SPEI.' };
+    }
     if (action === 'deactivate') { versions.forEach((y) => { y.is_active = false; }); return { error: null, ok: true }; }
     if (action === 'stats') return { error: null, by_status: [{ status: 'completed', n: 180 }, { status: 'waiting', n: 32 }],
       by_ref: [['ini', 212], ['tpl', 212], ['esp', 205], ['ia', 141], ['pg', 96], ['cod', 94], ['venda', 41], ['px', 41], ['ag', 38], ['al', 4]].map(([ref, leads]) => ({ ref, leads })),

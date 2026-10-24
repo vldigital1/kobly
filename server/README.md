@@ -64,6 +64,12 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - `wait_until`: próximo horário comercial (dias + abre/fecha) ou data e hora, sempre no fuso da empresa (`organizations.timezone`, horário de verão incluso).
 - `notify`: alerta no Telegram pelo bot da empresa (rota `notify-channels`: list | save | delete | test; token cifrado, conferido com `getMe`). O fluxo segue mesmo se o alerta falhar.
 - `flow-graph` action `stats` agora devolve `by_ref` (leads por bloco) e `waiting_at` (parados agora) — o botão "Métricas" do editor mostra no canvas.
+### Fase 5 — MCP da Kobly e copiloto (migração `0072`)
+- `POST /mcp` (Model Context Protocol, HTTP): `Authorization: Bearer kbmcp_...`. Tokens em Integrações → Acesso de IA (rota `mcp-tokens`: list | create | revoke); o token aparece uma vez, no banco fica só o SHA-256; 60 chamadas/min por token. A empresa vem SEMPRE do token.
+- Ferramentas: `kobly_guia` (formato, regras e todos os blocos), `kobly_listar_campanhas`, `kobly_recursos` (modelos, etiquetas, contas de pagamento, pixels, canais — sem segredos), `kobly_ler_fluxo`, `kobly_validar_fluxo`, `kobly_salvar_rascunho`, `kobly_metricas` (sem dados pessoais), `kobly_copiloto`. Não existe ferramenta de publicar.
+- Rascunhos: `flow_graph_versions.is_draft/source/note`. `flow-graph` ganhou `save_draft`, `get_version` e `copilot`; `activate` (publicar rascunho ou voltar versão) revalida antes.
+- Copiloto (`src/flows/copilot.js`): regras sobre a trilha real (não responde, janela fechada, falha de envio, erro/baixa conversão da cobrança, IA sem saída, agente abandonado/pedindo humano, A/B com vencedor ou empate, estrutura sem venda/pixel/plano B). Mínimo de 20 leads por bloco (30 por caminho no A/B). A IA só resume os fatos calculados.
+- Conectar no Claude Code: `claude mcp add --transport http kobly https://<api>/mcp --header "Authorization: Bearer <token>"`.
 - Variável opcional: `XPAG_BASE_URL` (padrão `https://api.xpag.global`). Testado contra o sandbox público da XPag: Pix e SPEI criados e consultados; pagamento simulado passa a `confirmed` na consulta. Valor livre (SPEI) foi recusado no sandbox — conferir em produção.
 
 ## E-mails, convite e sessão

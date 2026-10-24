@@ -71,5 +71,16 @@ export function createLlm({ apiKey, baseUrl = 'https://api.deepseek.com', model 
     return { resposta, acao };
   }
 
-  return { classify, extract, agentReply, configured: !!apiKey };
+  // Copiloto: transforma os fatos já calculados em um resumo curto e priorizado. Não pode criar números.
+  async function summarize({ facts, leads }) {
+    const out = await chatJson(
+      'Você é um consultor de funis de venda pelo WhatsApp. Receberá FATOS já medidos sobre um fluxo. ' +
+      'Escreva em português do Brasil um resumo de até 4 frases dizendo o que fazer primeiro e por quê. ' +
+      'Use SOMENTE os números presentes nos fatos; não invente métricas nem promessas de resultado. Responda só com JSON: {"resumo": "<texto>"}.',
+      JSON.stringify({ leads_analisados: leads, fatos: facts }),
+    );
+    return out && typeof out.resumo === 'string' ? out.resumo.trim().slice(0, 1200) : null;
+  }
+
+  return { classify, extract, agentReply, summarize, configured: !!apiKey };
 }

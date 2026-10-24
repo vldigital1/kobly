@@ -18,6 +18,8 @@ import { createPayments } from './payments/service.js';
 import { createXpag } from './payments/xpag.js';
 import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
+import { createCopilot } from './flows/copilot.js';
+import { createMcp } from './mcp/server.js';
 
 const MAX_BODY = 64 * 1024;
 const MAX_PROXY_BODY = 5 * 1024 * 1024;
@@ -54,12 +56,13 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const notifier = createNotifier({ pool, secretKey: secretKeyBuf, fetchImpl });
   const flows = createFlowRuntime({ pool, whatsapp, llm, payments, pixel, notifier });
   whatsapp.setInboundHandler(flows.onInbound);
-  const flowAdmin = createFlowAdmin({ pool });
+  const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }) });
+  const mcp = createMcp({ pool, flowAdmin });
   const postback = createPostback({ pool, flows });
   const invites = createInvites({ pool, auth, mailer });
   const storage = createStorage({ dir: config.storageDir || '/var/lib/kobly-storage', canAccessOrg: async (user, org) => { try { return (await whatsapp.resolveOrg(user, org)).role !== 'Suporte'; } catch { return false; } } });
   const unsub = createUnsubscribe({ pool, secret: config.unsubscribeSecret });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens } });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -146,6 +149,13 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
           const { status: st, ...counts } = r;
           return send(res, st, st === 200 ? { ok: true, ...counts } : { code: 'rejected' });
         }
+      }
+      // MCP da Kobly (assistentes de IA): token próprio da empresa no Authorization; só rascunhos.
+      if (path === '/mcp') {
+        if (req.method !== 'POST') { res.statusCode = 405; res.setHeader('Allow', 'POST'); return res.end(); }
+        const r = await mcp.handleHttp(bearer(req), (await readBody(req, 1024 * 1024)).toString('utf8'));
+        if (r.body === null) { res.statusCode = r.status; return res.end(); }
+        return send(res, r.status, r.body);
       }
       // Aviso do gateway de pagamento: o token na URL só identifica a credencial; a confirmação é checada na API do gateway.
       const pm = /^\/webhooks\/payments\/([a-z]+)\/([A-Za-z0-9_-]{20,64})$/.exec(path);
