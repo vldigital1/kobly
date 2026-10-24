@@ -85,7 +85,10 @@ export function createPayments({ pool, providers, secretKey, publicBaseUrl, now 
   async function receiveWebhook(providerName, token, rawBody, onConfirmed) {
     const row = (await pool.query(`select * from public.payment_integrations where provider = $1 and webhook_token = $2`, [providerName, String(token || '')])).rows[0];
     if (!row) return { status: 404, body: { ok: false } };
-    let body; try { body = JSON.parse(rawBody || '{}'); } catch { return { status: 200, body: { ok: true, ignored: 'json' } }; }
+    // JSON (a maioria) ou formulário (alguns gateways mandam application/x-www-form-urlencoded)
+    let body;
+    try { body = JSON.parse(rawBody || '{}'); }
+    catch { const f = Object.fromEntries(new URLSearchParams(String(rawBody || ''))); if (!Object.keys(f).length) return { status: 200, body: { ok: true, ignored: 'json' } }; body = f; }
     const ev = provider(row.provider).parseWebhook(body);
     if (!ev) return { status: 200, body: { ok: true, ignored: 'not_cashin' } };
     const dup = await pool.query(`insert into public.payment_webhook_events (organization_id, integration_id, dedupe_key, status, payload) values ($1,$2,$3,$4,$5::jsonb)

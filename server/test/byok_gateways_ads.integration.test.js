@@ -112,7 +112,7 @@ test('Mercado Pago: conecta com o token, cobra Pix no fluxo e o aviso confirma p
   const c = await fn('payment-integrations', { action: 'connect', provider: 'mercadopago', client_secret: 'APP_USR-teste-mp' }, A.token);
   assert.equal(c.status, 200, JSON.stringify(c)); assert.equal(c.integration.provider, 'mercadopago');
   const list = await fn('payment-integrations', { action: 'list' }, A.token);
-  assert.deepEqual(list.providers.map((p) => p.id).sort(), ['mercadopago', 'woovi', 'xpag']);
+  assert.deepEqual(list.providers.map((p) => p.id).sort(), ['mercadopago', 'pushinpay', 'syncpay', 'woovi', 'xpag']);
 
   // a validação do fluxo avisa quando o bloco pede moeda/método que o Mercado Pago não cobra
   const camp = (await pool.query(`insert into public.campaigns (organization_id, nome) values ($1,'MP') returning id`, [A.orgId])).rows[0].id;

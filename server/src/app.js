@@ -17,7 +17,7 @@ import { createAiKeys } from './ai/router.js';
 import { createMetaAds } from './ads/meta.js';
 import { createPayments } from './payments/service.js';
 import { createXpag } from './payments/xpag.js';
-import { createMercadoPago, createWoovi } from './payments/pix_br.js';
+import { createMercadoPago, createWoovi, createPushinPay, createSyncPay } from './payments/pix_br.js';
 import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
 import { createCopilot } from './flows/copilot.js';
@@ -62,7 +62,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const aiKeys = createAiKeys({ pool, secretKey: secretKeyBuf, fetchImpl, allowPlatform: !!config.aiPlatformFallback,
     platform: { apiKey: config.aiApiKey, baseUrl: config.aiBaseUrl, model: config.aiModel } });
   const llm = aiKeys;
-  const paymentsCore = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }), mercadopago: createMercadoPago({ fetchImpl }), woovi: createWoovi({ fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
+  const paymentsCore = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }), mercadopago: createMercadoPago({ fetchImpl }), woovi: createWoovi({ fetchImpl }), pushinpay: createPushinPay({ fetchImpl }), syncpay: createSyncPay({ fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
   const pixel = createPixel({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaGraphBase });
   const notifier = createNotifier({ pool, secretKey: secretKeyBuf, fetchImpl });
   // UTMify: cobrança do fluxo vira pedido "aguardando pagamento"; confirmada, vira "pago" (nunca derruba o fluxo)

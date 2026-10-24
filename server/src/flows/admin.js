@@ -43,14 +43,15 @@ export function createFlowAdmin({ pool, copilot = null }) {
       const found = new Set(rows.map((r) => r.id));
       for (const id of ids) if (!found.has(id)) warns.push(`${label} ${id} não existe nesta empresa.`);
     }
-    // Mercado Pago e Woovi só cobram Pix em reais
+    // Mercado Pago, Woovi, PushinPay e SyncPay só cobram Pix em reais
+    const PIX_BR = { mercadopago: 'Mercado Pago', woovi: 'Woovi', pushinpay: 'PushinPay', syncpay: 'SyncPay' };
     const pays = (graph.nodes || []).filter((n) => n.type === 'payment' && n.data && n.data.integration_id);
     if (pays.length) {
       const { rows } = await pool.query(`select id::text, provider from public.payment_integrations where organization_id = $1 and id::text = any($2::text[])`, [orgId, pays.map((n) => String(n.data.integration_id))]);
       const prov = new Map(rows.map((r) => [r.id, r.provider]));
       for (const n of pays) {
         const p = prov.get(String(n.data.integration_id));
-        if ((p === 'mercadopago' || p === 'woovi') && (n.data.currency !== 'BRL' || n.data.method !== 'PIX')) warns.push(`Bloco "${n.ref}": ${p === 'woovi' ? 'Woovi' : 'Mercado Pago'} só cobra Pix em reais (BRL).`);
+        if (PIX_BR[p] && (n.data.currency !== 'BRL' || n.data.method !== 'PIX')) warns.push(`Bloco "${n.ref}": ${PIX_BR[p]} só cobra Pix em reais (BRL).`);
       }
     }
     if (tags.size) {

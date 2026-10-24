@@ -366,7 +366,7 @@ function PostbackTab({ data, empresaId }) {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
             <Icon name="info" size={15} style={{ color: 'var(--accent)' }} />
-            Cada URL aceita POST com JSON (Hotmart, NexusPayt e contrato genérico). Vincule a campanha ao webhook no Construtor de fluxo.
+            Cada URL aceita POST com JSON (Hotmart, Cakto, PerfectPay, NexusPayt e contrato genérico). Vincule a campanha ao webhook no Construtor de fluxo.
           </div>
         </div>
       </Card>
@@ -1090,7 +1090,7 @@ const SECTIONS = [
   { value: 'postback', label: 'Postback', icon: 'webhook', help: 'Webhooks de checkout' },
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
-  { value: 'pagamentos', label: 'Pagamentos e alertas', icon: 'credit-card', help: 'Conta do gateway (XPag) para cobrar nos fluxos, Pixel da Meta (API de Conversões) e alertas no Telegram.' },
+  { value: 'pagamentos', label: 'Pagamentos e alertas', icon: 'credit-card', help: 'Conta do gateway (XPag, Mercado Pago, PushinPay, SyncPay ou Woovi) para cobrar nos fluxos, Pixel da Meta (API de Conversões) e alertas no Telegram.' },
   { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },
   { value: 'mcp', label: 'Acesso de IA', icon: 'bot', help: 'Tokens para assistentes de IA (MCP) criarem rascunhos de fluxo.' },
 ];

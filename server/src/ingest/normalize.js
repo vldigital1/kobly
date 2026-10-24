@@ -1,4 +1,4 @@
-// Normalização dos postbacks (contrato Kobly, Hotmart, NexoPayt, ENTITY). Portado 1:1 de supabase/functions/postback-receiver.
+// Normalização dos postbacks (contrato Kobly, Hotmart, Cakto, PerfectPay, NexoPayt, ENTITY). Portado 1:1 de supabase/functions/postback-receiver.
 const RATE_LIMIT_PER_MIN = 120;
 const DEAD_LETTER_MAX_BYTES = 16 * 1024;
 const DEAD_LETTER_HEAD_BYTES = 8 * 1024;
@@ -76,6 +76,38 @@ function isNexopaytShaped(body) {
 function isEntityShaped(body) {
   return !!(body && body.kind === "ENTITY" && typeof body.event === "string" && body.event.startsWith("entity.transaction."));
 }
+// Cakto (docs.cakto.com.br): { secret, event, data: { id, status, amount, paymentMethod, checkoutUrl, customer, product, pix } }.
+const CAKTO_EVENT_MAP = {
+  purchase_approved: "Compra Aprovada",
+  purchase_refused: "Compra Recusada",
+  pix_gerado: "Pix Gerado",
+  boleto_gerado: "Boleto Gerado",
+  refund: "Compra Reembolsada",
+  chargeback: "Chargeback",
+  checkout_abandonment: "Abandono de carrinho",
+  subscription_canceled: "Cancelamento de Assinatura"
+};
+function isCaktoShaped(body) {
+  return !!(body && typeof body.event === "string" && CAKTO_EVENT_MAP[body.event] && body.data && typeof body.data === "object" && body.data.customer && "secret" in body);
+}
+// PerfectPay (help.perfectpay.com.br): { token, code, sale_amount, sale_status_enum, sale_status_detail, payment_type_enum, customer, product, metadata }.
+// Vem SEM "event" e com "customer": precisa ser reconhecida antes da NexoPayt.
+const PERFECTPAY_STATUS_MAP = { 2: "Compra Aprovada", 10: "Compra Aprovada", 5: "Compra Recusada", 6: "Compra cancelada", 13: "Compra cancelada", 7: "Compra Reembolsada", 9: "Chargeback", 12: "Abandono de carrinho" };
+const PERFECTPAY_PAYMENT_LABEL = { 1: "Cartão", 2: "Boleto", 3: "PayPal", 4: "Cartão", 5: "Grátis", 6: "Cartão" };
+function isPerfectPayShaped(body) {
+  return !!(body && typeof body.event !== "string" && body.sale_status_enum !== undefined && body.code && body.customer && typeof body.customer === "object");
+}
+function resolvePerfectPayTipoEvento(body) {
+  const st = Number(body.sale_status_enum);
+  const detail = String(body.sale_status_detail || "").toLowerCase();
+  if (st === 1 || st === 3) {
+    if (Number(body.payment_type_enum) === 2 || body.billet_url) return "Boleto Gerado";
+    if (detail.includes("pix")) return "Pix Gerado";
+    return null;
+  }
+  if (st === 0 && detail === "checkout_saved") return "Abandono de carrinho";
+  return PERFECTPAY_STATUS_MAP[st] || null;
+}
 function normalizePayload(body) {
   if (!body) return null;
   if (isHotmartShaped(body)) {
@@ -99,6 +131,46 @@ function normalizePayload(body) {
       // sufixo do tipo_evento, o refund era dedupado e fluxos de reembolso nunca disparavam.
       externalId: body.data.purchase?.transaction ? `${body.data.purchase.transaction}:${tipoEvento2}` : body.id || null,
       sourceEvent: body.event
+    };
+  }
+  if (isCaktoShaped(body)) {
+    const d = body.data;
+    const tipoEvento2 = CAKTO_EVENT_MAP[body.event];
+    const c = d.customer || {};
+    if (!c.email) return null;
+    const amount = d.amount ?? d.baseAmount ?? d.offer?.price;
+    const pm = String(d.paymentMethod || "").toLowerCase();
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.name || null,
+      phone: c.phone || null,
+      product: d.product?.name || d.offer?.name || null,
+      value: amount != null && !Number.isNaN(Number(amount)) ? Number(amount) : null,
+      paymentMethod: NEXOPAYT_PAYMENT_LABEL[pm] || (pm || null),
+      // idempotência por transição: o mesmo pedido passa por pix_gerado e depois purchase_approved
+      externalId: d.id ? `${d.id}:${tipoEvento2}` : null,
+      sourceEvent: body.event,
+      isPix: tipoEvento2 === "Pix Gerado"
+    };
+  }
+  if (isPerfectPayShaped(body)) {
+    const tipoEvento2 = resolvePerfectPayTipoEvento(body);
+    if (!tipoEvento2) return null;
+    const c = body.customer || {};
+    if (!c.email) return null;
+    const phone = `${c.phone_area_code ?? ""}${c.phone_number ?? ""}` || null;
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.full_name || null,
+      phone,
+      product: body.product?.name || body.plan?.name || null,
+      value: body.sale_amount != null && !Number.isNaN(Number(body.sale_amount)) ? Number(body.sale_amount) : null,
+      paymentMethod: PERFECTPAY_PAYMENT_LABEL[Number(body.payment_type_enum)] || null,
+      externalId: `${body.code}:${tipoEvento2}`,
+      sourceEvent: String(body.sale_status_detail || body.sale_status_enum),
+      isPix: tipoEvento2 === "Pix Gerado"
     };
   }
   if (isNexopaytShaped(body)) {

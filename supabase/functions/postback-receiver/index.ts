@@ -164,6 +164,38 @@ function isEntityShaped(body: any): boolean {
 // a Hotmart desativa automaticamente um Webhook que fica respondendo erro).
 // `isPix` é opcional: só o branch nexopayt o preenche; nos demais o chamador deriva
 // do sourceEvent (compat com o comportamento anterior).
+// Cakto (docs.cakto.com.br): { secret, event, data: { id, status, amount, paymentMethod, checkoutUrl, customer, product, pix } }.
+const CAKTO_EVENT_MAP: Record<string, string> = {
+  purchase_approved: "Compra Aprovada",
+  purchase_refused: "Compra Recusada",
+  pix_gerado: "Pix Gerado",
+  boleto_gerado: "Boleto Gerado",
+  refund: "Compra Reembolsada",
+  chargeback: "Chargeback",
+  checkout_abandonment: "Abandono de carrinho",
+  subscription_canceled: "Cancelamento de Assinatura"
+};
+function isCaktoShaped(body: any): boolean {
+  return !!(body && typeof body.event === "string" && CAKTO_EVENT_MAP[body.event] && body.data && typeof body.data === "object" && body.data.customer && "secret" in body);
+}
+// PerfectPay (help.perfectpay.com.br): { token, code, sale_amount, sale_status_enum, sale_status_detail, payment_type_enum, customer, product, metadata }.
+// Vem SEM "event" e com "customer": precisa ser reconhecida antes da NexoPayt.
+const PERFECTPAY_STATUS_MAP: Record<number, string> = { 2: "Compra Aprovada", 10: "Compra Aprovada", 5: "Compra Recusada", 6: "Compra cancelada", 13: "Compra cancelada", 7: "Compra Reembolsada", 9: "Chargeback", 12: "Abandono de carrinho" };
+const PERFECTPAY_PAYMENT_LABEL: Record<number, string> = { 1: "Cartão", 2: "Boleto", 3: "PayPal", 4: "Cartão", 5: "Grátis", 6: "Cartão" };
+function isPerfectPayShaped(body: any): boolean {
+  return !!(body && typeof body.event !== "string" && body.sale_status_enum !== undefined && body.code && body.customer && typeof body.customer === "object");
+}
+function resolvePerfectPayTipoEvento(body: any): string | null {
+  const st = Number(body.sale_status_enum);
+  const detail = String(body.sale_status_detail || "").toLowerCase();
+  if (st === 1 || st === 3) {
+    if (Number(body.payment_type_enum) === 2 || body.billet_url) return "Boleto Gerado";
+    if (detail.includes("pix")) return "Pix Gerado";
+    return null;
+  }
+  if (st === 0 && detail === "checkout_saved") return "Abandono de carrinho";
+  return PERFECTPAY_STATUS_MAP[st] || null;
+}
 function normalizePayload(body: any): {
   tipoEvento: string; email: string | null; name: string | null; phone: string | null;
   product: string | null; value: number | null; paymentMethod: string | null;
@@ -198,6 +230,46 @@ function normalizePayload(body: any): {
 
   // NexoPayt/NexusPayt: sem campo `event` no raiz — o evento sai dos status. Status não
   // mapeável → null (200 "ignored" no chamador, nunca 4xx).
+  if (isCaktoShaped(body)) {
+    const d = body.data;
+    const tipoEvento2 = CAKTO_EVENT_MAP[body.event];
+    const c = d.customer || {};
+    if (!c.email) return null;
+    const amount = d.amount ?? d.baseAmount ?? d.offer?.price;
+    const pm = String(d.paymentMethod || "").toLowerCase();
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.name || null,
+      phone: c.phone || null,
+      product: d.product?.name || d.offer?.name || null,
+      value: amount != null && !Number.isNaN(Number(amount)) ? Number(amount) : null,
+      paymentMethod: NEXOPAYT_PAYMENT_LABEL[pm] || (pm || null),
+      // idempotência por transição: o mesmo pedido passa por pix_gerado e depois purchase_approved
+      externalId: d.id ? `${d.id}:${tipoEvento2}` : null,
+      sourceEvent: body.event,
+      isPix: tipoEvento2 === "Pix Gerado"
+    };
+  }
+  if (isPerfectPayShaped(body)) {
+    const tipoEvento2 = resolvePerfectPayTipoEvento(body);
+    if (!tipoEvento2) return null;
+    const c = body.customer || {};
+    if (!c.email) return null;
+    const phone = `${c.phone_area_code ?? ""}${c.phone_number ?? ""}` || null;
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.full_name || null,
+      phone,
+      product: body.product?.name || body.plan?.name || null,
+      value: body.sale_amount != null && !Number.isNaN(Number(body.sale_amount)) ? Number(body.sale_amount) : null,
+      paymentMethod: PERFECTPAY_PAYMENT_LABEL[Number(body.payment_type_enum)] || null,
+      externalId: `${body.code}:${tipoEvento2}`,
+      sourceEvent: String(body.sale_status_detail || body.sale_status_enum),
+      isPix: tipoEvento2 === "Pix Gerado"
+    };
+  }
   if (isNexopaytShaped(body)) {
     const tx = (body.transaction ?? {}) as Record<string, any>;
     const pm = String(tx.payment_method ?? body.payment_method ?? "").toLowerCase();
@@ -307,7 +379,7 @@ function normalizePayload(body: any): {
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck"];
 const UTM_ALIAS: Record<string, string> = { xcod: "sck", source: "utm_source", medium: "utm_medium", campaign: "utm_campaign", content: "utm_content", term: "utm_term" };
 const UTM_PARENTS = /^(utm|utms|tracking|trackingparameters|tracking_parameters|origin|origem)$/i;
-const UTM_URL_KEYS = /^(checkout_url|url|link|page_url|landing_page|referrer|src_url)$/i;
+const UTM_URL_KEYS = /^(checkout_?url|url|link|page_?url|landing_?page|referrer|src_url)$/i;
 function extractUtm(body: any): Record<string, string> | null {
   const out: Record<string, string> = {};
   const urls: unknown[] = [];

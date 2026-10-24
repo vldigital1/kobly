@@ -5,7 +5,7 @@
 export const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'sck'];
 const ALIAS = { xcod: 'sck', source: 'utm_source', medium: 'utm_medium', campaign: 'utm_campaign', content: 'utm_content', term: 'utm_term' };
 const ALIAS_PARENTS = /^(utm|utms|tracking|trackingparameters|tracking_parameters|origin|origem)$/i;
-const URL_KEYS = /^(checkout_url|url|link|page_url|landing_page|referrer|src_url)$/i;
+const URL_KEYS = /^(checkout_?url|url|link|page_?url|landing_?page|referrer|src_url)$/i;
 const clean = (v) => (typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim().slice(0, 200) : null;
 
 function fromUrl(out, raw) {

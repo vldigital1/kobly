@@ -111,6 +111,14 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - **SMS desligado** — `src/lib/features.js` (`SMS_ENABLED = false`) esconde o SMS das telas; nas funções do Supabase, `process-steps` pula e `bulk-send` recusa SMS enquanto `SMS_ENABLED` não for `true`. Nada foi apagado.
 - Testes: `test/byok_gateways_ads.unit.test.js`, `test/byok_gateways_ads.integration.test.js`.
 
+### PushinPay, SyncPay, Cakto e PerfectPay (migração `0078`)
+- **PushinPay** (`doc.pushinpay.com.br`): `POST https://api.pushinpay.com.br/api/pix/cashIn` (centavos, mín. R$ 0,50, `webhook_url` por cobrança), consulta `GET /api/transactions/{id}` (status created | paid | canceled | expired; a PushinPay limita a consulta a 1 por minuto, por isso só consultamos ao receber o aviso). Credencial conferida por uma consulta de transação inexistente (404 = token aceito, 401 = recusado).
+- **SyncPay** (`syncpay.apidog.io`): token em `POST /api/partner/v1/auth-token` (Client ID + Secret, vale 1 h e fica em cache — pedir de novo antes dá 429), cobrança `POST /cash-in` (reais, mín. R$ 1,00, `client.cpf` se o lead tiver documento), consulta `GET /transaction/{identifier}`. A SyncPay não publica a lista de status: só um status claramente "pago" (paid, completed, approved…) confirma; qualquer outro deixa pendente. **Testar com uma cobrança real de R$ 1,00 antes de usar em produção.**
+- Avisos de gateway em `application/x-www-form-urlencoded` também são aceitos (além de JSON).
+- **Postback Cakto** (`{ secret, event, data }`: purchase_approved, purchase_refused, pix_gerado, boleto_gerado, refund, chargeback, checkout_abandonment, subscription_canceled) e **PerfectPay** (`sale_status_enum`: 2/10 aprovada, 1 pendente → boleto ou Pix, 0 + checkout_saved ou 12 → abandono, 5 recusada, 6/13 cancelada, 7 reembolso, 9 chargeback; UTMs vêm em `metadata`). A PerfectPay é reconhecida antes da NexoPayt (as duas mandam `customer` sem `event`). Mesma regra no `postback-receiver` do Supabase.
+- Sem documentação pública utilizável (não implementados): NexusPag (páginas bloqueiam leitura automática; faltam campos da resposta e a consulta), SigiloPay, Beehive, Kairos, SkalePayments, Wiven, Magn.cash; postbacks de Kiwify, Kirvano, Braip, GGCheckout, MundPay, Payt e Zenith (formato do aviso de venda não publicado).
+- Testes: `test/more_gateways.unit.test.js`, `test/more_gateways.integration.test.js`.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.
