@@ -65,10 +65,10 @@ supabase functions deploy asaas
 - `asaas-webhook` roda com `verify_jwt = false` (é webhook, o Asaas não manda JWT), então
   a autenticação é o header **`asaas-access-token`** comparado com a secret Vault
   `asaas_webhook_token` via `safeEqual`.
-- **Atenção ao fail-open:** o teste é `if (expectedToken)`. Com a secret **ausente**, a
-  function segue sem exigir header nenhum — e aí qualquer POST na URL pública forja um
-  `PAYMENT_RECEIVED` e marca plano como pago. A secret existir não é detalhe de conforto:
-  é o que fecha a porta.
+- **Fail-closed (corrigido em 2026-10-24):** antes, com a secret **ausente**, a function seguia
+  sem exigir header — qualquer POST forjava um `PAYMENT_RECEIVED`. Agora, sem a secret (ou com
+  menos de 16 caracteres, ou com o Vault fora), ela responde **503** e não ativa nada; o Asaas
+  guarda e reenvia os avisos, então configure a secret ANTES de ligar o webhook em produção.
 - O **mesmo valor** vai nos dois lados: Vault + campo de token no painel do Asaas
   (Integrações → Webhooks). Se divergirem, o Asaas toma 401 e o pagamento acontece sem
   que o plano seja marcado — falha silenciosa do lado do cliente.

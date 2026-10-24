@@ -20,6 +20,7 @@ import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
 import { createCopilot } from './flows/copilot.js';
 import { createMcp } from './mcp/server.js';
+import { tokenFrom } from './ingest/auth.js';
 
 const MAX_BODY = 64 * 1024;
 const MAX_PROXY_BODY = 5 * 1024 * 1024;
@@ -74,7 +75,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     if (origin && (config.allowedOrigins || []).includes(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type, accept, prefer, range, range-unit, accept-profile, content-profile, x-client-info, apikey');
+      res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type, accept, prefer, range, range-unit, accept-profile, content-profile, x-client-info, apikey, x-kobly-token, x-kobly-signature');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, HEAD, OPTIONS');
       res.setHeader('Access-Control-Expose-Headers', 'content-range, content-profile, preference-applied');
       res.setHeader('Access-Control-Max-Age', '600');
@@ -183,7 +184,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         res.statusCode = r.status; res.setHeader('Content-Type', r.type); res.setHeader('Cache-Control', 'no-store'); return res.end(r.body);
       }
       if (path === '/functions/v1/postback-receiver' && req.method === 'POST') {
-        const r = await postback.receive(url.searchParams.get('token'), (await readBody(req, MAX_PROXY_BODY)).toString('utf8'));
+        const r = await postback.receive(tokenFrom(req.headers, url.searchParams), (await readBody(req, MAX_PROXY_BODY)).toString('utf8'), req.headers);
         return send(res, r.status, r.body);
       }
       const fm = /^\/functions\/v1\/([a-z0-9-]+)$/.exec(path);

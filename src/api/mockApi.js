@@ -759,6 +759,16 @@ export const KoblyApi = {
     resetDb();
     return { ok: true, token: data };
   },
+  // Segurança do webhook: hottok da Hotmart e modo estrito (exigir assinatura/hottok). RLS: só a própria conta.
+  async updatePostbackSecurity(tokenId, { hottok, require_signature }) {
+    const patch = {};
+    if (hottok !== undefined) patch.hottok = hottok ? String(hottok).trim() : null;
+    if (require_signature !== undefined) patch.require_signature = !!require_signature;
+    const { error } = await supabase.from('postback_tokens').update(patch).eq('id', tokenId);
+    resetDb();
+    if (error) return { ok: false, error: /hottok/.test(error.message || '') ? 'O hottok precisa ter de 8 a 200 caracteres.' : 'Não foi possível salvar.' };
+    return { ok: true };
+  },
   async revokePostbackToken(tokenId) {
     const { error } = await supabase.from('postback_tokens')
       .update({ ativo: false })

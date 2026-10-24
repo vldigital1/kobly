@@ -170,6 +170,30 @@ test('ponta a ponta: Pix gerado → modelo → resposta → cobrança SPEI → p
   assert.deepEqual(trilha, ['ini:default', 'tpl:sent', 'esp:waiting_reply', 'esp:reply', 'cond:yes', 'pg:charge_created', 'cod:sent', 'esp2:waiting_reply', 'pg:payment_confirmed', 'pg:payment_approved', 'venda:default', 'etq:default', 'fim:completed']);
 });
 
+test('postback seguro: URL antiga segue valendo e fica registrada; modo estrito exige assinatura no cabeçalho', { skip }, async () => {
+  const ev = (email) => JSON.stringify({ event: 'cart_abandoned', email, name: 'Teste' });
+  // compatibilidade: só a URL continua aceita (modo legado) e marca last_unsigned_at
+  assert.equal((await post(`/functions/v1/postback-receiver?token=${A.pbk}`, ev('legado@x.test'))).status, 200);
+  const row = (await pool.query(`select id, signing_secret, last_unsigned_at from public.postback_tokens where token = $1`, [A.pbk])).rows[0];
+  assert.ok(row.last_unsigned_at, 'uso só pela URL fica registrado para a tela avisar');
+  assert.match(row.signing_secret, /^[0-9a-f]{64}$/, 'todo token ganha um segredo de assinatura');
+
+  await pool.query(`update public.postback_tokens set require_signature = true where id = $1`, [row.id]);
+  const semAss = await post(`/functions/v1/postback-receiver?token=${A.pbk}`, ev('estrito@x.test'));
+  assert.equal(semAss.status, 401); assert.equal((await semAss.json()).error, 'assinatura_obrigatoria');
+
+  // token no cabeçalho (fora da URL) + assinatura HMAC
+  const { signPostback } = await import('../src/ingest/auth.js');
+  const corpo = ev('assinado@x.test'); const t = Math.floor(Date.now() / 1000);
+  const ok = await post('/functions/v1/postback-receiver', corpo, null, { 'x-kobly-token': A.pbk, 'x-kobly-signature': `t=${t},v1=${signPostback(row.signing_secret, t, corpo)}` });
+  assert.equal(ok.status, 200, await ok.clone().text());
+  const forjado = await post('/functions/v1/postback-receiver', corpo, null, { 'x-kobly-token': A.pbk, 'x-kobly-signature': `t=${t},v1=${signPostback('segredo-roubado-errado', t, corpo)}` });
+  assert.equal(forjado.status, 401);
+  assert.equal((await pool.query(`select count(*)::int n from public.leads where organization_id = $1 and email in ('estrito@x.test')`, [A.orgId])).rows[0].n, 0, 'evento recusado não cria lead');
+  assert.equal((await pool.query(`select count(*)::int n from public.leads where organization_id = $1 and email = 'assinado@x.test'`, [A.orgId])).rows[0].n, 1);
+  await pool.query(`update public.postback_tokens set require_signature = false where id = $1`, [row.id]);
+});
+
 test('RLS: cada empresa só enxerga as próprias execuções, cobranças e caixa de entrada', { skip }, async () => {
   for (const t of ['flow_executions', 'payment_charges', 'whatsapp_inbound_messages', 'flow_graph_versions', 'flow_sales']) {
     assert.ok((await asUser(A.userId, `select count(*)::int n from public.${t}`)).rows[0].n >= 1, `A vê ${t}`);

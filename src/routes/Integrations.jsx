@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { SUPABASE_URL } from '@/api/supabaseClient.js';
+import { signedPostbackHeaders, usedUnsignedRecently } from '@/lib/postbackSign.js';
 import { KoblyAI } from '@/api/ai.js';
 import { KoblyMockDB } from '@/api/mockData.js';
 import { Badge, Banner, Button, Card, Icon, IconButton, Input, PageHeader, Select, Spinner, Tabs } from '@/ds';
@@ -90,6 +91,68 @@ const EXAMPLE_PAYLOAD = `{
 }`;
 
 // ── Aba 1: Postback URL ──
+// Segurança de UM webhook (migração 0073): sem isso, quem tiver a URL consegue enviar eventos falsos.
+// Prova aceita: assinatura HMAC no cabeçalho (segredo nunca vai na URL) ou o Hottok da Hotmart.
+// Modo estrito: a URL sozinha deixa de valer. A URL antiga continua aceita enquanto o modo estrito estiver desligado.
+function PostbackSecurity({ t, onSaved }) {
+  const store = useKobly();
+  const [open, setOpen] = useState(false);
+  const [hottok, setHottok] = useState(t.hottok || '');
+  const [saving, setSaving] = useState(false);
+  const protegido = t.require_signature;
+  const exposto = !protegido && usedUnsignedRecently(t);
+  async function save(patch, msg) {
+    setSaving(true);
+    const r = await KoblyApi.updatePostbackSecurity(t.id, patch);
+    setSaving(false);
+    if (!r.ok) { store.notify('danger', r.error); return; }
+    store.notify('success', msg); onSaved();
+  }
+  function toggleStrict() {
+    if (!protegido) {
+      const temProva = !!(t.hottok || hottok);
+      if (!confirm(temProva
+        ? 'Ligar o modo estrito? Eventos sem o Hottok correto (ou sem assinatura) passam a ser RECUSADOS. Confirme que a plataforma já está mandando o Hottok.'
+        : 'Ligar o modo estrito? Eventos SEM assinatura no cabeçalho passam a ser RECUSADOS — a plataforma precisa assinar com o segredo abaixo. Se for Hotmart, cadastre o Hottok antes.')) return;
+    }
+    save({ require_signature: !protegido }, protegido ? 'Modo estrito desligado: a URL sozinha volta a valer.' : 'Modo estrito ligado: só eventos com prova no cabeçalho entram.');
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button type="button" onClick={() => setOpen((v) => !v)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: exposto ? 'var(--amber-600)' : 'var(--text-muted)', textAlign: 'start' }}>
+        <Icon name={protegido ? 'shield' : 'lock'} size={14} />
+        {protegido ? 'Protegido: só aceita eventos com assinatura ou Hottok'
+          : exposto ? 'Atenção: este webhook recebeu eventos só pela URL — quem tiver a URL pode enviar eventos falsos'
+            : 'Segurança: proteja este webhook com assinatura ou Hottok'}
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
+      </button>
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-card)' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+            <strong>Hotmart:</strong> em Ferramentas → Webhook, copie o <em>Hottok</em> da sua conta e cole aqui. A Hotmart o envia no cabeçalho <code>X-HOTMART-HOTTOK</code>.
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}><Input label="Hottok da Hotmart" type="password" value={hottok} onChange={(e) => setHottok(e.target.value)} placeholder="cole o Hottok" autoComplete="off" /></div>
+            <Button size="sm" variant="secondary" loading={saving} disabled={hottok === (t.hottok || '')} onClick={() => save({ hottok }, hottok ? 'Hottok salvo' : 'Hottok removido')}>Salvar</Button>
+          </div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+            <strong>Outras plataformas / integração própria:</strong> envie o token no cabeçalho <code>X-Kobly-Token</code> (fora da URL) e assine o corpo: <code>X-Kobly-Signature: t=&lt;unix&gt;,v1=&lt;HMAC-SHA256(segredo, "t.corpo")&gt;</code> (vale 5 min).
+          </div>
+          <CopyField value={t.signing_secret || ''} label="Segredo de assinatura" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Button size="sm" variant={protegido ? 'secondary' : 'primary'} iconLeft={protegido ? 'unlock' : 'shield'} loading={saving} onClick={toggleStrict}>
+              {protegido ? 'Desligar modo estrito' : 'Ligar modo estrito'}
+            </Button>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+              {t.last_unsigned_at ? `Último evento só pela URL: ${new Date(t.last_unsigned_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : 'Nenhum evento só pela URL registrado.'}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PostbackTab({ data, empresaId }) {
   const store = useKobly();
   const [tokens, setTokens] = useState([]);
@@ -211,10 +274,13 @@ function PostbackTab({ data, empresaId }) {
       if (testName.trim()) payload.name = testName.trim();
       if (testProduct.trim()) payload.product = testProduct.trim();
       if (testValue !== '' && !Number.isNaN(Number(testValue))) payload.value = Number(testValue);
-      const res = await fetch(postbackUrl, {
+      // assinado como uma integração bem configurada faria: token no cabeçalho + HMAC (funciona com o modo estrito)
+      const raw = JSON.stringify(payload);
+      const signed = activeToken.signing_secret ? await signedPostbackHeaders(activeToken.token, activeToken.signing_secret, raw) : null;
+      const res = await fetch(signed ? `${SUPABASE_URL}/functions/v1/postback-receiver` : postbackUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json', ...(signed || {}) },
+        body: raw,
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.ok && !json.ignored) {
@@ -223,7 +289,7 @@ function PostbackTab({ data, empresaId }) {
         const fresh = await KoblyApi.getRecentEvents(20, empresaId);
         setRecentEvents(fresh);
       } else {
-        store.notify('danger', json.detail || json.reason || 'Falha ao disparar o evento de teste');
+        store.notify('danger', json.detail || json.reason || json.error || 'Falha ao disparar o evento de teste');
       }
     } catch (e) {
       store.notify('danger', 'Erro de rede ao disparar o evento');
@@ -276,6 +342,7 @@ function PostbackTab({ data, empresaId }) {
                       <IconButton icon="trash-2" size="sm" aria-label="Excluir" onClick={() => deleteWebhook(t)} />
                     </div>
                     <CopyField value={url} label={`URL do webhook ${t.nome}`} />
+                    <PostbackSecurity t={t} onSaved={loadTokens} />
                   </div>
                 );
               })}

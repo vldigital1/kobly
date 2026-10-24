@@ -2,19 +2,27 @@
 // Portado de supabase/functions/postback-receiver. Regra de ouro: NUNCA responder 4xx/5xx por evento
 // desconhecido ou erro interno (plataformas como a Hotmart desativam o webhook que falha) — só token/JSON inválidos.
 import { normalizePayload, extractRecoveryLink, deadLetterPayload, RATE_LIMIT_PER_MIN } from './normalize.js';
+import { verifyPostbackAuth } from './auth.js';
 
 export function createPostback({ pool, flows = null }) {
   const deadLetter = (org, tokenId, reason, detail, raw, parsed) =>
     pool.query(`insert into public.webhook_dead_letter (organization_id, postback_token_id, provider, reason, detail, raw_payload) values ($1,$2,'postback',$3,$4,$5)`,
       [org, tokenId, reason, detail, JSON.stringify(deadLetterPayload(raw, parsed))]).catch((e) => console.error('[postback] dead-letter falhou:', e.message));
 
-  async function receive(token, rawBody) {
-    if (!token) return { status: 401, body: { error: 'missing_token', detail: 'Adicione ?token=pbk_xxx na URL' } };
+  // headers: cabeçalhos da requisição (minúsculos). Ver ingest/auth.js para assinatura/hottok/modo estrito.
+  async function receive(token, rawBody, headers = {}) {
+    if (!token) return { status: 401, body: { error: 'missing_token', detail: 'Envie o token no cabeçalho X-Kobly-Token (ou ?token=pbk_xxx na URL)' } };
     let body;
     try { body = JSON.parse(rawBody || '{}'); } catch { return { status: 400, body: { error: 'invalid_json' } }; }
     try {
-      const t = await pool.query(`select id, organization_id from public.postback_tokens where token = $1 and ativo = true`, [token]);
+      const t = await pool.query(`select id, organization_id, signing_secret, hottok, require_signature, last_unsigned_at from public.postback_tokens where token = $1 and ativo = true`, [token]);
       if (!t.rows[0]) return { status: 401, body: { error: 'invalid_token', detail: 'Token inválido ou inativo' } };
+      const auth = verifyPostbackAuth({ token: t.rows[0], headers, rawBody: rawBody || '' });
+      if (!auth.ok) return { status: 401, body: { error: auth.reason } };
+      // modo legado (só a URL): registra para a tela avisar; no máximo uma escrita por hora
+      if (auth.mode === 'legado_url' && (!t.rows[0].last_unsigned_at || Date.now() - new Date(t.rows[0].last_unsigned_at) > 3600e3)) {
+        await pool.query(`update public.postback_tokens set last_unsigned_at = now() where id = $1`, [t.rows[0].id]).catch(() => {});
+      }
       const org = t.rows[0].organization_id, tokenId = t.rows[0].id;
 
       const rl = await pool.query(`select (select count(*) from public.webhook_events where organization_id = $1 and created_at >= now() - interval '60 seconds')

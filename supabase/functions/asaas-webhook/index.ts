@@ -42,13 +42,16 @@ Deno.serve(async (req: Request) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   // 1) Autenticação do webhook: header `asaas-access-token` == secret do Vault.
-  const { data: expectedToken } = await sb.rpc("get_secret", { p_name: "asaas_webhook_token" });
-  if (expectedToken) {
-    const got = req.headers.get("asaas-access-token") || "";
-    if (!safeEqual(got, String(expectedToken))) return json({ error: "unauthorized" }, 401);
+  // FAIL-CLOSED: sem a secret configurada (ou se o Vault não responder) NADA é aceito —
+  // antes, a falta da secret deixava qualquer um ativar plano pago com um PAYMENT_CONFIRMED forjado.
+  // 503 faz o Asaas guardar e reenviar o aviso; basta configurar a secret para a fila andar.
+  const { data: expectedToken, error: secretErr } = await sb.rpc("get_secret", { p_name: "asaas_webhook_token" });
+  if (secretErr || !expectedToken || String(expectedToken).length < 16) {
+    console.error("[asaas-webhook] asaas_webhook_token ausente/curto no Vault ou Vault indisponível — recusando", secretErr?.message ?? "");
+    return json({ error: "webhook_not_configured" }, 503);
   }
-  // Se a secret não estiver definida, registramos e seguimos (dev). Em produção,
-  // defina `asaas_webhook_token` para exigir o header.
+  const got = req.headers.get("asaas-access-token") || "";
+  if (!safeEqual(got, String(expectedToken))) return json({ error: "unauthorized" }, 401);
 
   let body: any = {};
   try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }

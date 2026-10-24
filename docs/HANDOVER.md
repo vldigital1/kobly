@@ -118,7 +118,7 @@ HEAD: `a7d72ac`.
 
 - Netlify: `netlify.toml` (build, Node 20, SPA fallback, headers). Envs `VITE_*`.
 - DNS: CNAME `app` → Netlify.
-- `asaas-webhook` **fail-open** se token Vault ausente.
+- `asaas-webhook` é fail-closed: sem o token no Vault responde 503 e não ativa plano (corrigido 2026-10-24).
 - CI GitHub Actions: **ausente** no repo.
 - Backups Postgres: **a confirmar** (plano Supabase).
 
