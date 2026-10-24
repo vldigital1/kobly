@@ -16,6 +16,12 @@ Substitui o Supabase do Kobly por: Postgres no dize-db + PostgREST (mesma API de
 ## Testes
 `npm test` (unitários sempre; integração só com `KOBLY_TEST_DATABASE_URL` apontando para um Postgres **descartável** com o esquema aplicado).
 
+Sem Postgres instalado, use o banco de teste em memória (PGlite, Postgres real em WebAssembly), montado igual ao dize-db:
+- `npm run test:db` — aplica bootstrap + todas as migrações + grants e diz se passou (checagem rápida de migração nova).
+- `npm run test:db:serve` — idem e fica ouvindo em `postgres://postgres@127.0.0.1:5544/postgres`; em outro terminal:
+  `KOBLY_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5544/postgres npm test` (unitários + integração).
+- Limite: o PGlite tem uma conexão só (o socket multiplexa o pool), então disputa entre workers concorrentes (`skip locked`) só é prova num Postgres de verdade.
+
 ## Estado
 Etapa 1 (banco + login) e Etapa 2 (front ligado: `src/api/apiClient.js`) prontas em desenvolvimento (`https://kobly-api-dev.dizevolv.com`). Ainda 501: ai-chat, send-email, send-whatsapp (substituído pela rota whatsapp-account; envio das campanhas depende do motor), send-sms, bulk-send, asaas, resend-admin, invite-client, webhooks de entrada e agendador. `cron.schedule`/`net.http_post` são stubs: o agendador (process-steps, process-bulk, reset de uso) passa a ser do serviço.
 

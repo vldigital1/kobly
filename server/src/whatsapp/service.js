@@ -216,7 +216,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     const expected = 'sha256=' + createHmac('sha256', secret).update(rawBody).digest('hex');
     if (!signatureHeader || !timingEq(signatureHeader, expected)) return { status: 403, reason: 'assinatura inválida' };
     let payload; try { payload = JSON.parse(rawBody.toString()); } catch { return { status: 200, ignored: 'json' }; }
-    const stats = { statuses: 0, templates: 0, optOuts: 0, inbound: 0 };
+    const stats = { statuses: 0, templates: 0, optOuts: 0 };
     for (const entry of payload.entry || []) for (const ch of entry.changes || []) {
       const v = ch.value || {};
       if (ch.field === 'messages') {
@@ -225,7 +225,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
         for (const m of v.messages || []) {
           // caixa de entrada + retomada dos fluxos que aguardam resposta; falha aqui não pode derrubar o webhook
           if (inboundHandler) {
-            try { if (await inboundHandler({ orgId: row.organization_id, accountId: row.id, message: m, contacts: v.contacts || [] })) stats.inbound++; }
+            try { await inboundHandler({ orgId: row.organization_id, accountId: row.id, message: m, contacts: v.contacts || [] }); }
             catch (e) { console.error('[whatsapp] inbound falhou:', e.message); }
           }
           if (m.type === 'text' && OPT_OUT.test(m.text && m.text.body || '')) stats.optOuts += await optOut(row, m.from);

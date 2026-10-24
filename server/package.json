@@ -6,9 +6,16 @@
   "description": "Serviço do Kobly no dize-db: login/sessões próprios + (próximas etapas) rotas que substituem as Edge Functions do Supabase.",
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:db": "node tools/pglite-test-db.mjs",
+    "test:db:serve": "node tools/pglite-test-db.mjs --serve",
+    "test:integration": "node --test --test-concurrency=1 test/*.integration.test.js"
   },
   "dependencies": {
     "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@electric-sql/pglite-socket": "^0.2.14"
   }
 }
