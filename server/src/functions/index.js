@@ -51,6 +51,7 @@ export function createFunctions(ctx) {
     'flow-graph': () => flowGraph,
     'payment-integrations': () => orgRoute('payments'),
     'pixel-configs': () => orgRoute('pixel'),
+    'notify-channels': () => orgRoute('notifier'),
   };
   return {
     names: () => Object.keys(handlers),

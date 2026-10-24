@@ -11,7 +11,10 @@ const exemplo = {
     { ref: 'ini', type: 'trigger', data: { events: ['Pix Gerado', 'Compra Recusada'] }, next: { default: 'tpl' }, position: { x: 0, y: 120 } },
     { ref: 'tpl', type: 'send_template', data: { template_id: 't1', vars: ['primeiro_nome', 'produto'] }, next: { sent: 'esp' }, position: { x: 300, y: 80 } },
     { ref: 'esp', type: 'wait_reply', data: { save_as: 'resposta', timeout_minutes: 1380 }, next: { reply: 'ia', timeout: 'fim' }, position: { x: 600, y: 80 } },
-    { ref: 'ia', type: 'ai_classify', data: { input: '{{resposta}}', outputs: [{ key: 'sim', description: 'aceitou' }, { key: 'oxxo', description: 'quer pagar no OXXO' }, { key: 'nao', description: 'recusou' }] }, next: { out_sim: 'pg', out_oxxo: 'pg', out_nao: 'fim' }, position: { x: 900, y: 40 } },
+    { ref: 'ia', type: 'ai_classify', data: { input: '{{resposta}}', outputs: [{ key: 'sim', description: 'aceitou' }, { key: 'oxxo', description: 'quer pagar no OXXO' }, { key: 'nao', description: 'recusou' }] }, next: { out_sim: 'pg', out_oxxo: 'pg', out_nao: 'ag' }, position: { x: 900, y: 40 } },
+    { ref: 'ag', type: 'ai_agent', data: { objective: 'Entender a objeção e oferecer o OXXO.', knowledge: 'Guia de 50 receitas, PDF na hora, $120 MXN.', max_turns: 6, timeout_minutes: 60 }, next: { done: 'pg', handoff: 'al', expiration: 'hc' }, position: { x: 1200, y: 320 } },
+    { ref: 'al', type: 'notify', data: { channel_id: 'tg-1', text: '🙋 {{nome}} pediu atendimento humano' }, next: { default: 'fim' }, position: { x: 1500, y: 420 } },
+    { ref: 'hc', type: 'wait_until', data: { mode: 'business_hours', days: [1, 2, 3, 4, 5], from: '09:00', to: '18:00' }, next: { default: 'tpl' }, position: { x: 1500, y: 260 } },
     { ref: 'pg', type: 'payment', data: { integration_id: 'int-1', currency: 'MXN', method: 'OXXO', amount: '120', listen_hours: 48 }, next: { charge_created: 'cod', payment_approved: 'venda', error: 'fim' }, position: { x: 1200, y: 0 } },
     { ref: 'cod', type: 'send_text', data: { text: 'Aquí tienes tu referencia OXXO: {{pagamento_codigo}}' }, next: { sent: 'fim' }, position: { x: 1500, y: -80 } },
     { ref: 'venda', type: 'record_sale', data: {}, next: { default: 'px' }, position: { x: 1500, y: 80 } },
@@ -36,6 +39,9 @@ const fakeApi = {
     }
     if (action === 'activate') { versions.forEach((y) => { y.is_active = y.version === x.version; }); return { error: null, ok: true }; }
     if (action === 'deactivate') { versions.forEach((y) => { y.is_active = false; }); return { error: null, ok: true }; }
+    if (action === 'stats') return { error: null, by_status: [{ status: 'completed', n: 180 }, { status: 'waiting', n: 32 }],
+      by_ref: [['ini', 212], ['tpl', 212], ['esp', 205], ['ia', 141], ['pg', 96], ['cod', 94], ['venda', 41], ['px', 41], ['ag', 38], ['al', 4]].map(([ref, leads]) => ({ ref, leads })),
+      waiting_at: [{ ref: 'esp', leads: 21 }, { ref: 'ag', leads: 11 }] };
     return { error: 'ação desconhecida' };
   },
   listTemplates: async () => [
@@ -45,6 +51,7 @@ const fakeApi = {
   getTags: async () => [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', nome: 'Lead quente' }, { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', nome: 'PARTE 1' }],
   listIntegrations: async () => [{ id: 'int-1', provider: 'xpag', label: 'México', sandbox: true, status: 'connected' }],
   listPixels: async () => [{ id: 'px-1', label: 'Pixel principal', pixel_id: '1234567890' }],
+  listChannels: async () => [{ id: 'tg-1', label: '@vendas_bot', default_chat_id: '-1001234567890' }],
 };
 
 function Preview() {

@@ -34,6 +34,15 @@ export function createFlowAdmin({ pool }) {
       const found = new Map(rows.map((r) => [r.id, r.status]));
       for (const t of tpls) if (!found.has(t)) warns.push(`Modelo ${t} não existe nesta empresa.`); else if (found.get(t) !== 'APPROVED') warns.push(`Modelo ${t} ainda não está aprovado pela Meta (${found.get(t)}).`);
     }
+    // conta do gateway, Pixel e canal de alerta precisam ser desta empresa
+    const refs = [['payment', 'integration_id', 'payment_integrations', 'Conta de pagamento'], ['pixel', 'pixel_config_id', 'pixel_configs', 'Pixel'], ['notify', 'channel_id', 'notification_channels', 'Canal de alerta']];
+    for (const [type, field, table, label] of refs) {
+      const ids = [...new Set((graph.nodes || []).filter((n) => n.type === type && n.data && n.data[field]).map((n) => String(n.data[field])))];
+      if (!ids.length) continue;
+      const { rows } = await pool.query(`select id::text from public.${table} where organization_id = $1 and id::text = any($2::text[])`, [orgId, ids]);
+      const found = new Set(rows.map((r) => r.id));
+      for (const id of ids) if (!found.has(id)) warns.push(`${label} ${id} não existe nesta empresa.`);
+    }
     if (tags.size) {
       const valid = [...tags].filter((t) => UUID.test(t));
       const { rows } = valid.length ? await pool.query(`select id::text from public.tags where organization_id = $1 and id = any($2::uuid[])`, [orgId, valid]) : { rows: [] };
@@ -93,9 +102,12 @@ export function createFlowAdmin({ pool }) {
         const f = await flowOf(orgId, body.campaign_id);
         const byStatus = (await pool.query(`select status, count(*)::int as n from public.flow_executions where flow_id = $1 group by status`, [f.flow_id])).rows;
         const byNode = (await pool.query(`select ref, node_type, outcome, count(distinct execution_id)::int as leads from public.flow_execution_events where flow_id = $1 group by ref, node_type, outcome order by ref`, [f.flow_id])).rows;
+        // leads distintos que chegaram a cada bloco (o contador mostrado no editor) e quantos estão parados nele agora
+        const byRef = (await pool.query(`select ref, count(distinct execution_id)::int as leads from public.flow_execution_events where flow_id = $1 group by ref`, [f.flow_id])).rows;
+        const waitingAt = (await pool.query(`select current_ref as ref, count(*)::int as leads from public.flow_executions where flow_id = $1 and status in ('running','waiting') group by current_ref`, [f.flow_id])).rows;
         const recent = (await pool.query(`select e.id, e.status, e.current_ref, e.last_error, e.started_at, e.finished_at, l.nome, l.email from public.flow_executions e join public.leads l on l.id = e.lead_id
           where e.flow_id = $1 order by e.created_at desc limit 50`, [f.flow_id])).rows;
-        return { by_status: byStatus, by_node: byNode, recent };
+        return { by_status: byStatus, by_node: byNode, by_ref: byRef, waiting_at: waitingAt, recent };
       }
       case 'cancel_execution': {
         canEdit(ctx);

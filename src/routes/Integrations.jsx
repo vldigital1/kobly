@@ -1022,7 +1022,7 @@ const SECTIONS = [
   { value: 'postback', label: 'Postback', icon: 'webhook', help: 'Webhooks de checkout' },
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
-  { value: 'pagamentos', label: 'Pagamentos e Pixel', icon: 'credit-card', help: 'Conta do gateway (XPag) para cobrar nos fluxos e Pixel da Meta (API de Conversões).' },
+  { value: 'pagamentos', label: 'Pagamentos e alertas', icon: 'credit-card', help: 'Conta do gateway (XPag) para cobrar nos fluxos, Pixel da Meta (API de Conversões) e alertas no Telegram.' },
 ];
 const KoblyPaymentsTab = React.lazy(() => import('@/routes/PaymentsTab.jsx').then((m) => ({ default: m.KoblyPaymentsTab })));
 const LOJA_SUBS = [

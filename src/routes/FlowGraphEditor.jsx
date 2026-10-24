@@ -15,9 +15,10 @@ const defaultApi = {
   getTags: () => KoblyApi.getTags(),
   listIntegrations: () => KoblyApi.paymentIntegrations('list').then((r) => r.integrations || []),
   listPixels: () => KoblyApi.pixelConfigs('list').then((r) => r.pixels || []),
+  listChannels: () => KoblyApi.notifyChannels('list').then((r) => r.channels || []),
 };
 
-const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [] });
+const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], metrics: null });
 const VARS_HELP = '{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{hora_atual}} {{dia_semana}} · depois da Cobrança: {{pagamento_codigo}} {{pagamento_qr}} {{pagamento_link}} {{pagamento_valor}}';
 
 // ---- Cartão do bloco no canvas ------------------------------------------------
@@ -37,6 +38,18 @@ function BlockNode({ id, data, selected }) {
         <strong style={{ color: 'var(--text-strong)', fontSize: 13, flex: 1 }}>{b.label}</strong>
         <span style={{ color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{id}</span>
       </div>
+      {lookups.metrics && (
+        <div style={{ display: 'flex', gap: 6, padding: '0 10px 6px' }}>
+          <span title="Leads que chegaram a este bloco" style={{ background: 'var(--surface-sunken)', color: 'var(--text-strong)', borderRadius: 'var(--radius-pill)', padding: '1px 8px', fontSize: 11, fontWeight: 600 }}>
+            {(lookups.metrics[id] && lookups.metrics[id].leads) || 0} leads
+          </span>
+          {lookups.metrics[id] && lookups.metrics[id].here > 0 && (
+            <span title="Leads parados neste bloco agora" style={{ background: 'var(--amber-tint)', color: 'var(--amber-600)', borderRadius: 'var(--radius-pill)', padding: '1px 8px', fontSize: 11, fontWeight: 600 }}>
+              {lookups.metrics[id].here} aqui agora
+            </span>
+          )}
+        </div>
+      )}
       <div style={{ padding: '0 10px 8px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minHeight: 16 }}>
         {summaryOf(data.type, data.data || {}, lookups)}
       </div>
@@ -123,7 +136,7 @@ function RuleFields({ r, set, tags }) {
 }
 
 function Inspector({ node, onChange, onDelete, isStart }) {
-  const { templates, tags, integrations = [], pixels = [] } = React.useContext(LookupsCtx);
+  const { templates, tags, integrations = [], pixels = [], channels = [] } = React.useContext(LookupsCtx);
   if (!node) return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Selecione um bloco para editar. Para ligar, arraste da bolinha de uma saída até outro bloco.</div>;
   const d = node.data.data || {};
   const set = (patch) => onChange({ ...d, ...patch });
@@ -235,6 +248,47 @@ function Inspector({ node, onChange, onDelete, isStart }) {
       </>);
       break;
     }
+    case 'ai_agent': body = (<>
+      <TextArea label="Objetivo do agente" value={d.objective} onChange={(v) => set({ objective: v })} rows={3} hint="O que conta como sucesso. Ex.: tirar dúvidas e levar o lead a pagar o guia de $45 MXN." />
+      <TextArea label="Base de conhecimento" value={d.knowledge} onChange={(v) => set({ knowledge: v })} rows={6} hint="Preço, entrega, garantia, perguntas frequentes. O agente não promete nada fora daqui." />
+      <Input label="Tom de voz" value={d.tone || ''} onChange={(e) => set({ tone: e.target.value || undefined })} placeholder="amigável e direto" />
+      <TextArea label="Mensagem de abertura (opcional)" value={d.opening} onChange={(v) => set({ opening: v || undefined })} rows={2} hint="Vazio: o agente responde a última mensagem do lead (ou espera ele escrever)." />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Input label="Máx. de respostas" type="number" value={d.max_turns ?? 10} onChange={(e) => set({ max_turns: num(e.target.value) })} />
+        <Input label="Prazo sem resposta (min)" type="number" value={d.timeout_minutes ?? 60} onChange={(e) => set({ timeout_minutes: num(e.target.value) })} />
+      </div>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Saídas: Concluiu, Pediu humano (ligue num Alerta), Sem resposta e Erro. A última resposta fica em {'{{agente_resposta}}'}.</div>
+    </>); break;
+    case 'split': body = (<>
+      <ListEditor items={d.variants || []} max={6} addLabel="Adicionar caminho" onChange={(variants) => set({ variants })}
+        make={(items) => ({ id: String.fromCharCode(97 + items.length), weight: 50 })}
+        render={(v, up) => (<div style={{ display: 'flex', gap: 6 }}>
+          <Input value={v.id} onChange={(e) => up({ id: slug(e.target.value).slice(0, 10) })} placeholder="a" style={{ width: 70 }} />
+          <Input type="number" value={v.weight} onChange={(e) => up({ weight: num(e.target.value) })} hint="peso %" />
+        </div>)} />
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Use "Métricas" para comparar quantos leads de cada caminho chegam à venda.</div>
+    </>); break;
+    case 'checkpoint': body = <Input label="Nome do ponto" value={d.name || ''} onChange={(e) => set({ name: e.target.value })} placeholder="viu a oferta" />; break;
+    case 'wait_until': body = (<>
+      <Select label="Esperar até" value={d.mode || 'business_hours'} onChange={(e) => set({ mode: e.target.value })} options={[{ value: 'business_hours', label: 'Próximo horário de atendimento' }, { value: 'datetime', label: 'Data e hora' }]} />
+      {d.mode === 'datetime' ? (
+        <Input label="Data e hora" value={d.at || ''} onChange={(e) => set({ at: e.target.value })} placeholder="2026-11-01 09:00 ou {{data_live}}" hint="No fuso da empresa (Configurações)." />
+      ) : (<>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{DIAS.map((dn, i) => (
+          <Check key={i} label={dn} checked={(d.days || []).includes(i)} onChange={(on) => set({ days: on ? [...(d.days || []), i].sort() : (d.days || []).filter((x) => x !== i) })} />))}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Input label="Abre" type="time" value={d.from || '09:00'} onChange={(e) => set({ from: e.target.value })} />
+          <Input label="Fecha" type="time" value={d.to || '18:00'} onChange={(e) => set({ to: e.target.value })} />
+        </div>
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Dentro do horário, segue na hora. Fora, espera a próxima abertura (no fuso da empresa).</div>
+      </>)}
+    </>); break;
+    case 'notify': body = (<>
+      {channels.length === 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--amber-600)' }}>Nenhum canal de alerta. Conecte um bot do Telegram em Integrações → Pagamentos, Pixel e alertas.</div>}
+      <Select label="Canal" value={d.channel_id || ''} onChange={(e) => set({ channel_id: e.target.value })} options={[{ value: '', label: 'Selecionar…' }, ...channels.map((c) => ({ value: c.id, label: `Telegram · ${c.label}` }))]} />
+      <TextArea label="Texto do alerta" value={d.text} onChange={(v) => set({ text: v })} rows={4} hint={VARS_HELP} />
+      <Input label="Outro chat (opcional)" value={d.chat_id || ''} onChange={(e) => set({ chat_id: e.target.value || undefined })} placeholder="vazio = chat padrão do canal" />
+    </>); break;
     case 'record_sale': body = (<>
       <Input label="Valor (opcional)" value={d.amount ?? ''} onChange={(e) => set({ amount: e.target.value || undefined })} placeholder="vazio = valor pago na cobrança" />
       <Input label="Moeda (opcional)" value={d.currency ?? ''} onChange={(e) => set({ currency: e.target.value.toUpperCase() || undefined })} placeholder="vazio = moeda da cobrança" />
@@ -287,20 +341,30 @@ function Editor({ campaign, onBack, api, notify }) {
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [metrics, setMetrics] = useState(null); // ref → { leads, here } (contador por bloco)
+  async function toggleMetrics() {
+    if (metrics) { setMetrics(null); return; }
+    const r = await call('stats', { campaign_id: campaign.id });
+    if (r.error) { notify('danger', r.error); return; }
+    const m = {};
+    for (const x of r.by_ref || []) m[x.ref] = { leads: x.leads, here: 0 };
+    for (const x of r.waiting_at || []) m[x.ref] = { ...(m[x.ref] || { leads: 0 }), here: x.leads };
+    setMetrics(m);
+    const total = (r.by_status || []).reduce((s, x) => s + x.n, 0);
+    notify('info', `${total} lead(s) já passaram por este fluxo.`);
+  }
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
-    const [g, templates, tags, integrations, pixels] = await Promise.all([
+    const opt = (fn) => (fn ? fn() : Promise.resolve([])).catch(() => []);
+    const [g, templates, tags, integrations, pixels, channels] = await Promise.all([
       api.flowGraph('get', { campaign_id: campaign.id }),
-      api.listTemplates().catch(() => []),
-      api.getTags().catch(() => []),
-      (api.listIntegrations ? api.listIntegrations() : Promise.resolve([])).catch(() => []),
-      (api.listPixels ? api.listPixels() : Promise.resolve([])).catch(() => []),
+      opt(api.listTemplates), opt(api.getTags), opt(api.listIntegrations), opt(api.listPixels), opt(api.listChannels),
     ]);
     if (g.error) { setState((s) => ({ ...s, loading: false, error: g.error })); return; }
     const c = toCanvas(g.active ? g.active.graph : emptyGraph());
-    setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null);
-    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [] });
+    setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null);
+    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [] });
     setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [] });
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos
   }, [api, campaign.id, setEdges, setNodes]);
@@ -402,7 +466,7 @@ function Editor({ campaign, onBack, api, notify }) {
   );
 
   return (
-    <LookupsCtx.Provider value={lookups}>
+    <LookupsCtx.Provider value={{ ...lookups, metrics }}>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 520, gap: 10 }}>
         {/* barra superior */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -417,6 +481,7 @@ function Editor({ campaign, onBack, api, notify }) {
             <Select value={String(state.version || '')} onChange={(e) => e.target.value && activate(e.target.value)} style={{ minWidth: 150 }}
               options={[...(state.version ? [] : [{ value: '', label: 'Versões…' }]), ...state.versions.map((v) => ({ value: String(v.version), label: `Versão ${v.version}${v.is_active ? ' (ativa)' : ''}` }))]} />
           )}
+          {state.version && <Button variant={metrics ? 'primary' : 'secondary'} size="sm" iconLeft="chart-column" onClick={toggleMetrics}>Métricas</Button>}
           {state.version && <Button variant="ghost" size="sm" onClick={deactivate}>Desligar</Button>}
           <Button variant="secondary" onClick={validate} loading={busy} iconLeft="check">Validar</Button>
           <Button onClick={save} loading={busy} iconLeft="send" disabled={state.loading}>Publicar</Button>
@@ -450,7 +515,7 @@ function Editor({ campaign, onBack, api, notify }) {
               defaultEdgeOptions={{ type: 'smoothstep' }} deleteKeyCode={['Delete', 'Backspace']} minZoom={0.2} maxZoom={1.75} proOptions={{ hideAttribution: true }}>
               <Background gap={20} size={1} />
               <Controls showInteractive={false} />
-              <MiniMap pannable zoomable style={{ background: 'var(--surface-card)' }} />
+              <MiniMap pannable zoomable style={{ background: 'var(--surface-card)', width: 150, height: 100 }} />
             </ReactFlow>
           </div>
 

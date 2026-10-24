@@ -39,6 +39,18 @@ export const BLOCKS = {
     exits: [['default', 'Próximo']], make: () => ({}) },
   pixel: { label: 'Pixel da Meta', group: 'Dinheiro', icon: 'target', tone: 'accent', hint: 'Envia Lead ou Purchase para a Meta (API de Conversões).',
     exits: [['default', 'Próximo']], make: () => ({ pixel_config_id: '', event: 'Purchase' }) },
+  ai_agent: { label: 'Agente de IA', group: 'IA', icon: 'bot', tone: 'purple', hint: 'Conversa com o lead em vários turnos até concluir o objetivo, pedir um humano ou o lead sumir.',
+    exits: [['done', 'Concluiu'], ['handoff', 'Pediu humano'], ['expiration', 'Sem resposta'], ['error', 'Erro']],
+    make: () => ({ objective: 'Tirar dúvidas sobre o produto e levar o lead a pagar.', knowledge: '', max_turns: 10, timeout_minutes: 60 }) },
+  split: { label: 'Teste A/B', group: 'Controle', icon: 'split', tone: 'blue', hint: 'Divide os leads entre caminhos pelos pesos. Cada lead fica sempre no mesmo caminho.',
+    exits: [], dynamic: (d) => (d.variants || []).map((v) => [`var_${v.id}`, `${v.id.toUpperCase()} · ${v.weight}%`]),
+    make: () => ({ variants: [{ id: 'a', weight: 50 }, { id: 'b', weight: 50 }] }) },
+  checkpoint: { label: 'Contador', group: 'Controle', icon: 'flag-triangle-right', tone: 'blue', hint: 'Marca um ponto do funil para contar quantos leads chegam até aqui.',
+    exits: [['default', 'Próximo']], make: () => ({ name: 'Etapa' }) },
+  wait_until: { label: 'Horário comercial', group: 'Controle', icon: 'calendar-clock', tone: 'amber', hint: 'Espera o próximo horário de atendimento (no fuso da empresa) ou uma data e hora.',
+    exits: [['default', 'Depois']], make: () => ({ mode: 'business_hours', days: [1, 2, 3, 4, 5], from: '09:00', to: '18:00' }) },
+  notify: { label: 'Alerta (Telegram)', group: 'Ações', icon: 'bell', tone: 'neutral', hint: 'Avisa a equipe no Telegram (venda, erro de pagamento, lead pedindo humano).',
+    exits: [['default', 'Próximo']], make: () => ({ channel_id: '', text: '🔔 {{nome}} ({{telefone}}) — {{evento}}' }) },
   tag: { label: 'Etiquetas', group: 'Ações', icon: 'tag', tone: 'neutral', hint: 'Adiciona ou remove etiquetas do lead.',
     exits: [['default', 'Próximo']], make: () => ({ add: [], remove: [] }) },
   set_var: { label: 'Definir variável', group: 'Ações', icon: 'pencil', tone: 'neutral', hint: 'Grava texto ou faz conta numa variável.',
@@ -122,6 +134,15 @@ export function summaryOf(type, d, lookups = {}) {
       return `${d.currency || '?'} · ${m ? m[1] : d.method || '?'} · ${d.open_amount ? 'valor livre' : d.amount || '?'}`;
     }
     case 'record_sale': return d.amount ? `Valor ${d.amount}` : 'Valor pago na cobrança';
+    case 'ai_agent': return d.objective || '';
+    case 'split': return (d.variants || []).map((v) => `${v.id.toUpperCase()} ${v.weight}%`).join(' · ');
+    case 'checkpoint': return d.name || '';
+    case 'wait_until': {
+      if (d.mode === 'datetime') return `Até ${d.at || '?'}`;
+      const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+      return `${(d.days || []).map((x) => DIAS[x]).join(', ')} · ${d.from || '?'}–${d.to || '?'}`;
+    }
+    case 'notify': return d.text || '';
     case 'pixel': return `${d.event || 'Purchase'} → ${(lookups.pixels || []).find((p) => p.id === d.pixel_config_id)?.label || 'escolha o Pixel'}`;
     default: return '';
   }

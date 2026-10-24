@@ -58,6 +58,12 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - Cada nova passagem pelo bloco gera cobrança nova (`external_id = kb-<execução>-<bloco>-<n>`); a repetição após falha temporária reusa a mesma (idempotente).
 - `record_sale`: grava em `flow_sales` (uma por cobrança) e soma em vendas recuperadas da campanha. A condição "comprou" também considera cobranças confirmadas.
 - `pixel`: API de Conversões da Meta (rota `pixel-configs`: list | save | delete | test). E-mail/telefone só em hash SHA-256; Purchase usa o id da cobrança como `event_id` (sem contagem dupla).
+### Fase 4 — escala (migração `0071`)
+- `ai_agent`: conversa em vários turnos (objetivo + base de conhecimento + tom). Cada resposta do lead vira um turno; a IA devolve a resposta e a ação (`continuar`/`concluido`/`humano`). Saídas `done`, `handoff`, `expiration` (sem resposta no prazo) e `error`. Histórico (últimas 24 falas) fica na execução. Sem `opening`, responde a última mensagem do lead; nunca pede senha/cartão.
+- `split` (teste A/B por pesos, saída `var_<id>`; o lead fica sempre no mesmo caminho), `checkpoint` (ponto contado no funil).
+- `wait_until`: próximo horário comercial (dias + abre/fecha) ou data e hora, sempre no fuso da empresa (`organizations.timezone`, horário de verão incluso).
+- `notify`: alerta no Telegram pelo bot da empresa (rota `notify-channels`: list | save | delete | test; token cifrado, conferido com `getMe`). O fluxo segue mesmo se o alerta falhar.
+- `flow-graph` action `stats` agora devolve `by_ref` (leads por bloco) e `waiting_at` (parados agora) — o botão "Métricas" do editor mostra no canvas.
 - Variável opcional: `XPAG_BASE_URL` (padrão `https://api.xpag.global`). Testado contra o sandbox público da XPag: Pix e SPEI criados e consultados; pagamento simulado passa a `confirmed` na consulta. Valor livre (SPEI) foi recusado no sandbox — conferir em produção.
 
 ## E-mails, convite e sessão

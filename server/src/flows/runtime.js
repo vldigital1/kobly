@@ -9,7 +9,7 @@
 // (MAX_ATTEMPTS) e depois segue pela saída "failed"; lead que pediu SAIR encerra a execução;
 // compra aprovada encerra execuções de recuperação (stop_on_purchase).
 import { nodeOf, nextOf, EVENTOS_RECUPERACAO, MAX_WAIT_MINUTES, delaySecondsRange } from './graph.js';
-import { render, buildFields, evalCondition, applySetVar, isWindowOpen, inboundText, digitsOf, DEFAULT_TZ } from './vars.js';
+import { render, buildFields, evalCondition, applySetVar, isWindowOpen, inboundText, digitsOf, DEFAULT_TZ, nextBusinessStart, parseLocalDateTime } from './vars.js';
 import { resolveCtaLink, retryable } from '../engine/steps.js';
 
 export const MAX_STEPS_PER_RUN = 25;
@@ -68,7 +68,15 @@ function plainNumber(v) {
 }
 export { plainNumber };
 
-export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null, pixel = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+// Teste A/B: sorteio pelos pesos (a escolha fica guardada na execução para não sortear de novo).
+export function pickVariant(variants, r) {
+  const total = variants.reduce((s, v) => s + v.weight, 0);
+  let acc = 0; const x = r * total;
+  for (const v of variants) { acc += v.weight; if (x < acc) return v.id; }
+  return variants[variants.length - 1].id;
+}
+
+export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const graphCache = new Map(); // versões são imutáveis: cache seguro
   async function loadGraph(versionId) {
     if (graphCache.has(versionId)) return graphCache.get(versionId);
@@ -261,6 +269,81 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
         ctx.vars._wait_options = (d.options || []).map((o) => ({ id: o.id, title: o.title }));
         return { wait: { kind: 'reply', seconds: (d.timeout_minutes || MAX_WAIT_MINUTES) * 60 }, detail: r.detail };
       }
+      case 'ai_agent': {
+        const hk = `_agent_${node.ref}`;
+        const saveAs = d.save_as || 'resposta';
+        const timeoutS = (d.timeout_minutes || 60) * 60;
+        let st = ctx.vars[hk] || { h: [], turns: 0 };
+        const waitAgain = (detail) => { ctx.vars[hk] = st; ctx.vars._wait_var = saveAs; delete ctx.vars._wait_options; return { wait: { kind: 'reply', seconds: timeoutS }, detail }; };
+        if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };
+        if (!ctx.vars._agent_pending) {
+          // entrada no bloco: começa uma conversa nova
+          st = { h: [], turns: 0 };
+          const ultima = ctx.vars[saveAs] || ctx.vars.ultima_mensagem;
+          if (d.opening) {
+            if (!isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora)) return { exit: 'error', detail: 'janela de 24 h fechada: o agente só conversa depois que o lead escreve (use um modelo antes)' };
+            const text = render(d.opening, ctx);
+            const s = await send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text }));
+            if (s.retry) return s;
+            if (s.exit !== 'sent') return { exit: 'error', detail: s.detail };
+            st.h.push({ r: 'agent', t: text });
+            return waitAgain('abertura enviada');
+          }
+          if (d.reply_on_entry === false || !ultima) return waitAgain('aguardando o lead');
+          ctx.vars[saveAs] = ultima; // responde já a última mensagem do lead
+        }
+        // turno: o lead respondeu → IA responde
+        delete ctx.vars._agent_pending;
+        const text = String(ctx.vars[saveAs] ?? ctx.vars.ultima_mensagem ?? '');
+        st.h.push({ r: 'lead', t: text });
+        if (!llm) return { exit: 'error', detail: 'IA não configurada' };
+        let out;
+        try {
+          out = await llm.agentReply({ objective: render(d.objective, ctx), knowledge: render(d.knowledge || '', ctx), tone: d.tone, history: st.h, leadName: (ctx.lead.nome || '').split(' ')[0] });
+        } catch (e) {
+          if (retryable(e.status, e.code) && e.code !== 'ai_unconfigured') { st.h.pop(); ctx.vars[hk] = st; ctx.vars._agent_pending = true; return { retry: String(e.message).slice(0, 200) }; }
+          return { exit: 'error', detail: String(e.message).slice(0, 200) };
+        }
+        if (out.resposta) {
+          const s = await send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text: out.resposta }));
+          if (s.retry) { st.h.pop(); ctx.vars[hk] = st; ctx.vars._agent_pending = true; return s; }
+          if (s.exit !== 'sent') return { exit: 'error', detail: s.detail };
+          st.h.push({ r: 'agent', t: out.resposta });
+        }
+        st.turns++;
+        if (st.h.length > 24) st.h = st.h.slice(-24);
+        ctx.vars[hk] = st;
+        ctx.vars.agente_resposta = out.resposta;
+        if (out.acao === 'concluido') return { exit: 'done', detail: `concluído em ${st.turns} resposta(s)` };
+        if (out.acao === 'humano') return { exit: 'handoff', detail: 'pediu atendimento humano' };
+        if (st.turns >= (d.max_turns || 10)) return { exit: 'done', detail: `limite de ${st.turns} respostas` };
+        return waitAgain(`resposta ${st.turns}`);
+      }
+      case 'split': {
+        const key = `_split_${node.ref}`;
+        const vs = d.variants || [];
+        let id = ctx.vars[key];
+        if (!vs.some((v) => v.id === id)) { id = pickVariant(vs, rnd()); ctx.vars[key] = id; }
+        return { exit: `var_${id}` };
+      }
+      case 'checkpoint': return { exit: 'default', detail: String(d.name || '').slice(0, 60) };
+      case 'wait_until': {
+        let at = null;
+        if (d.mode === 'business_hours') at = nextBusinessStart(ctx.agora, ctx.tz, d.days || [], d.from, d.to);
+        else {
+          const t = parseLocalDateTime(render(String(d.at || ''), ctx), ctx.tz);
+          if (!t) return { exit: 'default', detail: `data inválida (${render(String(d.at || ''), ctx) || 'vazia'}) — seguiu sem esperar` };
+          at = t > ctx.agora ? t : null;
+        }
+        if (!at) return { exit: 'default', detail: 'já está no horário' };
+        const secs = Math.min(MAX_WAIT_MINUTES * 60, Math.ceil((at.getTime() - ctx.agora.getTime()) / 1000));
+        return { wait: { kind: 'timer', seconds: secs }, detail: `até ${at.toISOString()}` };
+      }
+      case 'notify': {
+        if (!notifier) return { exit: 'default', detail: 'alertas indisponíveis neste ambiente' };
+        const r = await notifier.send({ orgId: ex.organization_id, channelId: d.channel_id, text: render(d.text, ctx), chatId: d.chat_id ? render(String(d.chat_id), ctx) : undefined });
+        return { exit: 'default', detail: r.ok ? 'alerta enviado' : `alerta falhou: ${r.detail}` }; // o fluxo segue mesmo se o alerta falhar
+      }
       case 'payment': {
         if (!payments) return { exit: 'error', detail: 'pagamentos indisponíveis neste ambiente' };
         const prefix = d.save_as || 'pagamento';
@@ -379,11 +462,18 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
 
     if (ex.status === 'waiting') {
       const node = nodeOf(graph, ref);
-      const exit = ex.resume_exit || (ex.wait_kind === 'reply' ? 'timeout' : 'default');
+      let exit = ex.resume_exit || (ex.wait_kind === 'reply' ? 'timeout' : 'default');
       delete ctx.vars._wait_var; delete ctx.vars._wait_options;
-      await logEvent(ex, node, exit);
-      ref = nextOf(node, exit);
-      if (!ref) return finish(ex, ctx, 'completed', null, ex.current_ref);
+      if (node && node.type === 'ai_agent' && exit === 'reply') {
+        // o agente continua no mesmo bloco: a resposta do lead vira o próximo turno da conversa
+        ctx.vars._agent_pending = true;
+        await logEvent(ex, node, 'reply');
+      } else {
+        if (node && node.type === 'ai_agent' && exit === 'timeout') exit = 'expiration';
+        await logEvent(ex, node, exit);
+        ref = nextOf(node, exit);
+        if (!ref) return finish(ex, ctx, 'completed', null, ex.current_ref);
+      }
     }
 
     for (let i = 0; i < MAX_STEPS_PER_RUN; i++) {

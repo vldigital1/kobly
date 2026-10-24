@@ -102,6 +102,51 @@ export function applySetVar(data, ctx) {
   return Math.round(r * 100) / 100;
 }
 
+// ---- Fuso horário -------------------------------------------------------------------
+// Diferença (ms) entre o relógio local do fuso e o UTC naquele instante (considera horário de verão).
+function tzOffset(date, tz) {
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const p = Object.fromEntries(f.formatToParts(date).map((x) => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - (date.getTime() - date.getMilliseconds());
+}
+// Data/hora local (no fuso) → instante UTC. Ex.: zonedToUtc(2026,10,20,9,0,'America/Mexico_City').
+export function zonedToUtc(y, m, d, hh, mm, tz) {
+  const guess = Date.UTC(y, m - 1, d, hh, mm);
+  let t = guess - tzOffset(new Date(guess), tz);
+  t = guess - tzOffset(new Date(t), tz); // segunda passada acerta a virada do horário de verão
+  return new Date(t);
+}
+function localDate(date, tz) {
+  const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const [y, m, d] = f.format(date).split('-').map(Number);
+  return { y, m, d };
+}
+
+// Próximo início do horário comercial; null se AGORA já está dentro dele.
+export function nextBusinessStart(now, tz, days, from, to) {
+  const lp = localParts(now, tz);
+  if (days.includes(lp.weekday) && lp.hhmm >= from && lp.hhmm < to) return null;
+  const [fh, fm] = from.split(':').map(Number);
+  const base = localDate(now, tz);
+  for (let i = 0; i <= 7; i++) {
+    const noon = zonedToUtc(base.y, base.m, base.d, 12, 0, tz); // meio-dia evita erro em dia com troca de horário
+    const day = new Date(noon.getTime() + i * 86400000);
+    const ld = localDate(day, tz);
+    const start = zonedToUtc(ld.y, ld.m, ld.d, fh, fm, tz);
+    if (start > now && days.includes(localParts(start, tz).weekday)) return start;
+  }
+  return null;
+}
+// "AAAA-MM-DD HH:MM" (ou "DD/MM/AAAA HH:MM") no fuso → instante; null se inválido.
+export function parseLocalDateTime(text, tz) {
+  const s = String(text || '').trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(s);
+  if (m) return zonedToUtc(+m[1], +m[2], +m[3], +m[4], +m[5], tz);
+  m = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})/.exec(s);
+  if (m) return zonedToUtc(+m[3], +m[2], +m[1], +m[4], +m[5], tz);
+  return null;
+}
+
 // Janela de 24 h da API oficial: aberta se o lead mandou mensagem nas últimas 24 h.
 export const isWindowOpen = (lastInbound, now = new Date()) => !!lastInbound && (now.getTime() - new Date(lastInbound).getTime()) < 24 * 3600 * 1000;
 

@@ -50,5 +50,26 @@ export function createLlm({ apiKey, baseUrl = 'https://api.deepseek.com', model 
     return res;
   }
 
-  return { classify, extract, configured: !!apiKey };
+  // Agente conversacional: responde a próxima mensagem e diz se continua, se concluiu o objetivo
+  // ou se precisa de um humano. Devolve { resposta, acao } com acao ∈ continuar | concluido | humano.
+  const ACOES = new Set(['continuar', 'concluido', 'humano']);
+  async function agentReply({ objective, knowledge, tone, history, leadName, language }) {
+    const out = await chatJson(
+      'Você é um atendente de vendas pelo WhatsApp de uma loja. Escreva como uma pessoa: mensagens curtas, naturais, sem listas longas. ' +
+      `${GUARD.replace('"mensagem_do_cliente"', '"conversa"')} Nunca prometa o que não está na base de conhecimento; se não souber, diga que vai confirmar. ` +
+      'Nunca peça senha, dados de cartão ou documentos. Escolha "concluido" quando o objetivo for atingido, "humano" se o cliente pedir uma pessoa, estiver irritado ou o assunto fugir do escopo, e "continuar" nos demais casos. ' +
+      'Responda só com JSON: {"resposta": "<texto para o cliente>", "acao": "continuar|concluido|humano"}.',
+      JSON.stringify({
+        objetivo: String(objective || '').slice(0, 2000), base_de_conhecimento: String(knowledge || '').slice(0, 8000),
+        tom: tone || 'amigável e direto', idioma: language || 'o mesmo idioma que o cliente usar', nome_do_cliente: leadName || '',
+        conversa: (history || []).slice(-12).map((m) => ({ de: m.r === 'lead' ? 'cliente' : 'atendente', texto: String(m.t || '').slice(0, 1000) })),
+      }),
+    );
+    const resposta = out && typeof out.resposta === 'string' ? out.resposta.trim().slice(0, 1000) : '';
+    const acao = out && ACOES.has(out.acao) ? out.acao : 'continuar';
+    if (!resposta && acao === 'continuar') throw new AiError(502, 'ai_bad_output', 'A IA não devolveu resposta.');
+    return { resposta, acao };
+  }
+
+  return { classify, extract, agentReply, configured: !!apiKey };
 }

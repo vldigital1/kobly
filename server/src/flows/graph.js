@@ -25,6 +25,11 @@ export const NODE_TYPES = {
   condition: { label: 'Condição', exits: ['yes', 'no'], required: [] },
   ai_classify: { label: 'IA: entender resposta', exits: ['other', 'error'], dynamic: (d) => (d.outputs || []).map((o) => `out_${o.key}`), required: [] },
   ai_extract: { label: 'IA: extrair dados', exits: ['ok', 'missing', 'error'], required: ['ok'] },
+  ai_agent: { label: 'Agente de IA', exits: ['done', 'handoff', 'expiration', 'error'], required: [] },
+  split: { label: 'Teste A/B', exits: [], dynamic: (d) => (d.variants || []).map((v) => `var_${v.id}`), required: [] },
+  checkpoint: { label: 'Contador', exits: ['default'], required: ['default'] },
+  wait_until: { label: 'Horário comercial', exits: ['default'], required: ['default'] },
+  notify: { label: 'Alerta', exits: ['default'], required: [] },
   payment: { label: 'Cobrança', exits: ['charge_created', 'payment_approved', 'error'], required: ['charge_created'] },
   record_sale: { label: 'Registrar venda', exits: ['default'], required: [] },
   pixel: { label: 'Pixel da Meta', exits: ['default'], required: [] },
@@ -125,6 +130,40 @@ function checkData(node, err) {
       if (d.instructions !== undefined && d.instructions !== null && (typeof d.instructions !== 'string' || d.instructions.length > 2000)) err(`${at}: instruções até 2000 caracteres.`);
       break;
     }
+    case 'ai_agent':
+      if (!str(d.objective, 2000)) err(`${at}: descreva o objetivo do agente (ex.: tirar dúvidas e levar o lead a pagar).`);
+      if (d.knowledge !== undefined && d.knowledge !== null && (typeof d.knowledge !== 'string' || d.knowledge.length > 8000)) err(`${at}: base de conhecimento até 8000 caracteres.`);
+      if (d.opening !== undefined && d.opening !== null && (typeof d.opening !== 'string' || d.opening.length > 1024)) err(`${at}: mensagem de abertura até 1024 caracteres.`);
+      if (d.max_turns !== undefined && !(Number.isInteger(d.max_turns) && d.max_turns >= 1 && d.max_turns <= 30)) err(`${at}: máximo de respostas entre 1 e 30.`);
+      if (d.timeout_minutes !== undefined && d.timeout_minutes !== null && !(Number.isFinite(d.timeout_minutes) && d.timeout_minutes > 0 && d.timeout_minutes <= MAX_WAIT_MINUTES)) err(`${at}: prazo entre 1 minuto e 30 dias.`);
+      break;
+    case 'split': {
+      const vs = Array.isArray(d.variants) ? d.variants : [];
+      if (vs.length < 2 || vs.length > 6) err(`${at}: use de 2 a 6 caminhos.`);
+      const ids = new Set();
+      for (const v of vs) {
+        if (!isObj(v) || !KEY.test(String(v.id || ''))) { err(`${at}: cada caminho precisa de um id (minúsculas, números e _).`); continue; }
+        if (ids.has(v.id)) err(`${at}: caminho repetido "${v.id}".`); ids.add(v.id);
+        if (!(Number.isFinite(v.weight) && v.weight > 0 && v.weight <= 100)) err(`${at}: peso do caminho "${v.id}" entre 1 e 100.`);
+      }
+      for (const v of vs) if (isObj(v) && KEY.test(String(v.id || '')) && !(isObj(node.next) && node.next[`var_${v.id}`])) err(`${at}: ligue o caminho "${v.id}".`);
+      break;
+    }
+    case 'checkpoint':
+      if (!str(d.name, 60)) err(`${at}: dê um nome ao contador (ex.: "viu a oferta").`);
+      break;
+    case 'wait_until': {
+      if (!['business_hours', 'datetime'].includes(d.mode)) { err(`${at}: escolha "horário comercial" ou "data e hora".`); break; }
+      if (d.mode === 'business_hours') {
+        if (!(Array.isArray(d.days) && d.days.length && d.days.every((x) => Number.isInteger(x) && x >= 0 && x <= 6))) err(`${at}: escolha os dias de atendimento.`);
+        if (!(HHMM.test(String(d.from)) && HHMM.test(String(d.to)) && d.from < d.to)) err(`${at}: horário de início e fim no formato HH:MM (início antes do fim).`);
+      } else if (!str(d.at, 64)) err(`${at}: informe a data e hora (AAAA-MM-DD HH:MM ou variável).`);
+      break;
+    }
+    case 'notify':
+      if (!str(d.channel_id, 64)) err(`${at}: escolha o canal de alerta (Integrações → Pagamentos, Pixel e alertas).`);
+      if (!str(d.text, 2000)) err(`${at}: escreva o texto do alerta.`);
+      break;
     case 'payment': {
       if (!str(d.integration_id, 64)) err(`${at}: escolha a conta do gateway (Integrações → Pagamentos).`);
       const methods = PAYMENT_METHODS[d.currency];
@@ -225,7 +264,7 @@ export function validateGraph(graph) {
     const seen = new Set(); const stack = [start.ref];
     while (stack.length) { const r = stack.pop(); if (seen.has(r)) continue; seen.add(r); const n = byRef.get(r); if (n && isObj(n.next)) for (const t of Object.values(n.next)) if (t) stack.push(t); }
     for (const n of nodes) if (n && n.ref && !seen.has(n.ref)) warn(`O bloco "${n.ref}" não é alcançado a partir do início.`);
-    const PAUSA = new Set(['delay', 'wait_reply', 'send_buttons']);
+    const PAUSA = new Set(['delay', 'wait_reply', 'send_buttons', 'ai_agent', 'wait_until']);
     const color = new Map();
     const dfs = (r) => {
       color.set(r, 1);
