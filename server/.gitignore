@@ -1,2 +1,5 @@
 node_modules
 .env
+
+# ambiente local de desenvolvimento (banco PGlite, binários, credenciais de teste)
+.local-dev/

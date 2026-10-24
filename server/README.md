@@ -22,6 +22,14 @@ Sem Postgres instalado, use o banco de teste em memória (PGlite, Postgres real 
   `KOBLY_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5544/postgres npm test` (unitários + integração).
 - Limite: o PGlite tem uma conexão só (o socket multiplexa o pool), então disputa entre workers concorrentes (`skip locked`) só é prova num Postgres de verdade.
 
+## Ambiente local completo (Windows, sem instalar nada como administrador)
+`node tools/dev-local.mjs` sobe PostgreSQL 18 portátil + esquema completo + PostgREST + kobly-api; na primeira vez cria uma conta Cliente de teste e dados de demonstração (seed_demo + uma campanha com fluxo em grafo). Depois, na raiz: `node scripts/dev-local-front.mjs` → http://localhost:5173.
+- Tudo fica em `~/.kobly-local` (ou `KOBLY_LOCAL_DIR`): **fora do OneDrive** (não sincroniza arquivos de banco) e num caminho sem acento (o PostgreSQL no Windows não aceita "Á" no caminho).
+  - `pgsql/` — zip oficial "postgresql-18.x-windows-x64-binaries" (bin, lib, share; pode apagar pgAdmin/doc/symbols).
+  - `bin/postgrest.exe` — release oficial do PostgREST para Windows (usa a `libpq.dll` de `pgsql/bin`).
+  - `pgdata/` dados · `credenciais.json` e-mail/senha da conta de teste e segredos locais (nunca usar em produção).
+- Portas: PostgreSQL 54329, PostgREST 54330, API 4120. Ctrl+C para tudo. Para recomeçar do zero: apague `~/.kobly-local/pgdata`.
+
 ## Estado
 Etapa 1 (banco + login) e Etapa 2 (front ligado: `src/api/apiClient.js`) prontas em desenvolvimento (`https://kobly-api-dev.dizevolv.com`). Ainda 501: ai-chat, send-email, send-whatsapp (substituído pela rota whatsapp-account; envio das campanhas depende do motor), send-sms, bulk-send, asaas, resend-admin, invite-client, webhooks de entrada e agendador. `cron.schedule`/`net.http_post` são stubs: o agendador (process-steps, process-bulk, reset de uso) passa a ser do serviço.
 
