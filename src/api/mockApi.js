@@ -1140,6 +1140,9 @@ export const KoblyApi = {
   async team(action, extra = {}, empresaId = null) { return this.serviceCall('team', action, extra, empresaId); },
   async products(action, extra = {}, empresaId = null) { return this.serviceCall('products', action, extra, empresaId); },
   async tracking(action, extra = {}, empresaId = null) { return this.serviceCall('tracking', action, extra, empresaId); },
+  // Chaves de IA da empresa (BYOK) e conta de anúncios do Facebook.
+  async aiKeys(action, extra = {}, empresaId = null) { return this.serviceCall('ai-keys', action, extra, empresaId); },
+  async metaAds(action, extra = {}, empresaId = null) { return this.serviceCall('meta-ads', action, extra, empresaId); },
   async serviceCall(fn, action, extra = {}, empresaId = null) {
     const { data, error } = await supabase.functions.invoke(fn, { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
     if (error) {

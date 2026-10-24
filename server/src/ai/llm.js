@@ -1,13 +1,62 @@
-// Cliente de IA (API compatível com OpenAI: DeepSeek, OpenAI, OpenRouter…). Sem dependências; fetch injetável.
-// A chave fica só no ambiente do serviço (AI_API_KEY). A mensagem do lead é DADO: vai delimitada em JSON,
+// Cliente de IA. Provedores: OpenAI, Google Gemini, DeepSeek e OpenRouter pela API no formato OpenAI
+// (/chat/completions, fetch injetável) e Anthropic (Claude) pelo SDK oficial. A chave vem da empresa
+// (BYOK, ver ai/router.js) ou do ambiente (AI_API_KEY). A mensagem do lead é DADO: vai delimitada em JSON,
 // o sistema manda ignorar instruções dentro dela e a resposta só vale se for uma das saídas configuradas.
+import Anthropic from '@anthropic-ai/sdk';
+
 export class AiError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
 }
 
-export function createLlm({ apiKey, baseUrl = 'https://api.deepseek.com', model = 'deepseek-chat', fetchImpl = globalThis.fetch, timeoutMs = 20000 } = {}) {
+export const AI_PROVIDERS = {
+  openai: { label: 'OpenAI (GPT)', baseUrl: 'https://api.openai.com/v1' },
+  anthropic: { label: 'Anthropic (Claude)', defaultModel: 'claude-opus-5-5' },
+  gemini: { label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai' },
+  deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' },
+  openrouter: { label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+};
+// modelos Claude com recuperação automática no servidor quando o modelo recusa um pedido
+const CLAUDE_FALLBACK = new Set(['claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-sonnet-5-5']);
+
+// Primeiro objeto JSON do texto (o Claude responde em texto; os demais em json_object).
+export function parseJsonText(text) {
+  const t = String(text || '');
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new AiError(502, 'ai_bad_output', 'A IA devolveu um formato inválido.');
+  try { return JSON.parse(t.slice(a, b + 1)); } catch { throw new AiError(502, 'ai_bad_output', 'A IA devolveu um formato inválido.'); }
+}
+
+function anthropicError(e) {
+  if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return new AiError(401, 'ai_bad_key', 'A chave da Anthropic foi recusada.');
+  if (e instanceof Anthropic.NotFoundError) return new AiError(404, 'ai_bad_model', 'Modelo da Anthropic não encontrado para esta chave.');
+  if (e instanceof Anthropic.RateLimitError) return new AiError(429, 'ai_rate_limited', 'Limite de uso da Anthropic atingido; tentando de novo.');
+  if (e instanceof Anthropic.APIConnectionError) return new AiError(502, 'ai_unreachable', 'A IA não respondeu agora.');
+  if (e instanceof Anthropic.APIError) return new AiError(e.status || 502, 'ai_error', String(e.message || 'Erro na Anthropic').slice(0, 200));
+  return e;
+}
+
+export function createLlm({ apiKey, provider = null, baseUrl = 'https://api.deepseek.com', model = 'deepseek-chat', fetchImpl = globalThis.fetch, timeoutMs = 20000, anthropicClient = null } = {}) {
+  const isClaude = provider === 'anthropic';
+  const claude = isClaude && apiKey ? (anthropicClient || new Anthropic({ apiKey, maxRetries: 1, timeout: 90_000 })) : null;
+  if (provider && provider !== 'anthropic' && AI_PROVIDERS[provider]) baseUrl = AI_PROVIDERS[provider].baseUrl;
+
+  async function claudeJson(system, user) {
+    let r;
+    try {
+      const fallback = CLAUDE_FALLBACK.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {};
+      r = await claude.beta.messages.create({
+        model, max_tokens: 16000, ...fallback,
+        system: `${system} Responda somente com o objeto JSON, sem texto antes ou depois.`,
+        messages: [{ role: 'user', content: user }],
+      });
+    } catch (e) { throw anthropicError(e); }
+    if (r.stop_reason === 'refusal') throw new AiError(422, 'ai_refused', 'O Claude recusou responder a esta mensagem.');
+    return parseJsonText(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
+  }
+
   async function chatJson(system, user) {
-    if (!apiKey) throw new AiError(503, 'ai_unconfigured', 'IA não configurada neste ambiente (AI_API_KEY).');
+    if (!apiKey) throw new AiError(503, 'ai_unconfigured', 'IA não configurada: cadastre a chave de IA da empresa em Integrações → IA.');
+    if (isClaude) return claudeJson(system, user);
     let res;
     try {
       res = await fetchImpl(baseUrl.replace(/\/$/, '') + '/chat/completions', {
@@ -18,6 +67,7 @@ export function createLlm({ apiKey, baseUrl = 'https://api.deepseek.com', model 
       });
     } catch { throw new AiError(502, 'ai_unreachable', 'A IA não respondeu agora.'); }
     const j = await res.json().catch(() => null);
+    if (res.status === 401 || res.status === 403) throw new AiError(401, 'ai_bad_key', 'A chave de IA foi recusada pelo provedor.');
     if (!res.ok) throw new AiError(res.status, 'ai_error', (j && j.error && j.error.message) || `IA respondeu ${res.status}`);
     const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
     try { return JSON.parse(content); } catch { throw new AiError(502, 'ai_bad_output', 'A IA devolveu um formato inválido.'); }
@@ -82,5 +132,25 @@ export function createLlm({ apiKey, baseUrl = 'https://api.deepseek.com', model 
     return out && typeof out.resumo === 'string' ? out.resumo.trim().slice(0, 1200) : null;
   }
 
-  return { classify, extract, agentReply, summarize, configured: !!apiKey };
+  return { classify, extract, agentReply, summarize, configured: !!apiKey, provider: provider || 'openai_compat', model };
+}
+
+// Modelos disponíveis para a chave (também confirma que a chave funciona).
+export async function listModels({ provider, apiKey, fetchImpl = globalThis.fetch, anthropicClient = null }) {
+  if (provider === 'anthropic') {
+    const client = anthropicClient || new Anthropic({ apiKey, maxRetries: 1, timeout: 20_000 });
+    const ids = [];
+    try { for await (const m of client.models.list()) ids.push(m.id); } catch (e) { throw anthropicError(e); }
+    return ids;
+  }
+  const p = AI_PROVIDERS[provider];
+  if (!p) throw new AiError(400, 'bad_provider', 'Provedor de IA não suportado.');
+  let res;
+  try { res = await fetchImpl(`${p.baseUrl}/models`, { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(20000) }); }
+  catch { throw new AiError(502, 'ai_unreachable', 'O provedor de IA não respondeu.'); }
+  if (res.status === 401 || res.status === 403) throw new AiError(401, 'ai_bad_key', 'A chave de IA foi recusada pelo provedor.');
+  const j = await res.json().catch(() => null);
+  if (!res.ok) throw new AiError(res.status, 'ai_error', (j && j.error && j.error.message) || `Provedor respondeu ${res.status}`);
+  // Gemini devolve "models/gemini-…"; a API no formato OpenAI aceita o id sem o prefixo
+  return ((j && j.data) || []).map((m) => String(m.id || '').replace(/^models\//, '')).filter(Boolean).sort();
 }

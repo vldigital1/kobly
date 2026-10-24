@@ -13,9 +13,11 @@ import { createGraph } from './whatsapp/graph.js';
 import { parseKey } from './whatsapp/crypto.js';
 import { createFlowRuntime } from './flows/runtime.js';
 import { createFlowAdmin } from './flows/admin.js';
-import { createLlm } from './ai/llm.js';
+import { createAiKeys } from './ai/router.js';
+import { createMetaAds } from './ads/meta.js';
 import { createPayments } from './payments/service.js';
 import { createXpag } from './payments/xpag.js';
+import { createMercadoPago, createWoovi } from './payments/pix_br.js';
 import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
 import { createCopilot } from './flows/copilot.js';
@@ -55,9 +57,12 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     secretKey: config.secretKey ? parseKey(config.secretKey) : null,
     publicBaseUrl: config.publicBaseUrl || '', globalAppSecret: config.metaAppSecret || null,
   });
-  const llm = createLlm({ apiKey: config.aiApiKey, baseUrl: config.aiBaseUrl, model: config.aiModel, fetchImpl });
   const secretKeyBuf = config.secretKey ? parseKey(config.secretKey) : null;
-  const paymentsCore = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
+  // IA: chave de cada empresa (BYOK); a da plataforma só como reserva se AI_PLATFORM_FALLBACK=true
+  const aiKeys = createAiKeys({ pool, secretKey: secretKeyBuf, fetchImpl, allowPlatform: !!config.aiPlatformFallback,
+    platform: { apiKey: config.aiApiKey, baseUrl: config.aiBaseUrl, model: config.aiModel } });
+  const llm = aiKeys;
+  const paymentsCore = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }), mercadopago: createMercadoPago({ fetchImpl }), woovi: createWoovi({ fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
   const pixel = createPixel({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaGraphBase });
   const notifier = createNotifier({ pool, secretKey: secretKeyBuf, fetchImpl });
   // UTMify: cobrança do fluxo vira pedido "aguardando pagamento"; confirmada, vira "pago" (nunca derruba o fluxo)
@@ -81,7 +86,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const team = createTeam({ pool, auth, mailer });
   const tracking = createTracking({ pool, utmify });
   const products = createProducts({ pool });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products });
+  const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });

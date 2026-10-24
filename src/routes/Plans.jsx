@@ -1,3 +1,4 @@
+import { SMS_ENABLED } from '@/lib/features.js';
 import { useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { KoblyMockDB } from '@/api/mockData.js';
@@ -290,8 +291,8 @@ function KoblyPlans() {
             <Input label="Limite de execuções/mês" type="number" placeholder="50000" value={pf.limiteExecucoes} onChange={setField('limiteExecucoes')} />
             <Input label="Limite de integrações (vazio = ilimitado)" type="number" placeholder="10" value={pf.limiteIntegracoes} onChange={setField('limiteIntegracoes')} />
             <Input label="Excedente (R$/mensagem)" type="number" step="0.001" placeholder="0.010" value={pf.precoExcedente} onChange={setField('precoExcedente')} />
-            <Select label="SMS" value={pf.smsHabilitado} onChange={setField('smsHabilitado')}
-              options={[{ value: 'nao', label: 'Não' }, { value: 'sim', label: 'Sim' }]} />
+            {SMS_ENABLED && <Select label="SMS" value={pf.smsHabilitado} onChange={setField('smsHabilitado')}
+              options={[{ value: 'nao', label: 'Não' }, { value: 'sim', label: 'Sim' }]} />}
             <Select label="Disparo em massa" value={pf.disparoMassaHabilitado} onChange={setField('disparoMassaHabilitado')}
               options={[{ value: 'nao', label: 'Não' }, { value: 'sim', label: 'Sim' }]} />
             <Select label="Domínio próprio" value={pf.dominioProprioHabilitado} onChange={setField('dominioProprioHabilitado')}

@@ -70,6 +70,8 @@ export function createFunctions(ctx) {
     'team': () => orgUserRoute('team', 'team'),
     'products': () => orgUserRoute('products', 'products'),
     'tracking': () => orgUserRoute('tracking', 'tracking'),
+    'ai-keys': () => orgUserRoute('aiKeys', 'ai-keys'),
+    'meta-ads': () => orgUserRoute('metaAds', 'meta-ads'),
   };
   return {
     names: () => Object.keys(handlers),

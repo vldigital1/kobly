@@ -59,7 +59,7 @@ export function analyzeFlow(graph, byNode, paths = []) {
       }
       case 'ai_classify': {
         const none = o(node.ref, 'other'); if (pct(none, t) >= 30) add(node.ref, 'media', `IA não encaixou ${pct(none, t)}% das respostas`, `${none} de ${t} respostas foram para "Nenhuma".`, 'Descreva melhor quando usar cada saída (com exemplos) ou crie uma saída "dúvida".');
-        const err = o(node.ref, 'error'); if (pct(err, t) >= 5) add(node.ref, 'alta', `${pct(err, t)}% de erro na IA`, `${err} chamadas falharam.`, 'Confira a chave e os créditos da IA (AI_API_KEY) e ligue "Erro" a um caminho seguro.');
+        const err = o(node.ref, 'error'); if (pct(err, t) >= 5) add(node.ref, 'alta', `${pct(err, t)}% de erro na IA`, `${err} chamadas falharam.`, 'Confira a chave e os créditos da IA da empresa (Integrações → IA) e ligue "Erro" a um caminho seguro.');
         break;
       }
       default: break;
@@ -105,15 +105,16 @@ export function analyzeFlow(graph, byNode, paths = []) {
 }
 
 export function createCopilot({ pool, llm = null }) {
-  async function run(flowId, graph) {
+  async function run(flowId, graph, orgId = null) {
+    const ai = llm && llm.forOrg ? (orgId ? await llm.forOrg(orgId) : null) : llm;
     const byNode = (await pool.query(`select ref, outcome, count(distinct execution_id)::int as leads from public.flow_execution_events where flow_id = $1 group by ref, outcome`, [flowId])).rows;
     const pathsRows = (await pool.query(`select execution_id, array_agg(distinct ref || ':' || outcome) as steps from public.flow_execution_events
       where flow_id = $1 and execution_id in (select id from public.flow_executions where flow_id = $1 order by created_at desc limit 5000) group by execution_id`, [flowId])).rows;
     const suggestions = analyzeFlow(graph, byNode, pathsRows.map((r) => new Set(r.steps)));
     const leads = pathsRows.length;
     let summary = null;
-    if (llm && llm.configured && suggestions.length && llm.summarize) {
-      try { summary = await llm.summarize({ facts: suggestions.slice(0, 8).map((s) => ({ bloco: s.ref, prioridade: s.severity, fato: `${s.title}. ${s.detail}`, acao: s.action })), leads }); }
+    if (ai && ai.configured && suggestions.length && ai.summarize) {
+      try { summary = await ai.summarize({ facts: suggestions.slice(0, 8).map((s) => ({ bloco: s.ref, prioridade: s.severity, fato: `${s.title}. ${s.detail}`, acao: s.action })), leads }); }
       catch { summary = null; } // o resumo é opcional; as sugestões valem sem ele
     }
     return { leads, suggestions, summary };

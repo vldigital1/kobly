@@ -233,7 +233,7 @@ function Inspector({ node, onChange, onDelete, isStart }) {
       body = (<>
         {integrations.length === 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--amber-600)' }}>Nenhuma conta de gateway conectada. Conecte em Integrações → Pagamentos e Pixel.</div>}
         <Select label="Conta do gateway" value={d.integration_id || ''} onChange={(e) => set({ integration_id: e.target.value })}
-          options={[{ value: '', label: 'Selecionar…' }, ...integrations.map((i) => ({ value: i.id, label: `XPag · ${i.label}${i.sandbox ? ' (sandbox)' : ''}` }))]} />
+          options={[{ value: '', label: 'Selecionar…' }, ...integrations.map((i) => ({ value: i.id, label: `${({ xpag: 'XPag', mercadopago: 'Mercado Pago', woovi: 'Woovi' })[i.provider] || i.provider} · ${i.label}${i.sandbox ? ' (sandbox)' : ''}` }))]} />
         <Select label="País e moeda" value={d.currency || 'BRL'} onChange={(e) => { const c = e.target.value; set({ currency: c, method: (PAYMENT_METHODS[c] || [[]])[0][0], open_amount: false }); }}
           options={Object.keys(PAYMENT_METHODS).map((c) => ({ value: c, label: CURRENCY_LABEL[c] || c }))} />
         <Select label="Método" value={d.method || ''} onChange={(e) => set({ method: e.target.value, ...(e.target.value === 'OXXO' ? { open_amount: false } : {}) })} options={metodos.map(([value, label]) => ({ value, label }))} />

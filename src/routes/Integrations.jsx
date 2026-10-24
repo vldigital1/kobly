@@ -1,3 +1,4 @@
+import { SMS_ENABLED } from '@/lib/features.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { SUPABASE_URL } from '@/api/supabaseClient.js';
@@ -1090,15 +1091,17 @@ const SECTIONS = [
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
   { value: 'pagamentos', label: 'Pagamentos e alertas', icon: 'credit-card', help: 'Conta do gateway (XPag) para cobrar nos fluxos, Pixel da Meta (API de Conversões) e alertas no Telegram.' },
+  { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },
   { value: 'mcp', label: 'Acesso de IA', icon: 'bot', help: 'Tokens para assistentes de IA (MCP) criarem rascunhos de fluxo.' },
 ];
 const KoblyPaymentsTab = React.lazy(() => import('@/routes/PaymentsTab.jsx').then((m) => ({ default: m.KoblyPaymentsTab })));
+const KoblyAiKeysTab = React.lazy(() => import('@/routes/AiKeysTab.jsx').then((m) => ({ default: m.KoblyAiKeysTab })));
 const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
   { value: 'marca', label: 'Identidade', icon: 'palette' },
   { value: 'dominio', label: 'Remetente', icon: 'globe' },
   { value: 'whatsapp', label: 'WhatsApp', icon: 'message-circle' },
-  { value: 'sms', label: 'SMS', icon: 'smartphone' },
+  ...(SMS_ENABLED ? [{ value: 'sms', label: 'SMS', icon: 'smartphone' }] : []),
 ];
 
 function KoblyIntegrations() {
@@ -1188,7 +1191,7 @@ function KoblyIntegrations() {
               {lojaSub === 'marca' && <BrandTab empresaId={empresaId} />}
               {lojaSub === 'dominio' && <DomainTab empresaId={empresaId} />}
               {lojaSub === 'whatsapp' && <WhatsappMetaTab empresaId={empresaId} />}
-              {lojaSub === 'sms' && <SmsTab empresaId={empresaId} />}
+              {SMS_ENABLED && lojaSub === 'sms' && <SmsTab empresaId={empresaId} />}
             </div>
           )}
 
@@ -1198,6 +1201,11 @@ function KoblyIntegrations() {
           {section === 'pagamentos' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
               <KoblyPaymentsTab empresaId={empresaId} notify={store.notify} />
+            </React.Suspense>
+          )}
+          {section === 'ia' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <KoblyAiKeysTab empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
           )}
           {section === 'mcp' && (

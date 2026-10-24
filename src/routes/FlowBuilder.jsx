@@ -1,3 +1,4 @@
+import { SMS_ENABLED } from '@/lib/features.js';
 import React, { useState, useRef, useEffect } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { KoblyAI } from '@/api/ai.js';
@@ -15,7 +16,7 @@ import { useKobly } from '@/store/store.jsx';
 // Layout com variações (tweak: builderVariant = vertical | horizontal | compact).
 // KoblyFlowBuilder
 
-const CARD_TYPES = ['Gatilho', 'Adicionar Tag', 'Remover Tag', 'Envio de e-mail', 'Envio de WhatsApp', 'Envio de SMS', 'Condição', 'Acionar Fluxo'];
+const CARD_TYPES = ['Gatilho', 'Adicionar Tag', 'Remover Tag', 'Envio de e-mail', 'Envio de WhatsApp', ...(SMS_ENABLED ? ['Envio de SMS'] : []), 'Condição', 'Acionar Fluxo'];
 
 // Tom/ícone do card com fallback local p/ tipos ainda não mapeados no mockData (ex.: WhatsApp/SMS).
 const cardToneOf = (tipo) => KoblyMockDB.cardTone[tipo] || (tipo === 'Envio de WhatsApp' ? 'success' : tipo === 'Envio de SMS' ? 'warning' : tipo === 'Condição' ? 'info' : 'neutral');
@@ -153,7 +154,7 @@ function BranchSplit({ cond, steps, selId, onSelect, onDelete, onAddChild, opts,
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <Button size="sm" variant="ghost" iconLeft="mail" onClick={() => onAddChild(cond.id, r.key, 'Envio de e-mail')}>+ E-mail</Button>
               <Button size="sm" variant="ghost" iconLeft="message-circle" onClick={() => onAddChild(cond.id, r.key, 'Envio de WhatsApp')}>+ WhatsApp</Button>
-              <Button size="sm" variant="ghost" iconLeft="smartphone" onClick={() => onAddChild(cond.id, r.key, 'Envio de SMS')}>+ SMS</Button>
+              {SMS_ENABLED && <Button size="sm" variant="ghost" iconLeft="smartphone" onClick={() => onAddChild(cond.id, r.key, 'Envio de SMS')}>+ SMS</Button>}
             </div>
           </div>
         );

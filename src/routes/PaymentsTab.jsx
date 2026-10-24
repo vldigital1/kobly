@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
-import { Badge, Banner, Button, Card, Icon, IconButton, Input } from '@/ds';
+import { Badge, Banner, Button, Card, Icon, IconButton, Input, Select } from '@/ds';
 
-// Kobly — Integrações → Pagamentos e Pixel. Conta do gateway (XPag) usada pelo bloco "Cobrança" dos
+// Gateways: o que cada um cobra e onde pegar a credencial. Os de Pix (Mercado Pago, Woovi) só usam um token.
+const GATEWAYS = {
+  xpag: { label: 'XPag', desc: 'Pix (BRL), SPEI e OXXO (MXN), Nequi e Bre-B (COP), transferência (ARS) e Chile (CLP).', id: 'Client ID', secret: 'Client Secret', where: 'Painel da XPag → Integrações → API.' },
+  mercadopago: { label: 'Mercado Pago', desc: 'Pix (BRL).', secret: 'Access Token', where: 'Mercado Pago Developers → Suas integrações → Credenciais de produção (Access Token). Credencial de teste começa com TEST-.' },
+  woovi: { label: 'Woovi (OpenPix)', desc: 'Pix (BRL).', secret: 'AppID', where: 'Painel da Woovi → API/Plugins → Nova API: copie o AppID. Depois cadastre o webhook (Cobrança paga) com o endereço que aparece aqui.' },
+};
+
+// Kobly — Integrações → Pagamentos e Pixel. Conta do gateway (XPag, Mercado Pago, Woovi) usada pelo bloco "Cobrança" dos
 // fluxos e Pixel da Meta (API de Conversões). Segredos só vão para o servidor (cifrados); nunca voltam
 // para a tela. KoblyPaymentsTab
 
@@ -29,7 +36,8 @@ function KoblyPaymentsTab({ empresaId, notify = () => {} }) {
   const [px, setPx] = useState({ loading: true, list: [], error: null });
   const [tg, setTg] = useState({ loading: true, list: [], error: null });
   const [tgForm, setTgForm] = useState({ label: '', bot_token: '', chat_id: '' });
-  const [gwForm, setGwForm] = useState({ label: '', client_id: '', client_secret: '' });
+  const [gwForm, setGwForm] = useState({ provider: 'xpag', label: '', client_id: '', client_secret: '' });
+  const gwInfo = GATEWAYS[gwForm.provider];
   const [pxForm, setPxForm] = useState({ label: '', pixel_id: '', access_token: '', test_event_code: '' });
   const [busy, setBusy] = useState('');
 
@@ -43,11 +51,16 @@ function KoblyPaymentsTab({ empresaId, notify = () => {} }) {
 
   async function connectGw() {
     setBusy('gw');
-    const r = await KoblyApi.paymentIntegrations('connect', { provider: 'xpag', ...gwForm }, empresaId);
+    const r = await KoblyApi.paymentIntegrations('connect', gwForm, empresaId);
     setBusy('');
     if (r.error) { notify('danger', r.error); return; }
-    notify('success', 'Conta XPag conectada. Já dá para usar no bloco "Cobrança" dos fluxos.');
-    setGwForm({ label: '', client_id: '', client_secret: '' }); load();
+    notify('success', `Conta ${gwInfo.label} conectada. Já dá para usar no bloco "Cobrança" dos fluxos.`);
+    setGwForm({ provider: gwForm.provider, label: '', client_id: '', client_secret: '' }); load();
+  }
+  async function copyWebhook(i) {
+    const r = await KoblyApi.paymentIntegrations('webhook_url', { id: i.id }, empresaId);
+    if (r.error) { notify('danger', r.error); return; }
+    try { await navigator.clipboard.writeText(r.url); notify('success', 'Endereço do webhook copiado.'); } catch { notify('info', r.url); }
   }
   async function removeGw(i) {
     if (!confirm(`Desconectar "${i.label}"? Fluxos que usam esta conta passam a sair por "erro" no bloco de cobrança.`)) return;
@@ -95,28 +108,31 @@ function KoblyPaymentsTab({ empresaId, notify = () => {} }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Section icon="credit-card" title="Gateway de pagamento (XPag)" desc="Cobre dentro do WhatsApp com o método local de cada país: Pix (BRL), SPEI e OXXO (MXN), Nequi e Bre-B (COP), transferência (ARS) e Chile (CLP). O dinheiro cai na SUA conta XPag.">
+      <Section icon="credit-card" title="Gateway de pagamento" desc="Cobre dentro do WhatsApp pelo bloco Cobrança. O dinheiro cai direto na SUA conta do gateway.">
         {gw.error && <Banner tone="danger">{gw.error}</Banner>}
         {gw.list.map((i) => (
           <Row key={i.id}>
             <Icon name="credit-card" size={16} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: 'var(--text-strong)', fontWeight: 600 }}>{i.label}</div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Client ID {i.client_id}</div>
+              <div style={{ color: 'var(--text-strong)', fontWeight: 600 }}>{(GATEWAYS[i.provider] || {}).label || i.provider} · {i.label}</div>
+              {i.provider === 'xpag' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Client ID {i.client_id}</div>}
             </div>
             {i.sandbox && <Badge tone="warning">Sandbox</Badge>}
+            {i.provider === 'woovi' && <Button size="sm" variant="secondary" iconLeft="copy" onClick={() => copyWebhook(i)}>Copiar webhook</Button>}
             <Badge tone={i.status === 'connected' ? 'success' : 'danger'} dot>{i.status === 'connected' ? 'Conectada' : 'Erro'}</Badge>
             <IconButton icon="trash-2" size="sm" aria-label="Desconectar" onClick={() => removeGw(i)} />
           </Row>
         ))}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+          <Select label="Gateway" value={gwForm.provider} onChange={(e) => setGwForm({ ...gwForm, provider: e.target.value })} options={Object.entries(GATEWAYS).map(([value, g]) => ({ value, label: g.label }))} />
           <Input label="Nome (opcional)" value={gwForm.label} onChange={(e) => setGwForm({ ...gwForm, label: e.target.value })} placeholder="Principal, México..." />
-          <Input label="Client ID" value={gwForm.client_id} onChange={(e) => setGwForm({ ...gwForm, client_id: e.target.value })} />
-          <Input label="Client Secret" type="password" value={gwForm.client_secret} onChange={(e) => setGwForm({ ...gwForm, client_secret: e.target.value })} autoComplete="new-password" />
+          {gwInfo.id && <Input label={gwInfo.id} value={gwForm.client_id} onChange={(e) => setGwForm({ ...gwForm, client_id: e.target.value })} />}
+          <Input label={gwInfo.secret} type="password" value={gwForm.client_secret} onChange={(e) => setGwForm({ ...gwForm, client_secret: e.target.value })} autoComplete="new-password" />
         </div>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{gwInfo.label} cobra: {gwInfo.desc}</div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Button onClick={connectGw} loading={busy === 'gw'} disabled={!gwForm.client_id || !gwForm.client_secret} iconLeft="plug">Conectar XPag</Button>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Gere as chaves no painel da XPag em Integrações → API. A Kobly confere a chave antes de salvar.</span>
+          <Button onClick={connectGw} loading={busy === 'gw'} disabled={(gwInfo.id && !gwForm.client_id) || !gwForm.client_secret} iconLeft="plug">Conectar {gwInfo.label}</Button>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{gwInfo.where} A Kobly confere a credencial antes de salvar.</span>
         </div>
       </Section>
 

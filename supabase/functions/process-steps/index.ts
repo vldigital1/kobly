@@ -357,8 +357,10 @@ Deno.serve(async (req: Request) => {
   // risco é entregar recurso que o cliente não paga — e o passo vira "pulado", não
   // perdido: o próximo tick reavalia.
   const smsGateCache = new Map<string, boolean>();
+  // SMS desligado no produto até SMS_ENABLED=true (validação sem SMS): o passo vira "pulado", nada é perdido.
+  const smsLigado = Deno.env.get("SMS_ENABLED") === "true";
   const orgPodeSms = async (orgId: string): Promise<boolean> => {
-    if (!orgId) return false;
+    if (!orgId || !smsLigado) return false;
     const memo = smsGateCache.get(orgId);
     if (memo !== undefined) return memo;
     const { data, error } = await sb.rpc("org_pode", { p_org: orgId, p_recurso: "sms" });

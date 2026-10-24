@@ -1,3 +1,4 @@
+import { SMS_ENABLED } from '@/lib/features.js';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { KoblyMockDB } from '@/api/mockData.js';
@@ -13,7 +14,7 @@ import { useKobly } from '@/store/store.jsx';
 const CANAIS = [
   { value: 'email', label: 'E-mail', icon: 'mail' },
   { value: 'whatsapp', label: 'WhatsApp', icon: 'message-circle' },
-  { value: 'sms', label: 'SMS', icon: 'smartphone' },
+  ...(SMS_ENABLED ? [{ value: 'sms', label: 'SMS', icon: 'smartphone' }] : []),
 ];
 const TARGETS = [
   { value: 'all', label: 'Todos os leads' },
@@ -108,7 +109,7 @@ function KoblyBulkSend() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <PageIntro>Envie um e-mail, WhatsApp ou SMS em massa para uma lista de leads da sua conta.</PageIntro>
+      <PageIntro>Envie um e-mail{SMS_ENABLED ? ', WhatsApp ou SMS' : ' ou WhatsApp'} em massa para uma lista de leads da sua conta.</PageIntro>
 
       {running && (
         <Card icon="send" title="Disparo em andamento" subtitle={`Status: ${running.status}`}>

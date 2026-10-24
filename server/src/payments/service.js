@@ -4,7 +4,7 @@
 import { randomBytes } from 'node:crypto';
 import { AuthError } from '../auth.js';
 import { encrypt, decrypt } from '../whatsapp/crypto.js';
-import { PaymentError, XPAG_METHODS, OPEN_AMOUNT_OK, parseWebhook } from './xpag.js';
+import { PaymentError } from './xpag.js';
 
 const SAFE = 'id, organization_id, provider, label, client_id, sandbox, status, last_error, created_at, updated_at';
 
@@ -20,17 +20,27 @@ export function createPayments({ pool, providers, secretKey, publicBaseUrl, now 
     const orgId = ctx.orgId;
     const editor = () => { if (ctx.role === 'Suporte') throw new AuthError(403, 'forbidden', 'Seu perfil não pode alterar integrações de pagamento.'); };
     switch (body.action) {
-      case 'list': return { integrations: (await pool.query(`select ${SAFE} from public.payment_integrations where organization_id = $1 order by created_at`, [orgId])).rows };
+      case 'list': return {
+        integrations: (await pool.query(`select ${SAFE} from public.payment_integrations where organization_id = $1 order by created_at`, [orgId])).rows,
+        providers: Object.entries(providers).map(([id, p]) => ({ id, label: p.label || id, methods: p.methods || {}, needs_client_id: p.needsClientId !== false })),
+      };
+      case 'webhook_url': { // gateways que registram o aviso no painel (Woovi) precisam da URL da conta
+        const r = (await pool.query(`select provider, webhook_token from public.payment_integrations where id = $1 and organization_id = $2`, [body.id, orgId])).rows[0];
+        if (!r) throw new AuthError(404, 'not_found', 'Conta não encontrada.');
+        return { url: webhookUrl(r) };
+      }
       case 'connect': {
         editor(); needKey();
         const prov = String(body.provider || 'xpag');
+        const p = provider(prov);
         const clientId = String(body.client_id || '').trim(), secret = String(body.client_secret || '').trim();
-        if (clientId.length < 4 || secret.length < 8) throw new AuthError(422, 'validation_failed', 'Informe o Client ID e o Client Secret.');
-        try { await provider(prov).checkCredentials({ clientId, clientSecret: secret }); } catch (e) { throw fromPayment(e); }
-        const sandbox = /sandbox/i.test(clientId);
+        if (p.needsClientId !== false && clientId.length < 4) throw new AuthError(422, 'validation_failed', 'Informe o Client ID e o Client Secret.');
+        if (secret.length < 8) throw new AuthError(422, 'validation_failed', p.needsClientId !== false ? 'Informe o Client ID e o Client Secret.' : 'Cole a chave/token de API da conta.');
+        try { await p.checkCredentials({ clientId, clientSecret: secret }); } catch (e) { throw fromPayment(e); }
+        const sandbox = /sandbox|^TEST-/i.test(clientId || secret);
         const { rows } = await pool.query(`insert into public.payment_integrations (organization_id, provider, label, client_id, secret_enc, sandbox, webhook_token)
           values ($1,$2,$3,$4,$5,$6,$7) returning ${SAFE}`,
-          [orgId, prov, String(body.label || (sandbox ? 'Sandbox' : 'Principal')).slice(0, 60), clientId, encrypt(secret, secretKey), sandbox, randomBytes(24).toString('base64url')]);
+          [orgId, prov, String(body.label || (sandbox ? 'Sandbox' : 'Principal')).slice(0, 60), clientId || '—', encrypt(secret, secretKey), sandbox, randomBytes(24).toString('base64url')]);
         return { integration: rows[0] };
       }
       case 'disconnect': {
@@ -46,13 +56,14 @@ export function createPayments({ pool, providers, secretKey, publicBaseUrl, now 
   async function createCharge({ ex, nodeRef, integrationId, currency, method, amount, openAmount, payer, description, externalId, listenHours }) {
     const row = (await pool.query(`select * from public.payment_integrations where id::text = $1 and organization_id = $2`, [String(integrationId), ex.organization_id])).rows[0];
     if (!row) throw new PaymentError(400, 'integration_not_found', 'Credencial de pagamento não encontrada nesta empresa.');
-    if (!(XPAG_METHODS[currency] || []).includes(method)) throw new PaymentError(400, 'method_not_supported', `Método ${method} não vale para ${currency}.`);
-    if (openAmount && !OPEN_AMOUNT_OK(currency, method)) throw new PaymentError(400, 'open_amount_not_supported', 'Valor livre só existe para Pix (BRL) e SPEI (MXN).');
+    const gw = provider(row.provider);
+    if (!((gw.methods || {})[currency] || []).includes(method)) throw new PaymentError(400, 'method_not_supported', `${gw.label || row.provider} não cobra ${method} em ${currency}.`);
+    if (openAmount && !(gw.openAmountOk && gw.openAmountOk(currency, method))) throw new PaymentError(400, 'open_amount_not_supported', `${gw.label || row.provider} não aceita valor livre neste método.`);
     if (!openAmount && !(Number(amount) > 0)) throw new PaymentError(400, 'invalid_amount', 'Valor da cobrança inválido.');
     // idempotência: mesma external_id (repetição após falha temporária) devolve a mesma cobrança
     const prev = (await pool.query(`select * from public.payment_charges where external_id = $1`, [externalId])).rows[0];
     if (prev && prev.transaction_id) return prev;
-    const out = await provider(row.provider).createCharge(credOf(row), {
+    const out = await gw.createCharge(credOf(row), {
       currency, method, amount, openAmount, name: payer.name, document: payer.document, email: payer.email, phone: payer.phone,
       description, externalId, webhookUrl: webhookUrl(row),
     });
@@ -75,7 +86,7 @@ export function createPayments({ pool, providers, secretKey, publicBaseUrl, now 
     const row = (await pool.query(`select * from public.payment_integrations where provider = $1 and webhook_token = $2`, [providerName, String(token || '')])).rows[0];
     if (!row) return { status: 404, body: { ok: false } };
     let body; try { body = JSON.parse(rawBody || '{}'); } catch { return { status: 200, body: { ok: true, ignored: 'json' } }; }
-    const ev = parseWebhook(body);
+    const ev = provider(row.provider).parseWebhook(body);
     if (!ev) return { status: 200, body: { ok: true, ignored: 'not_cashin' } };
     const dup = await pool.query(`insert into public.payment_webhook_events (organization_id, integration_id, dedupe_key, status, payload) values ($1,$2,$3,$4,$5::jsonb)
       on conflict (integration_id, dedupe_key) do nothing returning id`, [row.organization_id, row.id, ev.dedupeKey, ev.status, JSON.stringify(body)]);

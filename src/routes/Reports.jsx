@@ -1,3 +1,4 @@
+import { SMS_ENABLED } from '@/lib/features.js';
 import React, { useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { KoblyMockDB } from '@/api/mockData.js';
@@ -70,13 +71,13 @@ function KoblyReports() {
       </div>
 
       <div className="kbly-grid-main" style={{ gap: 16 }}>
-        <Card title="Disparos por canal" subtitle="E-mail · WhatsApp · SMS — envios reais do período">
+        <Card title="Disparos por canal" subtitle={SMS_ENABLED ? 'E-mail · WhatsApp · SMS — envios reais do período' : 'E-mail · WhatsApp — envios reais do período'}>
           <Chart
             type="area" height={300}
             series={[
               { name: 'E-mail', data: d.disparosPorCanal.email },
               { name: 'WhatsApp', data: d.disparosPorCanal.whatsapp },
-              { name: 'SMS', data: d.disparosPorCanal.sms },
+              ...(SMS_ENABLED ? [{ name: 'SMS', data: d.disparosPorCanal.sms }] : []),
             ]}
             options={{
               colors: [C.accent, C.green, C.amber || C.orange || '#f59e0b'],

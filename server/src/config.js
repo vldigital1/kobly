@@ -23,10 +23,14 @@ export function loadConfig(env = process.env) {
     publicBaseUrl: (env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
     metaAppSecret: env.META_APP_SECRET || '',
     metaGraphBase: env.META_GRAPH_BASE || 'https://graph.facebook.com/v21.0',
+    // Marketing API (Facebook Ads): versão atual da documentação
+    metaAdsGraphBase: env.META_ADS_GRAPH_BASE || 'https://graph.facebook.com/v26.0',
     // IA dos blocos de fluxo (API compatível com OpenAI). Sem AI_API_KEY os blocos de IA saem por "error".
     aiApiKey: env.AI_API_KEY || '',
     aiBaseUrl: env.AI_BASE_URL || 'https://api.deepseek.com',
     aiModel: env.AI_MODEL || 'deepseek-chat',
+    // Chave da plataforma só vale para empresas SEM chave própria se isto for "true" (padrão: cada cliente paga a sua IA)
+    aiPlatformFallback: env.AI_PLATFORM_FALLBACK === 'true',
     // Gateway XPag (cada empresa cadastra a própria credencial; aqui só a URL da API)
     xpagBase: env.XPAG_BASE_URL || 'https://api.xpag.global',
   };

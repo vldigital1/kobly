@@ -77,6 +77,8 @@ export function pickVariant(variants, r) {
 }
 
 export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  // IA da empresa (chave própria, ai/router.js) ou um cliente fixo (testes / ambiente com uma chave só)
+  const aiOf = async (ex) => (llm && llm.forOrg ? llm.forOrg(ex.organization_id) : llm);
   const graphCache = new Map(); // versões são imutáveis: cache seguro
   async function loadGraph(versionId) {
     if (graphCache.has(versionId)) return graphCache.get(versionId);
@@ -310,6 +312,7 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
         delete ctx.vars._agent_pending;
         const text = String(ctx.vars[saveAs] ?? ctx.vars.ultima_mensagem ?? '');
         st.h.push({ r: 'lead', t: text });
+        const llm = await aiOf(ex);
         if (!llm) return { exit: 'error', detail: 'IA não configurada' };
         let out;
         try {
@@ -413,6 +416,7 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
       }
       case 'ai_classify':
       case 'ai_extract': {
+        const llm = await aiOf(ex);
         if (!llm) return { exit: 'error', detail: 'IA não configurada' };
         const text = render(d.input || '{{resposta}}', ctx);
         try {

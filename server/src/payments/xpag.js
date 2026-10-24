@@ -118,5 +118,5 @@ export function createXpag({ base = 'https://api.xpag.global', fetchImpl = globa
   // Valida a credencial (usada ao conectar): a consulta de saldo funciona de qualquer origem.
   const checkCredentials = (cred) => call(cred, 'GET', '/balance');
 
-  return { createCharge, consult, checkCredentials };
+  return { label: 'XPag', methods: XPAG_METHODS, openAmountOk: OPEN_AMOUNT_OK, needsClientId: true, parseWebhook, createCharge, consult, checkCredentials };
 }

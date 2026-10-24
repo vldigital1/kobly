@@ -74,6 +74,8 @@ Deno.serve(async (req: Request) => {
 
   const canal = normCanal(body.canal);
   if (!canal) return json({ error: "invalid_canal", detail: "canal deve ser email | whatsapp | sms" }, 400);
+  // SMS desligado no produto até SMS_ENABLED=true (validação sem SMS)
+  if (canal === "SMS" && Deno.env.get("SMS_ENABLED") !== "true") return json({ error: "sms_disabled", detail: "SMS está desativado no momento." }, 400);
   const filter = (body.filter && typeof body.filter === "object") ? body.filter : {};
 
   // Capacidade de plano (0061). Só barra o `create` — `estimate` é contagem

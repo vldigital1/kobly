@@ -43,6 +43,16 @@ export function createFlowAdmin({ pool, copilot = null }) {
       const found = new Set(rows.map((r) => r.id));
       for (const id of ids) if (!found.has(id)) warns.push(`${label} ${id} não existe nesta empresa.`);
     }
+    // Mercado Pago e Woovi só cobram Pix em reais
+    const pays = (graph.nodes || []).filter((n) => n.type === 'payment' && n.data && n.data.integration_id);
+    if (pays.length) {
+      const { rows } = await pool.query(`select id::text, provider from public.payment_integrations where organization_id = $1 and id::text = any($2::text[])`, [orgId, pays.map((n) => String(n.data.integration_id))]);
+      const prov = new Map(rows.map((r) => [r.id, r.provider]));
+      for (const n of pays) {
+        const p = prov.get(String(n.data.integration_id));
+        if ((p === 'mercadopago' || p === 'woovi') && (n.data.currency !== 'BRL' || n.data.method !== 'PIX')) warns.push(`Bloco "${n.ref}": ${p === 'woovi' ? 'Woovi' : 'Mercado Pago'} só cobra Pix em reais (BRL).`);
+      }
+    }
     if (tags.size) {
       const valid = [...tags].filter((t) => UUID.test(t));
       const { rows } = valid.length ? await pool.query(`select id::text from public.tags where organization_id = $1 and id = any($2::uuid[])`, [orgId, valid]) : { rows: [] };
@@ -124,7 +134,7 @@ export function createFlowAdmin({ pool, copilot = null }) {
         const f = await flowOf(orgId, body.campaign_id);
         const act = (await pool.query(`select graph from public.flow_graph_versions where flow_id = $1 and is_active`, [f.flow_id])).rows[0];
         if (!act) throw new AuthError(400, 'not_published', 'Publique o fluxo antes de pedir sugestões ao copiloto.');
-        return copilot.run(f.flow_id, act.graph);
+        return copilot.run(f.flow_id, act.graph, orgId);
       }
       case 'deactivate': { // volta a campanha para o motor antigo (lista de etapas)
         canEdit(ctx);
