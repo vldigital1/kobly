@@ -29,6 +29,7 @@ Sem Postgres instalado, use o banco de teste em memória (PGlite, Postgres real 
   - `bin/postgrest.exe` — release oficial do PostgREST para Windows (usa a `libpq.dll` de `pgsql/bin`).
   - `pgdata/` dados · `credenciais.json` e-mail/senha da conta de teste e segredos locais (nunca usar em produção).
 - Portas: PostgreSQL 54329, PostgREST 54330, API 4120. Ctrl+C para tudo. Para recomeçar do zero: apague `~/.kobly-local/pgdata`.
+- Ao subir de novo, aplica só as migrações novas (controle em `kobly_local.applied`; bancos criados antes dele contam como montados até a 0073).
 
 ## Estado
 Etapa 1 (banco + login) e Etapa 2 (front ligado: `src/api/apiClient.js`) prontas em desenvolvimento (`https://kobly-api-dev.dizevolv.com`). Ainda 501: ai-chat, send-email, send-whatsapp (substituído pela rota whatsapp-account; envio das campanhas depende do motor), send-sms, bulk-send, asaas, resend-admin, invite-client, webhooks de entrada e agendador. `cron.schedule`/`net.http_post` são stubs: o agendador (process-steps, process-bulk, reset de uso) passa a ser do serviço.
@@ -85,6 +86,14 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - Copiloto (`src/flows/copilot.js`): regras sobre a trilha real (não responde, janela fechada, falha de envio, erro/baixa conversão da cobrança, IA sem saída, agente abandonado/pedindo humano, A/B com vencedor ou empate, estrutura sem venda/pixel/plano B). Mínimo de 20 leads por bloco (30 por caminho no A/B). A IA só resume os fatos calculados.
 - Conectar no Claude Code: `claude mcp add --transport http kobly https://<api>/mcp --header "Authorization: Bearer <token>"`.
 - Variável opcional: `XPAG_BASE_URL` (padrão `https://api.xpag.global`). Testado contra o sandbox público da XPag: Pix e SPEI criados e consultados; pagamento simulado passa a `confirmed` na consulta. Valor livre (SPEI) foi recusado no sandbox — conferir em produção.
+
+### Chats ao vivo e Configurações (migração `0074`)
+- Menu em seções (Principal / Operações / Gestão) com telas novas: **Fluxos** (lista dos fluxos em grafo; `flow-graph` ação `list`; criar fluxo já salva o 1º rascunho gatilho → fim), **Chats ao vivo**, **Agentes de IA** e **Configurações**.
+- `whatsapp_outbound_messages`: tudo que sai pelo WhatsApp oficial (fluxo, agente, humano). Com `whatsapp_inbound_messages` forma a conversa.
+- Rota `inbox`: list | messages | send (texto livre só com a janela de 24 h aberta) | pause. Assumir a conversa (`leads.automation_paused`) encerra as execuções vivas do lead; o motor não inicia nem retoma fluxos dele até devolver.
+- Rota `workspace-settings`: get | update_org (nome, fuso) | upsert/delete por `kind` (quick_reply, custom_field, global_var, agent). Cliente só lê as tabelas; escrita só pela rota.
+- Mensagens dos fluxos aceitam `{{global.chave}}` (variáveis globais) e `{{campo.chave}}` (`leads.custom_fields`). O bloco Agente de IA aceita `agent_id` (agente salvo); o que o bloco preencher sobrepõe o agente.
+- Teste com banco: `test/workspace.integration.test.js`.
 
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.

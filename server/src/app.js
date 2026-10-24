@@ -20,6 +20,8 @@ import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
 import { createCopilot } from './flows/copilot.js';
 import { createMcp } from './mcp/server.js';
+import { createWorkspaceSettings } from './workspace/settings.js';
+import { createInbox } from './workspace/inbox.js';
 import { tokenFrom } from './ingest/auth.js';
 
 const MAX_BODY = 64 * 1024;
@@ -63,7 +65,9 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const invites = createInvites({ pool, auth, mailer });
   const storage = createStorage({ dir: config.storageDir || '/var/lib/kobly-storage', canAccessOrg: async (user, org) => { try { return (await whatsapp.resolveOrg(user, org)).role !== 'Suporte'; } catch { return false; } } });
   const unsub = createUnsubscribe({ pool, secret: config.unsubscribeSecret });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens } });
+  const workspaceSettings = createWorkspaceSettings({ pool });
+  const inbox = createInbox({ pool, whatsapp });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });

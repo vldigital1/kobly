@@ -33,7 +33,8 @@ function lookup(path, ctx, fields) {
   const p = path.split('.');
   if (p.length === 1) return fields[p[0]];
   const [root, ...rest] = p;
-  let cur = root === 'lead' ? ctx.lead : root === 'evento' ? ctx.evento : root === 'var' ? ctx.vars : undefined;
+  let cur = root === 'lead' ? ctx.lead : root === 'evento' ? ctx.evento : root === 'var' ? ctx.vars
+    : root === 'global' ? ctx.globals : root === 'campo' ? ctx.campos : undefined;
   for (const k of rest) { if (cur == null || typeof cur !== 'object') return undefined; cur = cur[k]; }
   return cur;
 }

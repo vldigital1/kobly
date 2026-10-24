@@ -1133,6 +1133,9 @@ export const KoblyApi = {
   async pixelConfigs(action, extra = {}, empresaId = null) { return this.serviceCall('pixel-configs', action, extra, empresaId); },
   async notifyChannels(action, extra = {}, empresaId = null) { return this.serviceCall('notify-channels', action, extra, empresaId); },
   async mcpTokens(action, extra = {}, empresaId = null) { return this.serviceCall('mcp-tokens', action, extra, empresaId); },
+  // Configurações da automação (empresa, respostas rápidas, campos, variáveis, agentes) e Chats ao vivo.
+  async workspaceSettings(action, extra = {}, empresaId = null) { return this.serviceCall('workspace-settings', action, extra, empresaId); },
+  async inbox(action, extra = {}, empresaId = null) { return this.serviceCall('inbox', action, extra, empresaId); },
   async serviceCall(fn, action, extra = {}, empresaId = null) {
     const { data, error } = await supabase.functions.invoke(fn, { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
     if (error) {

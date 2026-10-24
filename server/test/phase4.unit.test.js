@@ -36,6 +36,8 @@ function fakeDb({ graph, lead, clock }) {
       if (/insert into public.whatsapp_inbound_messages/.test(s)) return r([{ id: 'in' + Math.random() }]);
       if (/from public.leads where organization_id = \$1 and right/.test(s)) return r([{ id: lead.id }]);
       if (/update public.whatsapp_inbound_messages|whatsapp_last_inbound_at = now/.test(s)) { if (/whatsapp_last_inbound_at/.test(s)) lead.whatsapp_last_inbound_at = db.clock().toISOString(); return r([], 1); }
+      if (/from public.global_variables/.test(s)) return r([]); // variáveis globais da empresa (0074)
+      if (/insert into public.whatsapp_outbound_messages/.test(s)) return r([], 1); // conversa do chat ao vivo
       throw new Error('SQL não esperado: ' + s.slice(0, 120));
     },
   };

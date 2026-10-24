@@ -120,6 +120,8 @@ test('motor: cobrança SPEI, código na mensagem, confirmação puxa para "aprov
       if (/insert into public.email_events|update public.(lead_metrics|campaign_stats)/.test(s)) return r([], 1);
       if (/insert into public.flow_sales/.test(s)) { if (db.sales.some((x) => x.charge === p[4])) return r([]); db.sales.push({ charge: p[4], amount: p[5], currency: p[6] }); return r([{ id: 's1' }]); }
       if (/increment_vendas_recuperadas/.test(s)) { db.vendasRecuperadas++; return r([]); }
+      if (/from public.global_variables/.test(s)) return r([]); // variáveis globais da empresa (0074)
+      if (/insert into public.whatsapp_outbound_messages/.test(s)) return r([], 1); // conversa do chat ao vivo
       throw new Error('SQL não esperado: ' + s.slice(0, 120));
     },
   };

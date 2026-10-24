@@ -16,10 +16,11 @@ const defaultApi = {
   listIntegrations: () => KoblyApi.paymentIntegrations('list').then((r) => r.integrations || []),
   listPixels: () => KoblyApi.pixelConfigs('list').then((r) => r.pixels || []),
   listChannels: () => KoblyApi.notifyChannels('list').then((r) => r.channels || []),
+  listAgents: () => KoblyApi.workspaceSettings('get').then((r) => r.agents || []),
 };
 
-const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], metrics: null });
-const VARS_HELP = '{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{hora_atual}} {{dia_semana}} · depois da Cobrança: {{pagamento_codigo}} {{pagamento_qr}} {{pagamento_link}} {{pagamento_valor}}';
+const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], agents: [], metrics: null });
+const VARS_HELP = '{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{hora_atual}} {{dia_semana}} {{global.chave}} {{campo.chave}} · depois da Cobrança: {{pagamento_codigo}} {{pagamento_qr}} {{pagamento_link}} {{pagamento_valor}}';
 
 // ---- Cartão do bloco no canvas ------------------------------------------------
 function BlockNode({ id, data, selected }) {
@@ -136,7 +137,8 @@ function RuleFields({ r, set, tags }) {
 }
 
 function Inspector({ node, onChange, onDelete, isStart }) {
-  const { templates, tags, integrations = [], pixels = [], channels = [] } = React.useContext(LookupsCtx);
+  const lookups = React.useContext(LookupsCtx);
+  const { templates, tags, integrations = [], pixels = [], channels = [] } = lookups;
   if (!node) return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Selecione um bloco para editar. Para ligar, arraste da bolinha de uma saída até outro bloco.</div>;
   const d = node.data.data || {};
   const set = (patch) => onChange({ ...d, ...patch });
@@ -249,6 +251,10 @@ function Inspector({ node, onChange, onDelete, isStart }) {
       break;
     }
     case 'ai_agent': body = (<>
+      <Select label="Agente salvo" value={d.agent_id || ''} onChange={(e) => set(e.target.value ? { agent_id: e.target.value, objective: '', knowledge: '', max_turns: undefined, timeout_minutes: undefined } : { agent_id: undefined })}
+        options={[{ value: '', label: 'Configurar só neste bloco' }, ...((lookups.agents || []).map((a) => ({ value: a.id, label: a.name })))]}
+      />
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: -6 }}>{d.agent_id ? 'Usa o agente salvo em Agentes de IA. O que você preencher abaixo vale só neste bloco.' : 'Crie agentes reaproveitáveis no menu Agentes de IA.'}</div>
       <TextArea label="Objetivo do agente" value={d.objective} onChange={(v) => set({ objective: v })} rows={3} hint="O que conta como sucesso. Ex.: tirar dúvidas e levar o lead a pagar o guia de $45 MXN." />
       <TextArea label="Base de conhecimento" value={d.knowledge} onChange={(v) => set({ knowledge: v })} rows={6} hint="Preço, entrega, garantia, perguntas frequentes. O agente não promete nada fora daqui." />
       <Input label="Tom de voz" value={d.tone || ''} onChange={(e) => set({ tone: e.target.value || undefined })} placeholder="amigável e direto" />
@@ -365,14 +371,17 @@ function Editor({ campaign, onBack, api, notify }) {
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
     const opt = (fn) => (fn ? fn() : Promise.resolve([])).catch(() => []);
-    const [g, templates, tags, integrations, pixels, channels] = await Promise.all([
+    const [g, templates, tags, integrations, pixels, channels, agents] = await Promise.all([
       api.flowGraph('get', { campaign_id: campaign.id }),
-      opt(api.listTemplates), opt(api.getTags), opt(api.listIntegrations), opt(api.listPixels), opt(api.listChannels),
+      opt(api.listTemplates), opt(api.getTags), opt(api.listIntegrations), opt(api.listPixels), opt(api.listChannels), opt(api.listAgents),
     ]);
     if (g.error) { setState((s) => ({ ...s, loading: false, error: g.error })); return; }
-    const c = toCanvas(g.active ? g.active.graph : emptyGraph());
+    // sem versão publicada: abre o rascunho mais recente (ex.: fluxo criado pela tela Fluxos)
+    let base = g.active ? g.active.graph : null;
+    if (!base && (g.versions || [])[0]) { const v = await api.flowGraph('get_version', { campaign_id: campaign.id, version: g.versions[0].version }); if (!v.error && v.graph) base = v.graph; }
+    const c = toCanvas(base || emptyGraph());
     setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null);
-    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [] });
+    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [] });
     setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null });
     setCopilot(null);
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos

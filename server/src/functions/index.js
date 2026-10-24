@@ -45,6 +45,13 @@ export function createFunctions(ctx) {
     const { org } = await authedOrg(req, body);
     return io.send(res, 200, await ctx[svc].handle(org, body));
   };
+  // Serviços que também precisam do usuário (quem enviou, quem alterou).
+  const orgUserRoute = (svc) => async (req, res, io) => {
+    if (!ctx[svc]) throw new AuthError(503, 'unavailable', 'Recurso indisponível neste ambiente.');
+    const body = await io.readJson(req);
+    const { user, org } = await authedOrg(req, body);
+    return io.send(res, 200, await ctx[svc].handle(org, user, body));
+  };
   const handlers = {
     'whatsapp-account': () => whatsappAccount,
     'invite-client': () => inviteClient,
@@ -53,6 +60,8 @@ export function createFunctions(ctx) {
     'pixel-configs': () => orgRoute('pixel'),
     'notify-channels': () => orgRoute('notifier'),
     'mcp-tokens': () => orgRoute('mcpTokens'),
+    'workspace-settings': () => orgUserRoute('workspaceSettings'),
+    'inbox': () => orgUserRoute('inbox'),
   };
   return {
     names: () => Object.keys(handlers),

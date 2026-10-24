@@ -131,7 +131,7 @@ function checkData(node, err) {
       break;
     }
     case 'ai_agent':
-      if (!str(d.objective, 2000)) err(`${at}: descreva o objetivo do agente (ex.: tirar dúvidas e levar o lead a pagar).`);
+      if (!d.agent_id && !str(d.objective, 2000)) err(`${at}: descreva o objetivo do agente (ex.: tirar dúvidas e levar o lead a pagar).`);
       if (d.knowledge !== undefined && d.knowledge !== null && (typeof d.knowledge !== 'string' || d.knowledge.length > 8000)) err(`${at}: base de conhecimento até 8000 caracteres.`);
       if (d.opening !== undefined && d.opening !== null && (typeof d.opening !== 'string' || d.opening.length > 1024)) err(`${at}: mensagem de abertura até 1024 caracteres.`);
       if (d.max_turns !== undefined && !(Number.isInteger(d.max_turns) && d.max_turns >= 1 && d.max_turns <= 30)) err(`${at}: máximo de respostas entre 1 e 30.`);

@@ -342,19 +342,23 @@ const faq = [
 // Item de nav: { id, icon, label }. A visibilidade depende do papel.
 // v2: Simplificado — foco em automação pura (Campanhas, Leads, Integrações, Perfil).
 const NAV = {
-  painel:       { id: 'painel',       icon: 'layout-dashboard', label: 'Dashboard' },
-  clientes:     { id: 'clientes',     icon: 'building-2',       label: 'Clientes' },
-  pipeline:     { id: 'pipeline',     icon: 'kanban',           label: 'Pipeline' },
-  campanhas:    { id: 'campanhas',    icon: 'megaphone',        label: 'Campanhas' },
-  disparos:     { id: 'disparos',     icon: 'send',             label: 'Disparo em massa' },
-  leads:        { id: 'leads',        icon: 'users-round',      label: 'Leads' },
-  integracoes:  { id: 'integracoes',  icon: 'plug',             label: 'Integrações' },
-  relatorios:   { id: 'relatorios',   icon: 'chart-column',     label: 'Relatórios' },
-  planos:       { id: 'planos',       icon: 'credit-card',      label: 'Planos & cobrança' },
-  seguranca:    { id: 'seguranca',    icon: 'shield',           label: 'Segurança' },
-  chamados:     { id: 'chamados',     icon: 'messages-square',  label: 'Chamados' },
-  ajuda:        { id: 'ajuda',        icon: 'life-buoy',        label: 'Ajuda' },
-  perfil:       { id: 'perfil',       icon: 'user-round',       label: 'Perfil' },
+  painel:        { id: 'painel',        icon: 'layout-dashboard', label: 'Dashboard',            section: 'Principal' },
+  chats:         { id: 'chats',         icon: 'message-circle',   label: 'Chats ao vivo',        section: 'Principal' },
+  clientes:      { id: 'clientes',      icon: 'building-2',       label: 'Clientes',             section: 'Principal' },
+  pipeline:      { id: 'pipeline',      icon: 'kanban',           label: 'Pipeline',             section: 'Principal' },
+  leads:         { id: 'leads',         icon: 'users-round',      label: 'Leads',                section: 'Principal' },
+  fluxos:        { id: 'fluxos',        icon: 'git-branch',       label: 'Fluxos',               section: 'Operações' },
+  campanhas:     { id: 'campanhas',     icon: 'megaphone',        label: 'Campanhas',            section: 'Operações' },
+  agentes:       { id: 'agentes',       icon: 'bot',              label: 'Agentes de IA',        section: 'Operações' },
+  disparos:      { id: 'disparos',      icon: 'send',             label: 'Disparo em massa',     section: 'Operações' },
+  integracoes:   { id: 'integracoes',   icon: 'plug',             label: 'Integrações',          section: 'Operações' },
+  relatorios:    { id: 'relatorios',    icon: 'chart-column',     label: 'Relatórios',           section: 'Operações' },
+  configuracoes: { id: 'configuracoes', icon: 'settings',         label: 'Configurações',        section: 'Gestão' },
+  planos:        { id: 'planos',        icon: 'credit-card',      label: 'Planos & cobrança',    section: 'Gestão' },
+  seguranca:     { id: 'seguranca',     icon: 'shield',           label: 'Segurança',            section: 'Gestão' },
+  chamados:      { id: 'chamados',      icon: 'messages-square',  label: 'Chamados',             section: 'Gestão' },
+  ajuda:         { id: 'ajuda',         icon: 'life-buoy',        label: 'Ajuda',                section: 'Gestão' },
+  perfil:        { id: 'perfil',        icon: 'user-round',       label: 'Perfil',               section: 'Gestão' },
 };
 
 // Papéis: nav visível (em ordem), página inicial e capacidades.
@@ -362,14 +366,14 @@ const roles = {
   Cliente: {
     label: 'Cliente',
     descricao: 'Dono da conta — dashboard, pipeline, campanhas, leads, integrações.',
-    nav: ['painel', 'pipeline', 'campanhas', 'disparos', 'leads', 'integracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: false, createPlan: false, manageUsers: false, answerTickets: false },
   },
   Gestor: {
     label: 'Gestor',
     descricao: 'Agência — visão consolidada de várias contas.',
-    nav: ['painel', 'clientes', 'pipeline', 'campanhas', 'disparos', 'leads', 'integracoes', 'relatorios', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: true, createPlan: false, manageUsers: false, answerTickets: false },
   },
@@ -391,7 +395,7 @@ const roles = {
 
 // Títulos de rota (topbar)
 const routeTitle = {
-  painel: 'Dashboard', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
+  painel: 'Dashboard', chats: 'Chats ao vivo', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
   disparos: 'Disparo em massa',
   leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança',
   seguranca: 'Segurança', chamados: 'Chamados', ajuda: 'Central de ajuda', perfil: 'Perfil',

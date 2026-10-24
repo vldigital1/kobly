@@ -38,6 +38,17 @@ else {
   log('credenciais de teste criadas em', CREDS);
 }
 
+// Esquema montado pelo build-schema (mesmas transformações do banco de produção), na ordem do manifesto.
+function buildSchema() {
+  const out = mkdtempSync(join(tmpdir(), 'kobly-schema-'));
+  execFileSync(process.execPath, [join(SERVER, 'tools/build-schema.mjs'), out], { stdio: 'ignore' });
+  return { out, files: JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8')).filter((m) => !m.skipped).map((m) => m.file) };
+}
+async function markApplied(c, files) {
+  await c.query(`create schema if not exists kobly_local; create table if not exists kobly_local.applied (file text primary key, at timestamptz not null default now())`);
+  for (const file of files) await c.query(`insert into kobly_local.applied (file) values ($1) on conflict do nothing`, [file]);
+}
+
 // 1) PostgreSQL
 const fresh = !existsSync(join(DATA, 'PG_VERSION'));
 if (fresh) {
@@ -66,10 +77,10 @@ if (!dbExists) {
     .replace(/:"writer"/g, '"postgres"').replace(/:"authenticator"/g, '"kobly_authenticator"').replace(/:"dbname"/g, '"kobly"');
   await c.query(boot);
   await c.query(`set search_path to "$user", public, extensions`);
-  const out = mkdtempSync(join(tmpdir(), 'kobly-schema-'));
-  execFileSync(process.execPath, [join(SERVER, 'tools/build-schema.mjs'), out], { stdio: 'ignore' });
-  for (const m of JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'))) if (!m.skipped) await c.query(readFileSync(join(out, m.file), 'utf8'));
+  const { out, files } = buildSchema();
+  for (const file of files) await c.query(readFileSync(join(out, file), 'utf8'));
   await c.query(readFileSync(join(SERVER, 'sql/001_session_grace.sql'), 'utf8'));
+  await markApplied(c, files);
   await c.end();
 
   log('criando a conta de teste e os dados de demonstração…');
@@ -85,6 +96,21 @@ if (!dbExists) {
   await d.query(`insert into public.flow_graph_versions (organization_id, flow_id, version, graph, is_active, source, note) values ($1,$2,1,$3::jsonb,true,'editor','demonstração local')`,
     [org, flow, JSON.stringify(demoGraph())]);
   await d.end();
+}
+
+// Banco que já existia: aplica só as migrações novas (as já aplicadas ficam em kobly_local.applied).
+// Bancos criados antes deste controle foram montados até a 0073: essas contam como aplicadas.
+if (dbExists) {
+  const c = new pg.Client({ connectionString: DB_URL }); await c.connect();
+  await c.query(`set search_path to "$user", public, extensions`);
+  const { out, files } = buildSchema();
+  const tracked = (await c.query(`select to_regclass('kobly_local.applied') as t`)).rows[0].t;
+  if (!tracked) await markApplied(c, files.filter((f) => !/^\d{4}_/.test(f) || f.slice(0, 4) <= '0073'));
+  const done = new Set((await c.query(`select file from kobly_local.applied`)).rows.map((x) => x.file));
+  const pending = files.filter((f) => !done.has(f) && f !== '900_grants.sql');
+  for (const file of pending) { log(`aplicando ${file}…`); await c.query(readFileSync(join(out, file), 'utf8')); }
+  if (pending.length) { await c.query(readFileSync(join(out, '900_grants.sql'), 'utf8')); await markApplied(c, pending); }
+  await c.end();
 }
 
 // 2) PostgREST e 3) kobly-api — processos filhos com log prefixado

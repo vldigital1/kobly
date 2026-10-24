@@ -2,7 +2,7 @@
 // The navy sidebar: brand header, primary nav, workspace footer. Width follows the
 // --sidebar-width token (72px on tablet via the spacing.css media query). `collapsed`
 // hides the wordmark + item labels (Tooltips take over) and reduces the footer to
-// a centered avatar. `items`: [{ id, icon, label, badge? }]. `active` = current id.
+// a centered avatar. `items`: [{ id, icon, label, badge?, section? }] (section agrupa sob um título). `active` = current id.
 import { NavButton } from './NavButton.jsx';
 import { Avatar } from './Avatar.jsx';
 
@@ -25,6 +25,7 @@ export function NavRail({
         width: 'var(--sidebar-width)',
         flex: 'none',
         minHeight: '100%',
+        height: '100%',
         background: 'var(--surface-nav)',
         display: 'flex',
         flexDirection: 'column',
@@ -76,18 +77,30 @@ export function NavRail({
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: collapsed ? '6px 10px' : '6px 12px', flex: 1 }}>
-        {items.map((it) => (
-          <NavButton
-            key={it.id}
-            icon={it.icon}
-            label={it.label}
-            badge={it.badge || 0}
-            active={active === it.id}
-            collapsed={collapsed}
-            onClick={() => onNavigate && onNavigate(it.id)}
-          />
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: collapsed ? '6px 10px' : '6px 12px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        {items.map((it, i) => {
+          // Cabeçalho de seção (Principal / Operações / Gestão) quando muda; colapsado vira um traço.
+          const newSection = it.section && (i === 0 || items[i - 1].section !== it.section);
+          return (
+            <div key={it.id} style={{ display: 'contents' }}>
+              {newSection && (collapsed ? (
+                i > 0 && <span aria-hidden="true" style={{ height: 1, margin: '8px 6px', background: 'var(--border-nav)' }} />
+              ) : (
+                <span style={{ padding: i === 0 ? '4px 12px 6px' : '14px 12px 6px', fontSize: 'var(--text-2xs, 11px)', fontWeight: 'var(--fw-semibold)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-on-dark-muted)', opacity: 0.7 }}>
+                  {it.section}
+                </span>
+              ))}
+              <NavButton
+                icon={it.icon}
+                label={it.label}
+                badge={it.badge || 0}
+                active={active === it.id}
+                collapsed={collapsed}
+                onClick={() => onNavigate && onNavigate(it.id)}
+              />
+            </div>
+          );
+        })}
       </div>
 
       {collapsed ? (

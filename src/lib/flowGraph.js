@@ -84,6 +84,14 @@ export function emptyGraph() {
   return { version: 1, start: 'ini', nodes: [{ ref: 'ini', type: 'trigger', data: BLOCKS.trigger.make(), next: {}, position: { x: 0, y: 0 } }] };
 }
 
+// fluxo novo criado pela tela Fluxos: gatilho → fim (já válido, salvo como 1º rascunho)
+export function starterGraph() {
+  const g = emptyGraph();
+  g.nodes[0].next = { default: 'fim' };
+  g.nodes.push({ ref: 'fim', type: 'end', data: {}, next: {}, position: { x: 0, y: 220 } });
+  return g;
+}
+
 // grafo salvo → nós/arestas do canvas
 export function toCanvas(graph) {
   const nodes = (graph.nodes || []).map((n, i) => ({
@@ -134,7 +142,7 @@ export function summaryOf(type, d, lookups = {}) {
       return `${d.currency || '?'} · ${m ? m[1] : d.method || '?'} · ${d.open_amount ? 'valor livre' : d.amount || '?'}`;
     }
     case 'record_sale': return d.amount ? `Valor ${d.amount}` : 'Valor pago na cobrança';
-    case 'ai_agent': return d.objective || '';
+    case 'ai_agent': return d.agent_id ? `Agente: ${(lookups.agents || []).find((a) => a.id === d.agent_id)?.name || 'salvo'}` : (d.objective || '');
     case 'split': return (d.variants || []).map((v) => `${v.id.toUpperCase()} ${v.weight}%`).join(' · ');
     case 'checkpoint': return d.name || '';
     case 'wait_until': {

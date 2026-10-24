@@ -35,7 +35,7 @@ export function createFlowAdmin({ pool, copilot = null }) {
       for (const t of tpls) if (!found.has(t)) warns.push(`Modelo ${t} não existe nesta empresa.`); else if (found.get(t) !== 'APPROVED') warns.push(`Modelo ${t} ainda não está aprovado pela Meta (${found.get(t)}).`);
     }
     // conta do gateway, Pixel e canal de alerta precisam ser desta empresa
-    const refs = [['payment', 'integration_id', 'payment_integrations', 'Conta de pagamento'], ['pixel', 'pixel_config_id', 'pixel_configs', 'Pixel'], ['notify', 'channel_id', 'notification_channels', 'Canal de alerta']];
+    const refs = [['payment', 'integration_id', 'payment_integrations', 'Conta de pagamento'], ['pixel', 'pixel_config_id', 'pixel_configs', 'Pixel'], ['notify', 'channel_id', 'notification_channels', 'Canal de alerta'], ['ai_agent', 'agent_id', 'ai_agents', 'Agente de IA']];
     for (const [type, field, table, label] of refs) {
       const ids = [...new Set((graph.nodes || []).filter((n) => n.type === type && n.data && n.data[field]).map((n) => String(n.data[field])))];
       if (!ids.length) continue;
@@ -55,6 +55,22 @@ export function createFlowAdmin({ pool, copilot = null }) {
   async function handle(ctx, user, body) {
     const orgId = ctx.orgId;
     switch (body.action) {
+      case 'list': { // tela Fluxos: campanhas com fluxo em grafo (publicado ou só rascunho) e quantos leads estão nele
+        const { rows } = await pool.query(`
+          select c.id as campaign_id, c.nome, c.status_campanha as status, c.updated_at,
+                 max(v.version) filter (where v.is_active) as active_version,
+                 count(v.id) filter (where v.is_draft)::int as drafts,
+                 max(v.created_at) as last_saved_at,
+                 (select count(*)::int from public.flow_executions e where e.flow_id = f.id and e.status in ('running','waiting')) as leads_ativos,
+                 (select count(*)::int from public.flow_executions e where e.flow_id = f.id) as leads_total,
+                 (select n->'data'->'events' from public.flow_graph_versions v2, jsonb_array_elements(v2.graph->'nodes') n
+                   where v2.flow_id = f.id and n->>'ref' = v2.graph->>'start' order by v2.is_active desc, v2.version desc limit 1) as eventos
+            from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
+            join public.flow_graph_versions v on v.flow_id = f.id
+           where c.organization_id = $1
+           group by c.id, f.id order by max(v.created_at) desc`, [orgId]);
+        return { flows: rows };
+      }
       case 'validate': {
         const v = validateGraph(body.graph);
         return { ...v, warnings: [...v.warnings, ...(v.ok ? await refWarnings(orgId, body.graph) : [])] };
