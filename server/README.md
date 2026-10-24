@@ -43,6 +43,13 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - Compra aprovada encerra as execuções de recuperação do lead.
 - Rota: `POST /functions/v1/flow-graph` com `action` = validate | get | save (nova versão ativa) | activate (desfazer para uma versão) | deactivate (volta ao motor antigo) | stats (leads por bloco) | cancel_execution.
 
+### Fase 2 — blocos de conversa
+- `send_media` (imagem/áudio/vídeo/documento por link https), `send_buttons` (até 3 = botões, 4–10 = lista; cada opção vira a saída `opt_<id>`, mais `other`/`timeout`/`failed`; também casa a resposta digitada pelo texto ou número da opção).
+- `delay` em segundos (`seconds` ou `min_seconds`/`max_seconds`, aleatório) com `typing: true` ("digitando..." com a janela aberta). Esperas curtas retomam no segundo certo.
+- `ai_classify` (saídas `out_<chave>` + `other`/`error`) e `ai_extract` (campos viram variáveis; `ok`/`missing`/`error`). A mensagem do lead vai como dado delimitado e só valem chaves configuradas.
+- IA: `AI_API_KEY` (obrigatória para os blocos de IA), `AI_BASE_URL` (padrão `https://api.deepseek.com`), `AI_MODEL` (padrão `deepseek-chat`). Qualquer API compatível com OpenAI.
+- Editor visual: `src/routes/FlowGraphEditor.jsx` (Campanhas → ícone de ramificação). Prévia sem backend em DEV: `/flow-preview.html`.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.

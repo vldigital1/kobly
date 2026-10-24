@@ -52,6 +52,18 @@ export function createGraph({ base = 'https://graph.facebook.com/v21.0', fetchIm
         messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text',
         text: { body: text, preview_url: !!previewUrl },
       }),
+    // Mídia por link público (imagem, áudio, vídeo, documento). Também exige janela de 24 h aberta.
+    sendMedia: (phoneNumberId, token, { to, kind, link, caption, filename }) =>
+      call('POST', `/${encodeURIComponent(phoneNumberId)}/messages`, token, {
+        messaging_product: 'whatsapp', recipient_type: 'individual', to, type: kind,
+        [kind]: { link, ...(caption && kind !== 'audio' ? { caption } : {}), ...(filename && kind === 'document' ? { filename } : {}) },
+      }),
+    // Botões (até 3) ou lista (até 10): a resposta volta no webhook com o id da opção.
+    sendInteractive: (phoneNumberId, token, { to, interactive }) =>
+      call('POST', `/${encodeURIComponent(phoneNumberId)}/messages`, token, { messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'interactive', interactive }),
+    // "digitando..." (até ~25 s ou até a próxima mensagem); marca como lida a última mensagem do lead.
+    typing: (phoneNumberId, token, messageId) =>
+      call('POST', `/${encodeURIComponent(phoneNumberId)}/messages`, token, { messaging_product: 'whatsapp', status: 'read', message_id: messageId, typing_indicator: { type: 'text' } }),
     subscribeApp: (wabaId, token) => call('POST', `/${encodeURIComponent(wabaId)}/subscribed_apps`, token, {}),
   };
 }

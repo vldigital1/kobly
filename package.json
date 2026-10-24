@@ -13,6 +13,7 @@
     "gen:icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
+    "@xyflow/react": "^12.12.0",
     "apexcharts": "^3.49.1",
     "dompurify": "^3.4.12",
     "jszip": "^3.10.1",

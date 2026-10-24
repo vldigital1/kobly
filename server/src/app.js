@@ -13,6 +13,7 @@ import { createGraph } from './whatsapp/graph.js';
 import { parseKey } from './whatsapp/crypto.js';
 import { createFlowRuntime } from './flows/runtime.js';
 import { createFlowAdmin } from './flows/admin.js';
+import { createLlm } from './ai/llm.js';
 
 const MAX_BODY = 64 * 1024;
 const MAX_PROXY_BODY = 5 * 1024 * 1024;
@@ -42,7 +43,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     secretKey: config.secretKey ? parseKey(config.secretKey) : null,
     publicBaseUrl: config.publicBaseUrl || '', globalAppSecret: config.metaAppSecret || null,
   });
-  const flows = createFlowRuntime({ pool, whatsapp });
+  const llm = createLlm({ apiKey: config.aiApiKey, baseUrl: config.aiBaseUrl, model: config.aiModel, fetchImpl });
+  const flows = createFlowRuntime({ pool, whatsapp, llm });
   whatsapp.setInboundHandler(flows.onInbound);
   const flowAdmin = createFlowAdmin({ pool });
   const postback = createPostback({ pool, flows });

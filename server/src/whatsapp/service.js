@@ -172,6 +172,28 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     } catch (e) { throw metaToHttp(e); }
   }
 
+  async function sendWith(orgId, to, fn) {
+    const row = await accountRow(orgId);
+    if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
+    const phone = normalizePhone(to);
+    if (!phone) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDD + número.');
+    try {
+      const out = await fn(row, phone);
+      return { ok: true, id: (out && out.messages && out.messages[0] && out.messages[0].id) || null, to: phone };
+    } catch (e) { throw metaToHttp(e); }
+  }
+  const sendMediaTo = (orgId, { to, kind, url, caption, filename }) =>
+    sendWith(orgId, to, (row, phone) => graph.sendMedia(row.phone_number_id, tokenOf(row), { to: phone, kind, link: url, caption, filename }));
+  const sendInteractiveTo = (orgId, { to, interactive }) =>
+    sendWith(orgId, to, (row, phone) => graph.sendInteractive(row.phone_number_id, tokenOf(row), { to: phone, interactive }));
+  // "digitando..." é só cosmético: qualquer falha é ignorada.
+  async function typingFor(orgId, messageId) {
+    if (!messageId) return false;
+    const row = await accountRow(orgId);
+    if (!row) return false;
+    try { await graph.typing(row.phone_number_id, tokenOf(row), messageId); return true; } catch { return false; }
+  }
+
   // Quem trata as mensagens recebidas (motor de fluxos). Definido depois para evitar dependência circular.
   let inboundHandler = null;
   const setInboundHandler = (fn) => { inboundHandler = fn; };
@@ -246,5 +268,5 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     return r.rowCount;
   }
 
-  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, setInboundHandler, verifyWebhook, receiveWebhook, view, SAFE_COLS };
+  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, sendMediaTo, sendInteractiveTo, typingFor, setInboundHandler, verifyWebhook, receiveWebhook, view, SAFE_COLS };
 }

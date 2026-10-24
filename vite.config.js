@@ -19,6 +19,8 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('apexcharts')) return 'vendor-charts';
           if (id.includes('jszip') || id.includes('dompurify')) return 'vendor-email-import';
+          // React Flow (editor de fluxo em grafo): só baixa quando o editor abre. Antes da regra 'react'.
+          if (id.includes('@xyflow') || id.includes('zustand') || id.includes('d3-')) return 'vendor-flow';
           if (id.includes('react')) return 'vendor-react';
           return undefined;
         },

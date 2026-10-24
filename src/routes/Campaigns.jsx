@@ -8,6 +8,9 @@ import { AISuggestion, EmptyState, ErrorState, SkeletonTable } from '@/lib/ui.js
 import { KoblyFlowBuilder } from '@/routes/FlowBuilder.jsx';
 import { useKobly } from '@/store/store.jsx';
 
+// Editor do fluxo em grafo (motor novo): carregado só quando aberto (traz o React Flow junto).
+const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.jsx').then((m) => ({ default: m.KoblyFlowGraphEditor })));
+
 // Kobly — Campanhas. Lista de campanhas + galeria "Nova campanha" + orquestra o
 // Construtor de fluxo. KoblyCampaigns
 
@@ -233,6 +236,13 @@ function KoblyCampaigns() {
     store.notify('success', `Campanha "${c.nome}" excluída`);
   }
 
+  if (mode === 'graph' && active) {
+    return (
+      <React.Suspense fallback={<SkeletonTable rows={4} />}>
+        <KoblyFlowGraphEditor campaign={active} notify={store.notify} onBack={() => { setMode('list'); setActive(null); a.reload(); }} />
+      </React.Suspense>
+    );
+  }
   if (mode === 'builder' && active) {
     return React.createElement(KoblyFlowBuilder, { campaign: active, variant, onBack: () => { setMode('list'); setActive(null); a.reload(); } });
   }
@@ -284,10 +294,11 @@ function KoblyCampaigns() {
                 { key: 'abertura', header: 'Abertura', align: 'end', render: (r) => KoblyApi.pct(r.stats.taxaAbertura) },
                 { key: 'vendas', header: 'Recuperadas', align: 'end', render: (r) => <span style={{ color: r.stats.vendasRecuperadas ? 'var(--status-success-fg)' : 'var(--text-muted)', fontWeight: 'var(--fw-semibold)' }}>{KoblyApi.br(r.stats.vendasRecuperadas)}</span> },
                 { key: 'crit', header: 'Criticidade', render: (r) => <Badge tone={DB.optionSets.StatusCriticidade[r.stats.criticidade] || 'neutral'} dot>{r.stats.criticidade}</Badge> },
-                { key: 'acao', header: '', align: 'end', width: 150, render: (r) => canEdit ? (
+                { key: 'acao', header: '', align: 'end', width: 184, render: (r) => canEdit ? (
                   <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                     <IconButton icon={r.status === 'Ativa' ? 'pause' : 'play'} size="sm" aria-label="Alternar status" onClick={() => setStatus(r, r.status === 'Ativa' ? 'Pausada' : 'Ativa')} />
                     <IconButton icon="pencil" size="sm" aria-label="Editar fluxo" onClick={() => openBuilder(r.id)} />
+                    <IconButton icon="git-branch" size="sm" aria-label="Fluxo WhatsApp em grafo" title="Fluxo WhatsApp em grafo (novo)" onClick={() => { setActive(r); setMode('graph'); }} />
                     <IconButton icon="trash-2" size="sm" aria-label="Excluir campanha" onClick={() => removeCampaign(r)} />
                   </div>
                 ) : <IconButton icon="eye" size="sm" aria-label="Ver fluxo" onClick={() => openBuilder(r.id)} /> },

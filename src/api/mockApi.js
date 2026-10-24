@@ -1114,6 +1114,15 @@ export const KoblyApi = {
     }
     return { error: null, ...(data || {}) };
   },
+  // ---- Fluxo em grafo (motor novo) — validar, salvar versão, desfazer, métricas ----
+  async flowGraph(action, extra = {}, empresaId = null) {
+    const { data, error } = await supabase.functions.invoke('flow-graph', { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
+    if (error) {
+      const body = await error.context?.json?.().catch(() => null);
+      return { error: (body && body.message) || error.message || 'Falha ao falar com o servidor.', details: (body && body.details) || null };
+    }
+    return { error: null, ...(data || {}) };
+  },
   async listWhatsappTemplates() {
     const { data, error } = await supabase.from('whatsapp_templates').select('*').order('name');
     if (error) throw new Error(error.message);

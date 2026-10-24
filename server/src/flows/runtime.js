@@ -8,7 +8,7 @@
 // Garantias: estado salvo a cada bloco; envio com falha temporária repete com espera crescente
 // (MAX_ATTEMPTS) e depois segue pela saída "failed"; lead que pediu SAIR encerra a execução;
 // compra aprovada encerra execuções de recuperação (stop_on_purchase).
-import { nodeOf, nextOf, EVENTOS_RECUPERACAO, MAX_WAIT_MINUTES } from './graph.js';
+import { nodeOf, nextOf, EVENTOS_RECUPERACAO, MAX_WAIT_MINUTES, delaySecondsRange } from './graph.js';
 import { render, buildFields, evalCondition, applySetVar, isWindowOpen, inboundText, digitsOf, DEFAULT_TZ } from './vars.js';
 import { resolveCtaLink, retryable } from '../engine/steps.js';
 
@@ -35,9 +35,26 @@ export function buttonSuffix(components, ctaLink) {
   const prefix = btn.url.split('{{')[0];
   return ctaLink && ctaLink.startsWith(prefix) ? ctaLink.slice(prefix.length) : '';
 }
-export const delayMinutes = (d, rnd = Math.random) => (Number.isFinite(d.minutes) ? d.minutes : Math.round(d.min_minutes + rnd() * (d.max_minutes - d.min_minutes)));
+export const delaySeconds = (d, rnd = Math.random) => { const [a, b] = delaySecondsRange(d); return Math.round(a + rnd() * (b - a)); };
 
-export function createFlowRuntime({ pool, whatsapp, now = () => new Date(), rnd = Math.random, autoKick = true }) {
+// Mensagem interativa da Meta: até 3 opções viram botões; de 4 a 10, lista.
+export function buildInteractive(d, text) {
+  const opts = d.options || [];
+  if (opts.length <= 3) return { type: 'button', body: { text }, action: { buttons: opts.map((o) => ({ type: 'reply', reply: { id: o.id, title: o.title } })) } };
+  return { type: 'list', body: { text }, action: { button: (d.list_button || 'Ver opções').slice(0, 20), sections: [{ title: 'Opções', rows: opts.map((o) => ({ id: o.id, title: o.title, ...(o.description ? { description: String(o.description).slice(0, 72) } : {}) })) }] } };
+}
+// Qual saída seguir quando o lead responde: opção tocada (id), texto igual ao da opção, número da opção, ou "other".
+const normTxt = (v) => String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+export function replyExit(options, message, text) {
+  if (!Array.isArray(options) || !options.length) return 'reply';
+  const i = (message && message.interactive) || {};
+  const id = (i.button_reply && i.button_reply.id) || (i.list_reply && i.list_reply.id) || (message && message.button && message.button.payload) || null;
+  let hit = id && options.find((o) => o.id === id);
+  if (!hit) { const t = normTxt(text); hit = options.find((o, k) => normTxt(o.title) === t || String(k + 1) === t); }
+  return hit ? `opt_${hit.id}` : 'other';
+}
+
+export function createFlowRuntime({ pool, whatsapp, llm = null, now = () => new Date(), rnd = Math.random, autoKick = true }) {
   const graphCache = new Map(); // versões são imutáveis: cache seguro
   async function loadGraph(versionId) {
     if (graphCache.has(versionId)) return graphCache.get(versionId);
@@ -94,11 +111,19 @@ export function createFlowRuntime({ pool, whatsapp, now = () => new Date(), rnd 
     if (!lead) return true;
     await pool.query(`update public.whatsapp_inbound_messages set lead_id = $2 where id = $1`, [ins.rows[0].id, lead.id]);
     await pool.query(`update public.leads set whatsapp_last_inbound_at = now() where id = $1`, [lead.id]);
-    const r = await pool.query(`update public.flow_executions
-        set variables = jsonb_set(variables || jsonb_build_object('ultima_mensagem', $2::text), array[coalesce(variables->>'_wait_var', 'resposta')], to_jsonb($2::text)),
-            resume_exit = 'reply', run_at = now()
-      where lead_id = $1 and status = 'waiting' and wait_kind = 'reply' and resume_exit is null returning id`, [lead.id, text]);
-    if (r.rowCount) kick();
+    const waiting = (await pool.query(`select id, variables from public.flow_executions where lead_id = $1 and status = 'waiting' and wait_kind = 'reply' and resume_exit is null`, [lead.id])).rows;
+    let resumed = 0;
+    for (const w of waiting) {
+      const vars = { ...(w.variables || {}) };
+      const exit = replyExit(vars._wait_options, message, text);
+      vars[vars._wait_var || 'resposta'] = text;
+      vars.ultima_mensagem = text;
+      // só retoma se ainda estiver esperando (o prazo pode ter vencido no meio do caminho)
+      const r = await pool.query(`update public.flow_executions set variables = $2::jsonb, resume_exit = $3, run_at = now()
+        where id = $1 and status = 'waiting' and wait_kind = 'reply' and resume_exit is null returning id`, [w.id, JSON.stringify(vars), exit]);
+      resumed += r.rowCount;
+    }
+    if (resumed) kick();
     return true;
   }
 
@@ -159,12 +184,54 @@ export function createFlowRuntime({ pool, whatsapp, now = () => new Date(), rnd 
     switch (node.type) {
       case 'trigger': return { exit: 'default' };
       case 'delay': {
-        const m = Math.max(0, Math.min(MAX_WAIT_MINUTES, delayMinutes(d, rnd)));
-        return m === 0 ? { exit: 'default' } : { wait: { kind: 'timer', minutes: m } };
+        const s = Math.max(0, Math.min(MAX_WAIT_MINUTES * 60, delaySeconds(d, rnd)));
+        // "digitando..." durante a espera (só com a janela aberta; a Meta exige uma mensagem do lead para marcar)
+        if (d.typing && s > 0 && isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora) && whatsapp.typingFor) {
+          const last = (await pool.query(`select wa_message_id from public.whatsapp_inbound_messages where lead_id = $1 order by received_at desc limit 1`, [ex.lead_id])).rows[0];
+          if (last) await whatsapp.typingFor(ex.organization_id, last.wa_message_id);
+        }
+        return s === 0 ? { exit: 'default' } : { wait: { kind: 'timer', seconds: s } };
       }
       case 'wait_reply': {
         ctx.vars._wait_var = d.save_as || 'resposta';
-        return { wait: { kind: 'reply', minutes: d.timeout_minutes || MAX_WAIT_MINUTES } };
+        delete ctx.vars._wait_options;
+        return { wait: { kind: 'reply', seconds: (d.timeout_minutes || MAX_WAIT_MINUTES) * 60 } };
+      }
+      case 'send_media':
+      case 'send_buttons': {
+        if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };
+        if (!ctx.lead.telefone) return { exit: 'failed', detail: 'lead sem telefone' };
+        if (!isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora)) {
+          const fechada = node.type === 'send_media' && nextOf(node, 'window_closed') ? 'window_closed' : 'failed';
+          return { exit: fechada, detail: 'janela de 24 h fechada (mídia e botões só com conversa aberta; use um modelo antes)' };
+        }
+        if (node.type === 'send_media') {
+          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.telefone, kind: d.kind, url: render(d.url, ctx), caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }));
+        }
+        const r = await send(ex, ctx, () => whatsapp.sendInteractiveTo(ex.organization_id, { to: ctx.lead.telefone, interactive: buildInteractive(d, render(d.text, ctx)) }));
+        if (r.exit !== 'sent') return r;
+        ctx.vars._wait_var = d.save_as || 'resposta';
+        ctx.vars._wait_options = (d.options || []).map((o) => ({ id: o.id, title: o.title }));
+        return { wait: { kind: 'reply', seconds: (d.timeout_minutes || MAX_WAIT_MINUTES) * 60 }, detail: r.detail };
+      }
+      case 'ai_classify':
+      case 'ai_extract': {
+        if (!llm) return { exit: 'error', detail: 'IA não configurada' };
+        const text = render(d.input || '{{resposta}}', ctx);
+        try {
+          if (node.type === 'ai_classify') {
+            const key = await llm.classify({ text, outputs: d.outputs || [], instructions: d.instructions });
+            if (key) ctx.vars[d.save_as || 'classificacao'] = key;
+            return { exit: key ? `out_${key}` : 'other', detail: key || 'nenhuma saída' };
+          }
+          const got = await llm.extract({ text, fields: d.fields || [], instructions: d.instructions });
+          const faltando = [];
+          for (const f of d.fields || []) { if (got[f.name] !== null) ctx.vars[f.name] = got[f.name]; else if (f.required !== false) faltando.push(f.name); }
+          return faltando.length ? { exit: 'missing', detail: `faltou: ${faltando.join(', ')}` } : { exit: 'ok' };
+        } catch (e) {
+          if (retryable(e.status, e.code) && e.code !== 'ai_unconfigured') return { retry: String(e.message).slice(0, 200) };
+          return { exit: 'error', detail: String(e.message).slice(0, 200) };
+        }
       }
       case 'condition': return { exit: evalCondition(d, await factsFor(ex, ctx)) ? 'yes' : 'no' };
       case 'set_var': { ctx.vars[d.name] = applySetVar(d, ctx); return { exit: 'default', detail: `${d.name}=${String(ctx.vars[d.name]).slice(0, 60)}` }; }
@@ -213,7 +280,7 @@ export function createFlowRuntime({ pool, whatsapp, now = () => new Date(), rnd 
     if (ex.status === 'waiting') {
       const node = nodeOf(graph, ref);
       const exit = ex.resume_exit || (ex.wait_kind === 'reply' ? 'timeout' : 'default');
-      delete ctx.vars._wait_var;
+      delete ctx.vars._wait_var; delete ctx.vars._wait_options;
       await logEvent(ex, node, exit);
       ref = nextOf(node, exit);
       if (!ref) return finish(ex, ctx, 'completed', null, ex.current_ref);
@@ -228,7 +295,7 @@ export function createFlowRuntime({ pool, whatsapp, now = () => new Date(), rnd 
 
       if (r.retry) {
         const attempts = ex.attempts + 1;
-        if (attempts >= MAX_ATTEMPTS) r = { exit: 'failed', detail: `desistiu após ${attempts} tentativas: ${r.retry}` };
+        if (attempts >= MAX_ATTEMPTS) r = { exit: node.type.startsWith('ai_') ? 'error' : 'failed', detail: `desistiu após ${attempts} tentativas: ${r.retry}` };
         else {
           await logEvent(ex, node, 'retry', r.retry);
           return save(ex, { status: 'running', current_ref: ref, variables: ctx.vars, attempts, last_error: r.retry, steps_count: steps, run_at: new Date(now().getTime() + RETRY_BACKOFF_MIN * 60000 * attempts).toISOString() });
@@ -236,15 +303,19 @@ export function createFlowRuntime({ pool, whatsapp, now = () => new Date(), rnd 
       }
       if (r.stop) { await logEvent(ex, node, r.stop, r.detail); return finish(ex, ctx, r.stop, r.detail || null, ref); }
       if (r.wait) {
-        await logEvent(ex, node, r.wait.kind === 'reply' ? 'waiting_reply' : 'waiting', `${r.wait.minutes} min`);
-        return save(ex, { status: 'waiting', current_ref: ref, wait_kind: r.wait.kind, resume_exit: null, variables: ctx.vars, attempts: 0, last_error: null, steps_count: steps,
-          run_at: new Date(now().getTime() + r.wait.minutes * 60000).toISOString() });
+        const secs = r.wait.seconds;
+        await logEvent(ex, node, r.wait.kind === 'reply' ? 'waiting_reply' : 'waiting', secs < 120 ? `${secs} s` : `${Math.round(secs / 60)} min`);
+        await save(ex, { status: 'waiting', current_ref: ref, wait_kind: r.wait.kind, resume_exit: null, variables: ctx.vars, attempts: 0, last_error: null, steps_count: steps,
+          run_at: new Date(now().getTime() + secs * 1000).toISOString() });
+        // espera curta (pausas de "humanização"): retoma no segundo certo em vez de esperar o próximo ciclo
+        if (r.wait.kind === 'timer' && secs < 60 && autoKick) setTimeout(kick, secs * 1000 + 50).unref?.();
+        return;
       }
       await logEvent(ex, node, r.exit, r.detail);
       ex.attempts = 0;
       const nxt = nextOf(node, r.exit);
       if (!nxt) {
-        const err = r.exit === 'failed' ? (r.detail || 'falhou') : null;
+        const err = r.exit === 'failed' || r.exit === 'error' ? (r.detail || 'falhou') : null;
         return finish(ex, ctx, err ? 'failed' : 'completed', err, ref);
       }
       ref = nxt;

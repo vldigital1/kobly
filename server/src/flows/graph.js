@@ -13,17 +13,30 @@ const VAR_NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // exits: saídas que o bloco pode ter. required: saídas que precisam estar ligadas.
+// Blocos com saídas DINÂMICAS (botões, IA) calculam as saídas a partir dos dados: ver exitsOf().
 export const NODE_TYPES = {
   trigger: { label: 'Gatilho', exits: ['default'], required: ['default'] },
   send_template: { label: 'Modelo do WhatsApp', exits: ['sent', 'failed'], required: ['sent'] },
   send_text: { label: 'Mensagem de texto', exits: ['sent', 'failed', 'window_closed'], required: ['sent'] },
+  send_media: { label: 'Mídia', exits: ['sent', 'failed', 'window_closed'], required: ['sent'] },
+  send_buttons: { label: 'Botões / lista', exits: ['other', 'timeout', 'failed'], dynamic: (d) => (d.options || []).map((o) => `opt_${o.id}`), required: [] },
   delay: { label: 'Esperar', exits: ['default'], required: ['default'] },
   wait_reply: { label: 'Aguardar resposta', exits: ['reply', 'timeout'], required: ['reply'] },
   condition: { label: 'Condição', exits: ['yes', 'no'], required: [] },
+  ai_classify: { label: 'IA: entender resposta', exits: ['other', 'error'], dynamic: (d) => (d.outputs || []).map((o) => `out_${o.key}`), required: [] },
+  ai_extract: { label: 'IA: extrair dados', exits: ['ok', 'missing', 'error'], required: ['ok'] },
   tag: { label: 'Etiquetas', exits: ['default'], required: [] },
   set_var: { label: 'Definir variável', exits: ['default'], required: [] },
   end: { label: 'Fim', exits: [], required: [] },
 };
+export const exitsOf = (node) => {
+  const spec = NODE_TYPES[node && node.type];
+  if (!spec) return [];
+  const d = (node && node.data) || {};
+  return [...(spec.dynamic ? spec.dynamic(d) : []), ...spec.exits];
+};
+export const MEDIA_KINDS = ['image', 'audio', 'video', 'document'];
+const KEY = /^[a-z0-9_]{1,20}$/;
 
 export const CONDITION_KINDS = {
   tag: ['has', 'not_has'],
@@ -34,6 +47,15 @@ export const CONDITION_KINDS = {
   time_between: [],
   country: [],
 };
+
+// Faixa da espera em segundos [mín, máx] (aceita segundos ou o formato antigo em minutos).
+export function delaySecondsRange(d) {
+  if (Number.isFinite(d.seconds)) return [d.seconds, d.seconds];
+  if (Number.isFinite(d.min_seconds) && Number.isFinite(d.max_seconds)) return [d.min_seconds, d.max_seconds];
+  if (Number.isFinite(d.minutes)) return [d.minutes * 60, d.minutes * 60];
+  if (Number.isFinite(d.min_minutes) && Number.isFinite(d.max_minutes)) return [d.min_minutes * 60, d.max_minutes * 60];
+  return [0, 0];
+}
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const str = (v, max = 4096) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
@@ -55,12 +77,55 @@ function checkData(node, err) {
       if (d.fallback_template_id !== undefined && d.fallback_template_id !== null && !str(d.fallback_template_id, 64)) err(`${at}: modelo reserva inválido.`);
       break;
     case 'delay': {
-      const fixed = Number.isFinite(d.minutes);
-      const range = Number.isFinite(d.min_minutes) && Number.isFinite(d.max_minutes);
-      if (!fixed && !range) err(`${at}: informe o tempo de espera.`);
-      const vals = fixed ? [d.minutes] : [d.min_minutes, d.max_minutes];
-      if (vals.some((m) => m < 0 || m > MAX_WAIT_MINUTES)) err(`${at}: espera deve ficar entre 0 e 30 dias.`);
-      if (range && d.min_minutes > d.max_minutes) err(`${at}: o mínimo não pode passar do máximo.`);
+      // segundos (fixo ou faixa aleatória) ou, no formato antigo, minutos
+      const fixed = Number.isFinite(d.seconds) || Number.isFinite(d.minutes);
+      const range = (Number.isFinite(d.min_seconds) && Number.isFinite(d.max_seconds)) || (Number.isFinite(d.min_minutes) && Number.isFinite(d.max_minutes));
+      if (!fixed && !range) { err(`${at}: informe o tempo de espera.`); break; }
+      const s = delaySecondsRange(d);
+      if (s.some((x) => x < 0 || x > MAX_WAIT_MINUTES * 60)) err(`${at}: espera deve ficar entre 0 e 30 dias.`);
+      if (s[0] > s[1]) err(`${at}: o mínimo não pode passar do máximo.`);
+      break;
+    }
+    case 'send_media':
+      if (!MEDIA_KINDS.includes(d.kind)) err(`${at}: escolha o tipo de mídia (imagem, áudio, vídeo ou documento).`);
+      if (!(typeof d.url === 'string' && /^https:\/\/[^\s]+$/i.test(d.url.trim()) && d.url.length <= 2048)) err(`${at}: a mídia precisa de um link público https.`);
+      if (d.caption !== undefined && d.caption !== null && (typeof d.caption !== 'string' || d.caption.length > 1024)) err(`${at}: legenda até 1024 caracteres.`);
+      if (d.kind === 'audio' && d.caption) err(`${at}: o WhatsApp não aceita legenda em áudio.`);
+      break;
+    case 'send_buttons': {
+      if (!str(d.text, 1024)) err(`${at}: escreva a pergunta (até 1024 caracteres).`);
+      const opts = Array.isArray(d.options) ? d.options : [];
+      if (opts.length < 1 || opts.length > 10) err(`${at}: use de 1 a 10 opções.`);
+      const max = opts.length <= 3 ? 20 : 24; // limite da Meta: botão 20, item de lista 24
+      const ids = new Set();
+      for (const o of opts) {
+        if (!isObj(o) || !KEY.test(String(o.id || ''))) { err(`${at}: cada opção precisa de um id (minúsculas, números e _).`); continue; }
+        if (ids.has(o.id)) err(`${at}: opção repetida "${o.id}".`); ids.add(o.id);
+        if (!str(o.title, max)) err(`${at}: o texto da opção "${o.id}" deve ter até ${max} caracteres.`);
+      }
+      if (d.save_as !== undefined && !VAR_NAME.test(String(d.save_as))) err(`${at}: nome da variável inválido.`);
+      if (d.timeout_minutes !== undefined && d.timeout_minutes !== null && !(Number.isFinite(d.timeout_minutes) && d.timeout_minutes > 0 && d.timeout_minutes <= MAX_WAIT_MINUTES)) err(`${at}: prazo deve ficar entre 1 minuto e 30 dias.`);
+      break;
+    }
+    case 'ai_classify': {
+      const outs = Array.isArray(d.outputs) ? d.outputs : [];
+      if (outs.length < 2 || outs.length > 8) err(`${at}: use de 2 a 8 saídas.`);
+      const keys = new Set();
+      for (const o of outs) {
+        if (!isObj(o) || !KEY.test(String(o.key || ''))) { err(`${at}: cada saída precisa de uma chave (minúsculas, números e _).`); continue; }
+        if (keys.has(o.key)) err(`${at}: saída repetida "${o.key}".`); keys.add(o.key);
+        if (!str(o.description, 500)) err(`${at}: explique quando usar a saída "${o.key}".`);
+      }
+      if (d.instructions !== undefined && d.instructions !== null && (typeof d.instructions !== 'string' || d.instructions.length > 2000)) err(`${at}: instruções até 2000 caracteres.`);
+      break;
+    }
+    case 'ai_extract': {
+      const fs = Array.isArray(d.fields) ? d.fields : [];
+      if (fs.length < 1 || fs.length > 8) err(`${at}: extraia de 1 a 8 campos.`);
+      for (const f of fs) {
+        if (!isObj(f) || !VAR_NAME.test(String(f.name || ''))) { err(`${at}: nome de campo inválido (minúsculas, números e _).`); continue; }
+        if (!str(f.description, 300)) err(`${at}: descreva o campo "${f.name}".`);
+      }
       break;
     }
     case 'wait_reply':
@@ -114,8 +179,9 @@ export function validateGraph(graph) {
     checkData(n, err);
     const spec = NODE_TYPES[n.type];
     const next = isObj(n.next) ? n.next : {};
+    const exits = exitsOf(n);
     for (const [exit, target] of Object.entries(next)) {
-      if (!spec.exits.includes(exit)) err(`bloco "${n.ref}": saída "${exit}" não existe em ${spec.label}.`);
+      if (!exits.includes(exit)) err(`bloco "${n.ref}": saída "${exit}" não existe em ${spec.label}.`);
       else if (target !== null && target !== undefined && !byRef.has(target) && !nodes.some((m) => m && m.ref === target)) err(`bloco "${n.ref}": a saída "${exit}" aponta para "${target}", que não existe.`);
       if (target === n.ref) err(`bloco "${n.ref}": a saída "${exit}" aponta para ele mesmo.`);
     }
@@ -132,7 +198,7 @@ export function validateGraph(graph) {
     const seen = new Set(); const stack = [start.ref];
     while (stack.length) { const r = stack.pop(); if (seen.has(r)) continue; seen.add(r); const n = byRef.get(r); if (n && isObj(n.next)) for (const t of Object.values(n.next)) if (t) stack.push(t); }
     for (const n of nodes) if (n && n.ref && !seen.has(n.ref)) warn(`O bloco "${n.ref}" não é alcançado a partir do início.`);
-    const PAUSA = new Set(['delay', 'wait_reply']);
+    const PAUSA = new Set(['delay', 'wait_reply', 'send_buttons']);
     const color = new Map();
     const dfs = (r) => {
       color.set(r, 1);
