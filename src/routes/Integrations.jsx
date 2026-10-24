@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { SUPABASE_URL } from '@/api/supabaseClient.js';
 import { KoblyAI } from '@/api/ai.js';
@@ -1022,7 +1022,9 @@ const SECTIONS = [
   { value: 'postback', label: 'Postback', icon: 'webhook', help: 'Webhooks de checkout' },
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
+  { value: 'pagamentos', label: 'Pagamentos e Pixel', icon: 'credit-card', help: 'Conta do gateway (XPag) para cobrar nos fluxos e Pixel da Meta (API de Conversões).' },
 ];
+const KoblyPaymentsTab = React.lazy(() => import('@/routes/PaymentsTab.jsx').then((m) => ({ default: m.KoblyPaymentsTab })));
 const LOJA_SUBS = [
   { value: 'marca', label: 'Identidade', icon: 'palette' },
   { value: 'dominio', label: 'Remetente', icon: 'globe' },
@@ -1124,6 +1126,11 @@ function KoblyIntegrations() {
           {section === 'postback' && <PostbackTab data={a.data} empresaId={empresaId} />}
           {section === 'tags' && <TagsTab data={a.data} reload={a.reload} />}
           {section === 'emails' && <EmailTemplatesTab data={a.data} reload={a.reload} empresaId={empresaId} />}
+          {section === 'pagamentos' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <KoblyPaymentsTab empresaId={empresaId} notify={store.notify} />
+            </React.Suspense>
+          )}
         </>
       )}
     </div>

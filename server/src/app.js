@@ -14,6 +14,9 @@ import { parseKey } from './whatsapp/crypto.js';
 import { createFlowRuntime } from './flows/runtime.js';
 import { createFlowAdmin } from './flows/admin.js';
 import { createLlm } from './ai/llm.js';
+import { createPayments } from './payments/service.js';
+import { createXpag } from './payments/xpag.js';
+import { createPixel } from './payments/pixel.js';
 
 const MAX_BODY = 64 * 1024;
 const MAX_PROXY_BODY = 5 * 1024 * 1024;
@@ -44,14 +47,17 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     publicBaseUrl: config.publicBaseUrl || '', globalAppSecret: config.metaAppSecret || null,
   });
   const llm = createLlm({ apiKey: config.aiApiKey, baseUrl: config.aiBaseUrl, model: config.aiModel, fetchImpl });
-  const flows = createFlowRuntime({ pool, whatsapp, llm });
+  const secretKeyBuf = config.secretKey ? parseKey(config.secretKey) : null;
+  const payments = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
+  const pixel = createPixel({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaGraphBase });
+  const flows = createFlowRuntime({ pool, whatsapp, llm, payments, pixel });
   whatsapp.setInboundHandler(flows.onInbound);
   const flowAdmin = createFlowAdmin({ pool });
   const postback = createPostback({ pool, flows });
   const invites = createInvites({ pool, auth, mailer });
   const storage = createStorage({ dir: config.storageDir || '/var/lib/kobly-storage', canAccessOrg: async (user, org) => { try { return (await whatsapp.resolveOrg(user, org)).role !== 'Suporte'; } catch { return false; } } });
   const unsub = createUnsubscribe({ pool, secret: config.unsubscribeSecret });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -138,6 +144,12 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
           const { status: st, ...counts } = r;
           return send(res, st, st === 200 ? { ok: true, ...counts } : { code: 'rejected' });
         }
+      }
+      // Aviso do gateway de pagamento: o token na URL só identifica a credencial; a confirmação é checada na API do gateway.
+      const pm = /^\/webhooks\/payments\/([a-z]+)\/([A-Za-z0-9_-]{20,64})$/.exec(path);
+      if (pm && req.method === 'POST') {
+        const r = await payments.receiveWebhook(pm[1], pm[2], (await readBody(req, 256 * 1024)).toString('utf8'), (charge) => flows.onPaymentConfirmed(charge));
+        return send(res, r.status, r.body);
       }
       const sp = /^\/storage\/v1\/object\/(?:(public)\/)?([a-z]+)\/([^/]+)\/([^/]+)$/.exec(path);
       if (sp) {

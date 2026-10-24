@@ -54,7 +54,21 @@ export function replyExit(options, message, text) {
   return hit ? `opt_${hit.id}` : 'other';
 }
 
-export function createFlowRuntime({ pool, whatsapp, llm = null, now = () => new Date(), rnd = Math.random, autoKick = true }) {
+// Valor digitado ou vindo de variável → número. Aceita 45 | 45,90 | 1.234,50 | 1,234.50 | "$ 45".
+// Com vírgula e ponto, o separador que vem por último é o decimal; só vírgula com 1–2 casas no fim é decimal.
+function plainNumber(v) {
+  if (v === null || v === undefined) return NaN;
+  let s = String(v).replace(/[^\d,.-]/g, '');
+  if (!/\d/.test(s)) return NaN;
+  const c = s.lastIndexOf(','), d = s.lastIndexOf('.');
+  if (c > -1 && d > -1) s = c > d ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if (c > -1) s = /,\d{1,2}$/.test(s) ? s.slice(0, c).replace(/,/g, '') + '.' + s.slice(c + 1) : s.replace(/,/g, '');
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+}
+export { plainNumber };
+
+export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null, pixel = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const graphCache = new Map(); // versões são imutáveis: cache seguro
   async function loadGraph(versionId) {
     if (graphCache.has(versionId)) return graphCache.get(versionId);
@@ -127,6 +141,35 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, now = () => new 
     return true;
   }
 
+  // ---- Pagamento confirmado: puxa a execução para a saída "payment_approved" -------------
+  // Vale esteja o lead onde estiver no fluxo (esperando resposta, num delay, ou até já encerrado),
+  // enquanto a cobrança estiver "escutando" (listen_until). Não é uma espera: é uma preempção.
+  async function onPaymentConfirmed(charge) {
+    if (!charge.execution_id || !charge.node_ref) return { preempted: false, reason: 'cobrança sem execução' };
+    if (charge.listen_until && new Date(charge.listen_until) < now()) return { preempted: false, reason: 'fora do prazo de escuta' };
+    for (let tentativa = 0; tentativa < 6; tentativa++) {
+      const ex = (await pool.query(`select * from public.flow_executions where id = $1`, [charge.execution_id])).rows[0];
+      if (!ex) return { preempted: false, reason: 'execução removida' };
+      const graph = await loadGraph(ex.graph_version_id);
+      const node = nodeOf(graph, charge.node_ref);
+      if (!node || !nextOf(node, 'payment_approved')) { await logEvent(ex, node, 'payment_approved', 'pagamento confirmado; saída "pagamento aprovado" não está ligada'); return { preempted: false, reason: 'saída não ligada' }; }
+      const prefix = ((node.data || {}).save_as) || 'pagamento';
+      const extra = { [`${prefix}_status`]: 'confirmed', [`${prefix}_valor_pago`]: charge.paid_amount != null ? String(charge.paid_amount) : String(charge.amount ?? ''), _last_charge_id: charge.id, _last_charge_prefix: prefix };
+      const alive = ['running', 'waiting'].includes(ex.status);
+      if (!alive) { // execução já terminou: reabre (encerrando outra viva da mesma campanha para o mesmo lead)
+        await pool.query(`update public.flow_executions set status = 'cancelled', finished_at = now(), lease_until = null, last_error = 'substituída: pagamento aprovado em execução anterior'
+          where campaign_id = $1 and lead_id = $2 and id <> $3 and status in ('running','waiting')`, [ex.campaign_id, ex.lead_id, ex.id]);
+      }
+      // só mexe se ninguém estiver processando a execução agora (lease livre); senão tenta de novo em instantes
+      const r = await pool.query(`update public.flow_executions set status = 'waiting', wait_kind = 'timer', resume_exit = 'payment_approved', current_ref = $2,
+          variables = variables || $3::jsonb, run_at = now(), finished_at = null, last_error = null, attempts = 0
+        where id = $1 and (lease_until is null or lease_until < now()) returning id`, [ex.id, node.ref, JSON.stringify(extra)]);
+      if (r.rowCount) { await logEvent(ex, node, 'payment_confirmed', `cobrança ${charge.id}`); kick(); return { preempted: true }; }
+      await sleep(2000);
+    }
+    return { preempted: false, reason: 'execução ocupada' };
+  }
+
   // ---- Contexto do lead ------------------------------------------------------
   async function contextFor(ex) {
     const lead = (await pool.query(`select id, organization_id, nome, sobrenome, email, telefone, produto, valor_compra, link_recuperacao, whatsapp_opt_out, whatsapp_last_inbound_at from public.leads where id = $1`, [ex.lead_id])).rows[0] || null;
@@ -144,7 +187,9 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, now = () => new 
   }
   async function factsFor(ex, ctx) {
     const tags = new Set((await pool.query(`select tag_id from public.lead_tags where lead_id = $1`, [ex.lead_id])).rows.map((r) => r.tag_id));
-    const comprou = (await pool.query(`select 1 from public.webhook_events where organization_id = $1 and lead_id = $2 and tipo_evento = 'Compra Aprovada' and created_at >= $3 limit 1`, [ex.organization_id, ex.lead_id, ex.started_at])).rows.length > 0;
+    // comprou: compra aprovada no checkout OU cobrança do próprio fluxo confirmada, desde o início da execução
+    const comprou = (await pool.query(`select 1 from public.webhook_events where organization_id = $1 and lead_id = $2 and tipo_evento = 'Compra Aprovada' and created_at >= $3
+      union all select 1 from public.payment_charges where organization_id = $1 and lead_id = $2 and status = 'confirmed' and confirmed_at >= $3 limit 1`, [ex.organization_id, ex.lead_id, ex.started_at])).rows.length > 0;
     return { ...ctx, tags, comprou, janelaAberta: isWindowOpen(ctx.lead && ctx.lead.whatsapp_last_inbound_at, ctx.agora) };
   }
 
@@ -206,13 +251,68 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, now = () => new 
           return { exit: fechada, detail: 'janela de 24 h fechada (mídia e botões só com conversa aberta; use um modelo antes)' };
         }
         if (node.type === 'send_media') {
-          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.telefone, kind: d.kind, url: render(d.url, ctx), caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }));
+          const url = render(d.url, ctx).trim();
+          if (!/^https:\/\/\S+$/i.test(url)) return { exit: 'failed', detail: `link da mídia inválido ou vazio${/\{\{/.test(d.url) ? ` (a variável ${d.url} não tem um link https)` : ''}` };
+          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.telefone, kind: d.kind, url, caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }));
         }
         const r = await send(ex, ctx, () => whatsapp.sendInteractiveTo(ex.organization_id, { to: ctx.lead.telefone, interactive: buildInteractive(d, render(d.text, ctx)) }));
         if (r.exit !== 'sent') return r;
         ctx.vars._wait_var = d.save_as || 'resposta';
         ctx.vars._wait_options = (d.options || []).map((o) => ({ id: o.id, title: o.title }));
         return { wait: { kind: 'reply', seconds: (d.timeout_minutes || MAX_WAIT_MINUTES) * 60 }, detail: r.detail };
+      }
+      case 'payment': {
+        if (!payments) return { exit: 'error', detail: 'pagamentos indisponíveis neste ambiente' };
+        const prefix = d.save_as || 'pagamento';
+        // cada NOVA passagem pelo bloco gera uma cobrança nova (ex.: OXXO venceu → volta e gera outro);
+        // a repetição após falha temporária reaproveita a mesma (mesmo external_id = idempotente no gateway)
+        const seqKey = `_pay_seq_${node.ref}`;
+        if (!ex.attempts) ctx.vars[seqKey] = (Number(ctx.vars[seqKey]) || 0) + 1;
+        const externalId = `kb-${ex.id}-${node.ref}-${ctx.vars[seqKey] || 1}`;
+        const amount = d.open_amount ? null : plainNumber(render(String(d.amount ?? ''), ctx));
+        if (!d.open_amount && !(amount > 0)) return { exit: 'error', detail: `valor da cobrança inválido (${render(String(d.amount ?? ''), ctx) || 'vazio'})` };
+        try {
+          const ch = await payments.createCharge({
+            ex, nodeRef: node.ref, integrationId: d.integration_id, currency: d.currency, method: d.method, amount, openAmount: !!d.open_amount,
+            payer: { name: render(d.payer_name || '{{nome}}', ctx) || 'Cliente', document: d.document ? render(d.document, ctx) : undefined, email: ctx.lead.email || undefined, phone: ctx.lead.telefone || undefined },
+            description: d.description ? render(d.description, ctx) : undefined, externalId, listenHours: d.listen_hours || 48,
+          });
+          Object.assign(ctx.vars, {
+            [`${prefix}_codigo`]: ch.payment_code || '', [`${prefix}_qr`]: ch.payment_qr || '', [`${prefix}_link`]: ch.checkout_url || '',
+            [`${prefix}_valor`]: ch.amount != null ? String(ch.amount) : '', [`${prefix}_moeda`]: d.currency, [`${prefix}_metodo`]: d.method,
+            [`${prefix}_id`]: ch.id, [`${prefix}_status`]: ch.status, _last_charge_id: ch.id, _last_charge_prefix: prefix,
+          });
+          for (const [k, v] of Object.entries(ch.extra || {})) ctx.vars[`${prefix}_${k}`] = v;
+          return { exit: 'charge_created', detail: `${d.currency} ${d.method}${amount ? ' ' + amount : ' valor livre'}` };
+        } catch (e) {
+          if (e.status >= 500 || e.status === 429) return { retry: `${e.code || ''} ${e.message}`.trim().slice(0, 200) };
+          return { exit: 'error', detail: `${e.code || 'erro'}: ${String(e.message).slice(0, 180)}` };
+        }
+      }
+      case 'record_sale': {
+        const prefix = ctx.vars._last_charge_prefix || 'pagamento';
+        const amount = plainNumber(render(String(d.amount ?? `{{${prefix}_valor_pago}}`), ctx)) || plainNumber(render(`{{${prefix}_valor}}`, ctx));
+        if (!(amount > 0)) return { exit: 'default', detail: 'venda não registrada: sem valor' };
+        const currency = (render(String(d.currency || `{{${prefix}_moeda}}`), ctx) || 'BRL').toUpperCase().slice(0, 3) || 'BRL';
+        const product = render(String(d.product || '{{produto}}'), ctx) || null;
+        const chargeId = ctx.vars._last_charge_id && /^[0-9a-f-]{36}$/i.test(ctx.vars._last_charge_id) ? ctx.vars._last_charge_id : null;
+        const ins = await pool.query(`insert into public.flow_sales (organization_id, campaign_id, execution_id, lead_id, charge_id, amount, currency, product)
+          values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict (charge_id) where charge_id is not null do nothing returning id`,
+          [ex.organization_id, ex.campaign_id, ex.id, ex.lead_id, chargeId, amount, currency, product]);
+        if (!ins.rows[0]) return { exit: 'default', detail: 'venda já registrada para esta cobrança' };
+        await pool.query(`select public.increment_vendas_recuperadas($1)`, [ex.campaign_id]).catch((e) => console.error('[flows] vendas_recuperadas:', e.message));
+        ctx.vars.venda_registrada = 'sim';
+        return { exit: 'default', detail: `${currency} ${amount}` };
+      }
+      case 'pixel': {
+        if (!pixel) return { exit: 'default', detail: 'pixel indisponível neste ambiente' };
+        const prefix = ctx.vars._last_charge_prefix || 'pagamento';
+        const value = d.value ? plainNumber(render(String(d.value), ctx)) : d.event === 'Purchase' ? (plainNumber(render(`{{${prefix}_valor_pago}}`, ctx)) || plainNumber(render(`{{${prefix}_valor}}`, ctx))) : null;
+        // compra: mesmo event_id da cobrança → a Meta não conta duas vezes se outro sistema também enviar
+        const eventId = d.event === 'Purchase' && ctx.vars._last_charge_id ? String(ctx.vars._last_charge_id) : `${ex.id}:${node.ref}`;
+        const r = await pixel.send({ orgId: ex.organization_id, configId: d.pixel_config_id, eventName: d.event, eventId, lead: ctx.lead,
+          value: Number.isFinite(value) ? value : null, currency: d.currency || ctx.vars[`${prefix}_moeda`] || 'BRL' });
+        return { exit: 'default', detail: `${d.event}: ${r.ok ? 'enviado' : 'falhou'} (${r.detail})` }; // o fluxo segue mesmo se o Pixel falhar
       }
       case 'ai_classify':
       case 'ai_extract': {
@@ -295,7 +395,7 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, now = () => new 
 
       if (r.retry) {
         const attempts = ex.attempts + 1;
-        if (attempts >= MAX_ATTEMPTS) r = { exit: node.type.startsWith('ai_') ? 'error' : 'failed', detail: `desistiu após ${attempts} tentativas: ${r.retry}` };
+        if (attempts >= MAX_ATTEMPTS) r = { exit: node.type.startsWith('ai_') || node.type === 'payment' ? 'error' : 'failed', detail: `desistiu após ${attempts} tentativas: ${r.retry}` };
         else {
           await logEvent(ex, node, 'retry', r.retry);
           return save(ex, { status: 'running', current_ref: ref, variables: ctx.vars, attempts, last_error: r.retry, steps_count: steps, run_at: new Date(now().getTime() + RETRY_BACKOFF_MIN * 60000 * attempts).toISOString() });
@@ -361,5 +461,5 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, now = () => new 
   // Retomada rápida (resposta do lead / evento novo) sem esperar o próximo ciclo.
   function kick() { if (autoKick) setImmediate(() => { tick().catch((e) => console.error('[flows] tick:', e.message)); }); }
 
-  return { startForEvent, onInbound, tick, kick, process, runNode, loadGraph };
+  return { startForEvent, onInbound, onPaymentConfirmed, tick, kick, process, runNode, loadGraph };
 }

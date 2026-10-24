@@ -55,6 +55,11 @@ grant select on public.whatsapp_templates to kobly_authenticated;
 -- Motor de fluxos (0069): grafo, execuções, trilha e caixa de entrada são escritos só pelo serviço.
 revoke all on public.flow_graph_versions, public.flow_executions, public.flow_execution_events, public.whatsapp_inbound_messages from kobly_authenticated, kobly_anon;
 grant select on public.flow_graph_versions, public.flow_executions, public.flow_execution_events, public.whatsapp_inbound_messages to kobly_authenticated;
+-- Pagamentos, vendas e Pixel (0070): segredos não legíveis; escrita só pelo serviço.
+revoke all on public.payment_integrations, public.payment_charges, public.payment_webhook_events, public.flow_sales, public.pixel_configs from kobly_authenticated, kobly_anon;
+grant select (id, organization_id, provider, label, client_id, sandbox, status, last_error, created_at, updated_at) on public.payment_integrations to kobly_authenticated;
+grant select on public.payment_charges, public.flow_sales to kobly_authenticated;
+grant select (id, organization_id, label, pixel_id, test_event_code, created_at, updated_at) on public.pixel_configs to kobly_authenticated;
 `;
 writeFileSync(join(out, '900_grants.sql'), grants);
 manifest.push({ file: '900_grants.sql', sha256: createHash('sha256').update(grants).digest('hex') });

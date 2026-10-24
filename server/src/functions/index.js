@@ -38,10 +38,19 @@ export function createFunctions(ctx) {
     const { user, org } = await authedOrg(req, body);
     return io.send(res, 200, await ctx.flowAdmin.handle(org, user, body));
   };
+  // Credenciais do gateway de pagamento e do Pixel da Meta (segredos cifrados; só o serviço escreve).
+  const orgRoute = (svc) => async (req, res, io) => {
+    if (!ctx[svc]) throw new AuthError(503, 'unavailable', 'Recurso indisponível neste ambiente.');
+    const body = await io.readJson(req);
+    const { org } = await authedOrg(req, body);
+    return io.send(res, 200, await ctx[svc].handle(org, body));
+  };
   const handlers = {
     'whatsapp-account': () => whatsappAccount,
     'invite-client': () => inviteClient,
     'flow-graph': () => flowGraph,
+    'payment-integrations': () => orgRoute('payments'),
+    'pixel-configs': () => orgRoute('pixel'),
   };
   return {
     names: () => Object.keys(handlers),

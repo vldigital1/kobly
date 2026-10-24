@@ -32,13 +32,26 @@ export const BLOCKS = {
     make: () => ({ input: '{{resposta}}', outputs: [{ key: 'sim', description: 'aceitou ou quer continuar' }, { key: 'nao', description: 'recusou' }] }) },
   ai_extract: { label: 'IA: extrair dados', group: 'IA', icon: 'search', tone: 'purple', hint: 'Tira campos da resposta (cidade, plano...) e salva em variáveis.',
     exits: [['ok', 'Extraiu'], ['missing', 'Faltou dado'], ['error', 'Erro']], make: () => ({ input: '{{resposta}}', fields: [{ name: 'cidade', description: 'cidade do cliente', required: true }] }) },
+  payment: { label: 'Cobrança', group: 'Dinheiro', icon: 'credit-card', tone: 'accent', hint: 'Gera Pix, SPEI, OXXO, Nequi... no gateway e segue. Se o lead pagar (até 48 h), o fluxo pula para "Pago".',
+    exits: [['charge_created', 'Cobrança gerada'], ['payment_approved', 'Pago'], ['error', 'Erro']],
+    make: () => ({ integration_id: '', currency: 'BRL', method: 'PIX', amount: '{{valor}}', listen_hours: 48 }) },
+  record_sale: { label: 'Registrar venda', group: 'Dinheiro', icon: 'receipt', tone: 'accent', hint: 'Conta a venda recuperada no dashboard (uma vez por cobrança).',
+    exits: [['default', 'Próximo']], make: () => ({}) },
+  pixel: { label: 'Pixel da Meta', group: 'Dinheiro', icon: 'target', tone: 'accent', hint: 'Envia Lead ou Purchase para a Meta (API de Conversões).',
+    exits: [['default', 'Próximo']], make: () => ({ pixel_config_id: '', event: 'Purchase' }) },
   tag: { label: 'Etiquetas', group: 'Ações', icon: 'tag', tone: 'neutral', hint: 'Adiciona ou remove etiquetas do lead.',
     exits: [['default', 'Próximo']], make: () => ({ add: [], remove: [] }) },
   set_var: { label: 'Definir variável', group: 'Ações', icon: 'pencil', tone: 'neutral', hint: 'Grava texto ou faz conta numa variável.',
     exits: [['default', 'Próximo']], make: () => ({ name: 'etapa', op: 'set', value: '1' }) },
   end: { label: 'Fim', group: 'Ações', icon: 'flag', tone: 'neutral', hint: 'Encerra o fluxo para o lead.', exits: [], make: () => ({}) },
 };
-export const PALETTE_GROUPS = ['Mensagens', 'Controle', 'IA', 'Ações'];
+export const PALETTE_GROUPS = ['Mensagens', 'Controle', 'IA', 'Dinheiro', 'Ações'];
+// Moeda → métodos do bloco Cobrança (espelha o servidor).
+export const PAYMENT_METHODS = {
+  BRL: [['PIX', 'Pix']], MXN: [['SPEI', 'SPEI (transferência)'], ['OXXO', 'OXXO (dinheiro na loja)']], COP: [['NEQUI', 'Nequi'], ['BREB', 'Bre-B']],
+  ARS: [['BANK_TRANSFER', 'Transferência (CVU)']], CLP: [['BANK_TRANSFER', 'Transferência'], ['CARD', 'Cartão'], ['WALLET', 'Carteira']],
+};
+export const CURRENCY_LABEL = { BRL: 'Brasil — Real (BRL)', MXN: 'México — Peso (MXN)', COP: 'Colômbia — Peso (COP)', ARS: 'Argentina — Peso (ARS)', CLP: 'Chile — Peso (CLP)' };
 export const TONES = {
   accent: 'var(--accent)', green: 'var(--green-500)', amber: 'var(--amber-500)', blue: '#4C8DFF', purple: '#9B6CFF', neutral: 'var(--ink-400)',
 };
@@ -104,6 +117,12 @@ export function summaryOf(type, d, lookups = {}) {
     case 'ai_extract': return (d.fields || []).map((f) => f.name).join(', ');
     case 'tag': return `${(d.add || []).length ? `+${(d.add || []).length}` : ''} ${(d.remove || []).length ? `−${(d.remove || []).length}` : ''}`.trim() || 'Escolha etiquetas';
     case 'set_var': return `${d.name || '?'} ${d.op && d.op !== 'set' ? d.op : '='} ${d.value ?? ''}`;
+    case 'payment': {
+      const m = (PAYMENT_METHODS[d.currency] || []).find(([k]) => k === d.method);
+      return `${d.currency || '?'} · ${m ? m[1] : d.method || '?'} · ${d.open_amount ? 'valor livre' : d.amount || '?'}`;
+    }
+    case 'record_sale': return d.amount ? `Valor ${d.amount}` : 'Valor pago na cobrança';
+    case 'pixel': return `${d.event || 'Purchase'} → ${(lookups.pixels || []).find((p) => p.id === d.pixel_config_id)?.label || 'escolha o Pixel'}`;
     default: return '';
   }
 }

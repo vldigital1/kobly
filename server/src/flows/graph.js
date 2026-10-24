@@ -25,6 +25,9 @@ export const NODE_TYPES = {
   condition: { label: 'Condição', exits: ['yes', 'no'], required: [] },
   ai_classify: { label: 'IA: entender resposta', exits: ['other', 'error'], dynamic: (d) => (d.outputs || []).map((o) => `out_${o.key}`), required: [] },
   ai_extract: { label: 'IA: extrair dados', exits: ['ok', 'missing', 'error'], required: ['ok'] },
+  payment: { label: 'Cobrança', exits: ['charge_created', 'payment_approved', 'error'], required: ['charge_created'] },
+  record_sale: { label: 'Registrar venda', exits: ['default'], required: [] },
+  pixel: { label: 'Pixel da Meta', exits: ['default'], required: [] },
   tag: { label: 'Etiquetas', exits: ['default'], required: [] },
   set_var: { label: 'Definir variável', exits: ['default'], required: [] },
   end: { label: 'Fim', exits: [], required: [] },
@@ -36,6 +39,8 @@ export const exitsOf = (node) => {
   return [...(spec.dynamic ? spec.dynamic(d) : []), ...spec.exits];
 };
 export const MEDIA_KINDS = ['image', 'audio', 'video', 'document'];
+// Moeda → métodos do bloco de cobrança (espelha payments/xpag.js; o graph.js fica sem dependências).
+export const PAYMENT_METHODS = { BRL: ['PIX'], MXN: ['SPEI', 'OXXO'], COP: ['NEQUI', 'BREB'], ARS: ['BANK_TRANSFER'], CLP: ['BANK_TRANSFER', 'CARD', 'WALLET'] };
 const KEY = /^[a-z0-9_]{1,20}$/;
 
 export const CONDITION_KINDS = {
@@ -88,7 +93,8 @@ function checkData(node, err) {
     }
     case 'send_media':
       if (!MEDIA_KINDS.includes(d.kind)) err(`${at}: escolha o tipo de mídia (imagem, áudio, vídeo ou documento).`);
-      if (!(typeof d.url === 'string' && /^https:\/\/[^\s]+$/i.test(d.url.trim()) && d.url.length <= 2048)) err(`${at}: a mídia precisa de um link público https.`);
+      // link https fixo ou uma variável (ex.: {{pagamento_qr}} gerado pelo bloco de cobrança)
+      if (!(typeof d.url === 'string' && d.url.length <= 2048 && (/^https:\/\/[^\s]+$/i.test(d.url.trim()) || /^\{\{\s*[a-z_][a-z0-9_.]*\s*\}\}$/i.test(d.url.trim())))) err(`${at}: a mídia precisa de um link público https (ou uma variável como {{pagamento_qr}}).`);
       if (d.caption !== undefined && d.caption !== null && (typeof d.caption !== 'string' || d.caption.length > 1024)) err(`${at}: legenda até 1024 caracteres.`);
       if (d.kind === 'audio' && d.caption) err(`${at}: o WhatsApp não aceita legenda em áudio.`);
       break;
@@ -119,6 +125,27 @@ function checkData(node, err) {
       if (d.instructions !== undefined && d.instructions !== null && (typeof d.instructions !== 'string' || d.instructions.length > 2000)) err(`${at}: instruções até 2000 caracteres.`);
       break;
     }
+    case 'payment': {
+      if (!str(d.integration_id, 64)) err(`${at}: escolha a conta do gateway (Integrações → Pagamentos).`);
+      const methods = PAYMENT_METHODS[d.currency];
+      if (!methods) err(`${at}: moeda não suportada (${Object.keys(PAYMENT_METHODS).join(', ')}).`);
+      else if (!methods.includes(d.method)) err(`${at}: para ${d.currency} use ${methods.join(' ou ')}.`);
+      const aberto = !!d.open_amount;
+      if (aberto && !(d.currency === 'BRL' || (d.currency === 'MXN' && d.method === 'SPEI'))) err(`${at}: valor livre só existe para Pix (BRL) e SPEI (MXN).`);
+      if (!aberto && !(str(String(d.amount ?? ''), 64))) err(`${at}: informe o valor (número ou variável, ex.: {{valor_oferta}}).`);
+      if (!aberto && /^[\d.,\s]+$/.test(String(d.amount ?? '')) && !(Number(String(d.amount).replace(',', '.')) > 0)) err(`${at}: valor deve ser maior que zero.`);
+      if (d.currency === 'MXN' && d.method === 'OXXO' && /^[\d.,]+$/.test(String(d.amount ?? '')) && !(Number(String(d.amount).replace(',', '.')) >= 10 && Number(String(d.amount).replace(',', '.')) <= 10000)) err(`${at}: OXXO aceita de 10 a 10.000 MXN.`);
+      if (d.save_as !== undefined && !VAR_NAME.test(String(d.save_as))) err(`${at}: prefixo das variáveis inválido.`);
+      if (d.listen_hours !== undefined && !(Number.isFinite(d.listen_hours) && d.listen_hours >= 1 && d.listen_hours <= 168)) err(`${at}: escuta do pagamento entre 1 e 168 horas.`);
+      break;
+    }
+    case 'record_sale':
+      if (d.amount !== undefined && d.amount !== null && typeof d.amount !== 'string' && typeof d.amount !== 'number') err(`${at}: valor inválido.`);
+      break;
+    case 'pixel':
+      if (!str(d.pixel_config_id, 64)) err(`${at}: escolha o Pixel (Integrações → Pixel da Meta).`);
+      if (!['Purchase', 'Lead', 'InitiateCheckout', 'AddPaymentInfo'].includes(d.event)) err(`${at}: evento inválido.`);
+      break;
     case 'ai_extract': {
       const fs = Array.isArray(d.fields) ? d.fields : [];
       if (fs.length < 1 || fs.length > 8) err(`${at}: extraia de 1 a 8 campos.`);

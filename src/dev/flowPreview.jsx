@@ -11,9 +11,13 @@ const exemplo = {
     { ref: 'ini', type: 'trigger', data: { events: ['Pix Gerado', 'Compra Recusada'] }, next: { default: 'tpl' }, position: { x: 0, y: 120 } },
     { ref: 'tpl', type: 'send_template', data: { template_id: 't1', vars: ['primeiro_nome', 'produto'] }, next: { sent: 'esp' }, position: { x: 300, y: 80 } },
     { ref: 'esp', type: 'wait_reply', data: { save_as: 'resposta', timeout_minutes: 1380 }, next: { reply: 'ia', timeout: 'fim' }, position: { x: 600, y: 80 } },
-    { ref: 'ia', type: 'ai_classify', data: { input: '{{resposta}}', outputs: [{ key: 'sim', description: 'aceitou' }, { key: 'oxxo', description: 'quer pagar no OXXO' }, { key: 'nao', description: 'recusou' }] }, next: { out_sim: 'pdf', out_nao: 'fim' }, position: { x: 900, y: 40 } },
-    { ref: 'pdf', type: 'send_media', data: { kind: 'document', url: 'https://cdn.exemplo.test/guia.pdf', caption: 'Seu guia' }, next: { sent: 'fim' }, position: { x: 1200, y: 0 } },
-    { ref: 'fim', type: 'end', data: {}, next: {}, position: { x: 1500, y: 120 } },
+    { ref: 'ia', type: 'ai_classify', data: { input: '{{resposta}}', outputs: [{ key: 'sim', description: 'aceitou' }, { key: 'oxxo', description: 'quer pagar no OXXO' }, { key: 'nao', description: 'recusou' }] }, next: { out_sim: 'pg', out_oxxo: 'pg', out_nao: 'fim' }, position: { x: 900, y: 40 } },
+    { ref: 'pg', type: 'payment', data: { integration_id: 'int-1', currency: 'MXN', method: 'OXXO', amount: '120', listen_hours: 48 }, next: { charge_created: 'cod', payment_approved: 'venda', error: 'fim' }, position: { x: 1200, y: 0 } },
+    { ref: 'cod', type: 'send_text', data: { text: 'Aquí tienes tu referencia OXXO: {{pagamento_codigo}}' }, next: { sent: 'fim' }, position: { x: 1500, y: -80 } },
+    { ref: 'venda', type: 'record_sale', data: {}, next: { default: 'px' }, position: { x: 1500, y: 80 } },
+    { ref: 'px', type: 'pixel', data: { pixel_config_id: 'px-1', event: 'Purchase' }, next: { default: 'pdf' }, position: { x: 1800, y: 80 } },
+    { ref: 'pdf', type: 'send_media', data: { kind: 'document', url: 'https://cdn.exemplo.test/guia.pdf', caption: 'Seu guia' }, next: { sent: 'fim' }, position: { x: 2100, y: 80 } },
+    { ref: 'fim', type: 'end', data: {}, next: {}, position: { x: 2400, y: 120 } },
   ],
 };
 const versions = [{ version: 1, graph: exemplo, is_active: true, created_at: new Date().toISOString() }];
@@ -39,6 +43,8 @@ const fakeApi = {
     { id: 't2', name: 'lembrete_oxxo', language: 'es_MX', status: 'APPROVED', variable_count: 1 },
   ],
   getTags: async () => [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', nome: 'Lead quente' }, { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', nome: 'PARTE 1' }],
+  listIntegrations: async () => [{ id: 'int-1', provider: 'xpag', label: 'México', sandbox: true, status: 'connected' }],
+  listPixels: async () => [{ id: 'px-1', label: 'Pixel principal', pixel_id: '1234567890' }],
 };
 
 function Preview() {

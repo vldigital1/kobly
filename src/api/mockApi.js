@@ -1116,7 +1116,13 @@ export const KoblyApi = {
   },
   // ---- Fluxo em grafo (motor novo) — validar, salvar versão, desfazer, métricas ----
   async flowGraph(action, extra = {}, empresaId = null) {
-    const { data, error } = await supabase.functions.invoke('flow-graph', { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
+    return this.serviceCall('flow-graph', action, extra, empresaId);
+  },
+  // Contas do gateway de pagamento (XPag) e Pixel da Meta: segredos vão só para o servidor (cifrados).
+  async paymentIntegrations(action, extra = {}, empresaId = null) { return this.serviceCall('payment-integrations', action, extra, empresaId); },
+  async pixelConfigs(action, extra = {}, empresaId = null) { return this.serviceCall('pixel-configs', action, extra, empresaId); },
+  async serviceCall(fn, action, extra = {}, empresaId = null) {
+    const { data, error } = await supabase.functions.invoke(fn, { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
     if (error) {
       const body = await error.context?.json?.().catch(() => null);
       return { error: (body && body.message) || error.message || 'Falha ao falar com o servidor.', details: (body && body.details) || null };

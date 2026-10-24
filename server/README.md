@@ -50,6 +50,16 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - IA: `AI_API_KEY` (obrigatória para os blocos de IA), `AI_BASE_URL` (padrão `https://api.deepseek.com`), `AI_MODEL` (padrão `deepseek-chat`). Qualquer API compatível com OpenAI.
 - Editor visual: `src/routes/FlowGraphEditor.jsx` (Campanhas → ícone de ramificação). Prévia sem backend em DEV: `/flow-preview.html`.
 
+### Fase 3 — dinheiro (migração `0070`)
+- Cada empresa conecta a PRÓPRIA conta XPag (Integrações → Pagamentos e Pixel; rota `payment-integrations`: list | connect | disconnect). O Client Secret é validado na XPag (`GET /balance`) e guardado cifrado (`KOBLY_SECRET_KEY`).
+- Bloco `payment`: BRL Pix, MXN SPEI/OXXO, COP Nequi/Bre-B, ARS transferência, CLP. Saídas `charge_created` (segue o funil com `{{pagamento_codigo}}`, `{{pagamento_qr}}`, `{{pagamento_link}}`, `{{pagamento_valor}}`…), `error` e `payment_approved`.
+- `payment_approved` é PREEMPÇÃO, não espera: quando o pagamento é confirmado (até `listen_hours`, padrão 48 h), a execução é puxada para essa saída esteja onde estiver (até reaberta se já tinha terminado).
+- Confirmação: `POST /webhooks/payments/xpag/<token>` (o token só identifica a credencial). A XPag não documenta assinatura no aviso, então o serviço **consulta a transação na API** (`GET /consult-transaction`) antes de liberar. Aviso repetido é ignorado; se a consulta falhar, responde 503 e o gateway reenvia.
+- Cada nova passagem pelo bloco gera cobrança nova (`external_id = kb-<execução>-<bloco>-<n>`); a repetição após falha temporária reusa a mesma (idempotente).
+- `record_sale`: grava em `flow_sales` (uma por cobrança) e soma em vendas recuperadas da campanha. A condição "comprou" também considera cobranças confirmadas.
+- `pixel`: API de Conversões da Meta (rota `pixel-configs`: list | save | delete | test). E-mail/telefone só em hash SHA-256; Purchase usa o id da cobrança como `event_id` (sem contagem dupla).
+- Variável opcional: `XPAG_BASE_URL` (padrão `https://api.xpag.global`). Testado contra o sandbox público da XPag: Pix e SPEI criados e consultados; pagamento simulado passa a `confirmed` na consulta. Valor livre (SPEI) foi recusado no sandbox — conferir em produção.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.

@@ -27,5 +27,7 @@ export function loadConfig(env = process.env) {
     aiApiKey: env.AI_API_KEY || '',
     aiBaseUrl: env.AI_BASE_URL || 'https://api.deepseek.com',
     aiModel: env.AI_MODEL || 'deepseek-chat',
+    // Gateway XPag (cada empresa cadastra a própria credencial; aqui só a URL da API)
+    xpagBase: env.XPAG_BASE_URL || 'https://api.xpag.global',
   };
 }

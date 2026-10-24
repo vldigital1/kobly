@@ -3,7 +3,7 @@ import { ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, Handle, Po
 import '@xyflow/react/dist/style.css';
 import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Button, Icon, IconButton, Input, Select } from '@/ds';
-import { BLOCKS, PALETTE_GROUPS, TONES, TIPOS_EVENTO, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf } from '@/lib/flowGraph.js';
+import { BLOCKS, PALETTE_GROUPS, TONES, TIPOS_EVENTO, PAYMENT_METHODS, CURRENCY_LABEL, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf } from '@/lib/flowGraph.js';
 
 // Kobly — Editor visual do fluxo em grafo (motor novo). Blocos ligados por saídas nomeadas:
 // paleta → arrasta/clica para adicionar, liga uma saída a outro bloco, edita no painel da direita,
@@ -13,10 +13,12 @@ const defaultApi = {
   flowGraph: (...a) => KoblyApi.flowGraph(...a),
   listTemplates: () => KoblyApi.listWhatsappTemplates(),
   getTags: () => KoblyApi.getTags(),
+  listIntegrations: () => KoblyApi.paymentIntegrations('list').then((r) => r.integrations || []),
+  listPixels: () => KoblyApi.pixelConfigs('list').then((r) => r.pixels || []),
 };
 
-const LookupsCtx = React.createContext({ templates: [], tags: [] });
-const VARS_HELP = '{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{hora_atual}} {{dia_semana}} {{var.sua_variavel}}';
+const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [] });
+const VARS_HELP = '{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{hora_atual}} {{dia_semana}} · depois da Cobrança: {{pagamento_codigo}} {{pagamento_qr}} {{pagamento_link}} {{pagamento_valor}}';
 
 // ---- Cartão do bloco no canvas ------------------------------------------------
 function BlockNode({ id, data, selected }) {
@@ -121,7 +123,7 @@ function RuleFields({ r, set, tags }) {
 }
 
 function Inspector({ node, onChange, onDelete, isStart }) {
-  const { templates, tags } = React.useContext(LookupsCtx);
+  const { templates, tags, integrations = [], pixels = [] } = React.useContext(LookupsCtx);
   if (!node) return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Selecione um bloco para editar. Para ligar, arraste da bolinha de uma saída até outro bloco.</div>;
   const d = node.data.data || {};
   const set = (patch) => onChange({ ...d, ...patch });
@@ -209,6 +211,42 @@ function Inspector({ node, onChange, onDelete, isStart }) {
           <Check label="Obrigatório" checked={f.required !== false} onChange={(v) => up({ required: v })} />
         </>)} />
     </>); break;
+    case 'payment': {
+      const metodos = PAYMENT_METHODS[d.currency] || [];
+      const abertoOk = d.currency === 'BRL' || (d.currency === 'MXN' && d.method === 'SPEI');
+      const pref = d.save_as || 'pagamento';
+      body = (<>
+        {integrations.length === 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--amber-600)' }}>Nenhuma conta de gateway conectada. Conecte em Integrações → Pagamentos e Pixel.</div>}
+        <Select label="Conta do gateway" value={d.integration_id || ''} onChange={(e) => set({ integration_id: e.target.value })}
+          options={[{ value: '', label: 'Selecionar…' }, ...integrations.map((i) => ({ value: i.id, label: `XPag · ${i.label}${i.sandbox ? ' (sandbox)' : ''}` }))]} />
+        <Select label="País e moeda" value={d.currency || 'BRL'} onChange={(e) => { const c = e.target.value; set({ currency: c, method: (PAYMENT_METHODS[c] || [[]])[0][0], open_amount: false }); }}
+          options={Object.keys(PAYMENT_METHODS).map((c) => ({ value: c, label: CURRENCY_LABEL[c] || c }))} />
+        <Select label="Método" value={d.method || ''} onChange={(e) => set({ method: e.target.value, ...(e.target.value === 'OXXO' ? { open_amount: false } : {}) })} options={metodos.map(([value, label]) => ({ value, label }))} />
+        {abertoOk && <Check label="Valor livre (o lead paga o quanto quiser)" checked={d.open_amount} onChange={(v) => set({ open_amount: v })} />}
+        {!d.open_amount && <Input label="Valor" value={d.amount ?? ''} onChange={(e) => set({ amount: e.target.value })} placeholder="45 ou {{valor}}" hint={d.method === 'OXXO' ? 'OXXO aceita de 10 a 10.000 MXN.' : 'Número ou variável.'} />}
+        <Input label="Nome do pagador" value={d.payer_name || ''} onChange={(e) => set({ payer_name: e.target.value })} placeholder="{{nome}}" />
+        {(d.currency === 'ARS' || d.currency === 'CLP') && <Input label={d.currency === 'ARS' ? 'CUIT (opcional)' : 'RUT'} value={d.document || ''} onChange={(e) => set({ document: e.target.value })} />}
+        <Input label="Descrição (aparece para o pagador)" value={d.description || ''} onChange={(e) => set({ description: e.target.value })} placeholder="{{produto}}" />
+        <Input label="Escutar o pagamento por (horas)" type="number" value={d.listen_hours ?? 48} onChange={(e) => set({ listen_hours: num(e.target.value) })} hint="Se o lead pagar dentro desse prazo, o fluxo pula para a saída Pago, esteja onde estiver." />
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', lineHeight: 1.6 }}>
+          Variáveis para a mensagem seguinte: {`{{${pref}_codigo}}`} (Pix copia-e-cola, CLABE, referência OXXO), {`{{${pref}_qr}}`} (link da imagem do QR), {`{{${pref}_link}}`}, {`{{${pref}_valor}}`}
+          {d.method === 'SPEI' ? `, {{${pref}_banco}}, {{${pref}_beneficiario}}` : ''}.
+        </div>
+      </>);
+      break;
+    }
+    case 'record_sale': body = (<>
+      <Input label="Valor (opcional)" value={d.amount ?? ''} onChange={(e) => set({ amount: e.target.value || undefined })} placeholder="vazio = valor pago na cobrança" />
+      <Input label="Moeda (opcional)" value={d.currency ?? ''} onChange={(e) => set({ currency: e.target.value.toUpperCase() || undefined })} placeholder="vazio = moeda da cobrança" />
+      <Input label="Produto (opcional)" value={d.product ?? ''} onChange={(e) => set({ product: e.target.value || undefined })} placeholder="{{produto}}" />
+    </>); break;
+    case 'pixel': body = (<>
+      {pixels.length === 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--amber-600)' }}>Nenhum Pixel cadastrado. Cadastre em Integrações → Pagamentos e Pixel.</div>}
+      <Select label="Pixel" value={d.pixel_config_id || ''} onChange={(e) => set({ pixel_config_id: e.target.value })} options={[{ value: '', label: 'Selecionar…' }, ...pixels.map((p) => ({ value: p.id, label: `${p.label} (${p.pixel_id})` }))]} />
+      <Select label="Evento" value={d.event || 'Purchase'} onChange={(e) => set({ event: e.target.value })}
+        options={[{ value: 'Purchase', label: 'Compra (Purchase)' }, { value: 'Lead', label: 'Lead' }, { value: 'InitiateCheckout', label: 'Iniciou checkout' }, { value: 'AddPaymentInfo', label: 'Gerou pagamento' }]} />
+      <Input label="Valor (opcional)" value={d.value ?? ''} onChange={(e) => set({ value: e.target.value || undefined })} placeholder={d.event === 'Purchase' ? 'vazio = valor pago na cobrança' : ''} />
+    </>); break;
     case 'tag': body = (<>
       {['add', 'remove'].map((k) => (
         <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -252,15 +290,17 @@ function Editor({ campaign, onBack, api, notify }) {
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
-    const [g, templates, tags] = await Promise.all([
+    const [g, templates, tags, integrations, pixels] = await Promise.all([
       api.flowGraph('get', { campaign_id: campaign.id }),
       api.listTemplates().catch(() => []),
       api.getTags().catch(() => []),
+      (api.listIntegrations ? api.listIntegrations() : Promise.resolve([])).catch(() => []),
+      (api.listPixels ? api.listPixels() : Promise.resolve([])).catch(() => []),
     ]);
     if (g.error) { setState((s) => ({ ...s, loading: false, error: g.error })); return; }
     const c = toCanvas(g.active ? g.active.graph : emptyGraph());
     setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null);
-    setLookups({ templates: templates || [], tags: tags || [] });
+    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [] });
     setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [] });
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos
   }, [api, campaign.id, setEdges, setNodes]);
@@ -310,18 +350,21 @@ function Editor({ campaign, onBack, api, notify }) {
     setSelId(null); touch();
   };
 
-  async function validate() {
+  // chamada ao servidor que SEMPRE destrava os botões, mesmo se a rede/servidor falhar
+  const call = async (action, extra) => {
     setBusy(true);
-    const r = await api.flowGraph('validate', { graph: graph() });
-    setBusy(false);
+    try { return await api.flowGraph(action, extra); }
+    catch (e) { return { error: (e && e.message) || 'Falha ao falar com o servidor.' }; }
+    finally { setBusy(false); }
+  };
+  async function validate() {
+    const r = await call('validate', { graph: graph() });
     if (r.error) { notify('danger', r.error); return; }
     setReport({ ok: r.ok, errors: r.errors || [], warnings: r.warnings || [] });
     if (r.ok) notify('success', r.warnings && r.warnings.length ? 'Fluxo válido, com avisos.' : 'Fluxo válido.');
   }
   async function save() {
-    setBusy(true);
-    const r = await api.flowGraph('save', { campaign_id: campaign.id, graph: graph() });
-    setBusy(false);
+    const r = await call('save', { campaign_id: campaign.id, graph: graph() });
     if (r.error) { setReport(r.details ? { ok: false, errors: r.details.errors || [r.error], warnings: r.details.warnings || [] } : { ok: false, errors: [r.error], warnings: [] }); notify('danger', 'Corrija os erros antes de publicar.'); return; }
     setReport({ ok: true, errors: [], warnings: r.warnings || [] });
     setDirty(false);
