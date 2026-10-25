@@ -57,6 +57,14 @@ export function createFunctions(ctx) {
     const { user, org } = await authedOrg(req, body, fnName);
     return io.send(res, 200, await ctx[svc].handle(org, user, body));
   };
+  // Infraestrutura da Kobly (ex.: servidores Uazapi): só o Administrador da plataforma, sem empresa-alvo.
+  const platformAdminRoute = (fn) => async (req, res, io) => {
+    const body = await io.readJson(req);
+    const user = await ctx.auth.userFromAccessToken(bearerOf(req));
+    const p = (await ctx.pool.query(`select tipo_user_geral from public.profiles where auth_id = $1`, [user.id])).rows[0];
+    if (!p || p.tipo_user_geral !== 'Administrador') throw new AuthError(403, 'forbidden', 'Só o Administrador da Kobly gerencia os servidores.');
+    return io.send(res, 200, await fn(body));
+  };
   const handlers = {
     'whatsapp-account': () => whatsappAccount,
     'invite-client': () => inviteClient,
@@ -74,6 +82,7 @@ export function createFunctions(ctx) {
     'meta-ads': () => orgUserRoute('metaAds', 'meta-ads'),
     'platforms': () => orgUserRoute('platforms', 'platforms'),
     'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
+    'uazapi-servers': () => platformAdminRoute((body) => ctx.uazapi.handleServers(body)),
   };
   return {
     names: () => Object.keys(handlers),

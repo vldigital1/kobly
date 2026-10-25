@@ -35,6 +35,7 @@ const KoblyAgents = screen(() => import('@/routes/Agents.jsx'), 'KoblyAgents');
 const KoblySettings = screen(() => import('@/routes/Settings.jsx'), 'KoblySettings');
 const KoblyProducts = screen(() => import('@/routes/Products.jsx'), 'KoblyProducts');
 const KoblyMetaAds = screen(() => import('@/routes/MetaAds.jsx'), 'KoblyMetaAds');
+const KoblyServers = screen(() => import('@/routes/Servers.jsx'), 'KoblyServers');
 
 // Route id -> screen component (FlowBuilder / EmailEditor are sub-screens of Campanhas).
 const SCREENS = {
@@ -45,6 +46,7 @@ const SCREENS = {
   configuracoes: KoblySettings,
   produtos: KoblyProducts,
   anuncios: KoblyMetaAds,
+  servidores: KoblyServers,
   clientes: KoblyClients,
   pipeline: KoblyPipeline,
   campanhas: KoblyCampaigns,

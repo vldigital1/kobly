@@ -357,6 +357,7 @@ const NAV = {
   relatorios:    { id: 'relatorios',    icon: 'chart-column',     label: 'Relatórios',           section: 'Operações' },
   configuracoes: { id: 'configuracoes', icon: 'settings',         label: 'Configurações',        section: 'Gestão' },
   planos:        { id: 'planos',        icon: 'credit-card',      label: 'Planos & cobrança',    section: 'Gestão' },
+  servidores:    { id: 'servidores',    icon: 'server',           label: 'Servidores WhatsApp',  section: 'Gestão' },
   seguranca:     { id: 'seguranca',     icon: 'shield',           label: 'Segurança',            section: 'Gestão' },
   chamados:      { id: 'chamados',      icon: 'messages-square',  label: 'Chamados',             section: 'Gestão' },
   ajuda:         { id: 'ajuda',         icon: 'life-buoy',        label: 'Ajuda',                section: 'Gestão' },
@@ -389,7 +390,7 @@ const roles = {
   Administrador: {
     label: 'Administrador',
     descricao: 'Plataforma — usuários, planos, segurança, auditoria.',
-    nav: ['painel', 'clientes', 'relatorios', 'planos', 'seguranca', 'chamados', 'perfil'],
+    nav: ['painel', 'clientes', 'relatorios', 'planos', 'servidores', 'seguranca', 'chamados', 'perfil'],
     home: 'painel',
     can: { editCampaign: false, viewAllAccounts: true, createPlan: true, manageUsers: true, answerTickets: true },
   },
@@ -411,7 +412,7 @@ const roleDefFor = (role, teamRole) => (role === 'Cliente' && teamRole === 'aten
 
 // Títulos de rota (topbar)
 const routeTitle = {
-  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Facebook Ads', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
+  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Facebook Ads', servidores: 'Servidores WhatsApp', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
   disparos: 'Disparo em massa',
   leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança',
   seguranca: 'Segurança', chamados: 'Chamados', ajuda: 'Central de ajuda', perfil: 'Perfil',

@@ -78,7 +78,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   };
   // WhatsApp por QR Code (Uazapi). Mensagens recebidas entram na mesma caixa e nos mesmos fluxos.
   let flows = null;
-  const uazapi = createUazapi({ pool, secretKey: secretKeyBuf, base: config.uazapiBase, adminToken: config.uazapiAdminToken, publicBaseUrl: config.publicBaseUrl || '', fetchImpl,
+  const uazapi = createUazapi({ pool, secretKey: secretKeyBuf, base: config.uazapiBase, adminToken: config.uazapiAdminToken, envCapacity: config.uazapiCapacity || 300, publicBaseUrl: config.publicBaseUrl || '', fetchImpl,
     onInbound: (a) => flows.onInbound(a) });
   // Envio de texto: API oficial quando a empresa tem; senão o número conectado por QR Code.
   const officialConnected = async (orgId) => (await pool.query(`select 1 from public.whatsapp_accounts where organization_id = $1 and status = 'connected'`, [orgId])).rowCount > 0;

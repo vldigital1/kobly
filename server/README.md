@@ -138,6 +138,13 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - **Pixels** (`src/payments/pixel.js`, coluna `provider`): Meta (API de Conversões), **TikTok** (`POST business-api.tiktok.com/open_api/v1.3/event/track/`, `Access-Token`, e-mail e telefone +DDI em SHA-256, compra = CompletePayment, lead = SubmitForm) e **Google** (GA4 Measurement Protocol `mp/collect?measurement_id=G-…&api_secret=…`, client_id estável por lead, purchase com transaction_id; o "Testar" usa `/debug/mp/collect`).
 - Testes: `test/uazapi_pixels.unit.test.js`, `test/uazapi_pixels.integration.test.js`.
 
+### Vários servidores Uazapi (migração `0081`)
+- `uazapi_servers` (endereço, admintoken cifrado, limite de números, ativo). Tela **Servidores WhatsApp** só para o Administrador da Kobly (rota `uazapi-servers`: list | add | update | remove; a rota confere `tipo_user_geral = 'Administrador'`, sem empresa-alvo).
+- Número novo vai para o servidor ativo com menor ocupação proporcional (`pickServer`); cada instância guarda `server_id` e todas as chamadas dela (QR, status, envio, excluir) vão para o servidor dela. Sem vaga em nenhum: erro claro "servidores cheios".
+- O servidor do ambiente (`UAZAPI_BASE_URL` + `UAZAPI_ADMIN_TOKEN`) continua valendo como mais um, com limite `UAZAPI_CAPACITY` (padrão 300); instâncias dele ficam com `server_id` nulo.
+- Pausar um servidor tira ele da distribuição (os números que já estão continuam funcionando). Servidor com números não pode ser removido. A tela avisa quando a ocupação total passa de 80%.
+- Teste: `test/uazapi_servers.integration.test.js`.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.

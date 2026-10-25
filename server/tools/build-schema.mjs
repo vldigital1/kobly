@@ -84,6 +84,8 @@ revoke all on public.platform_api_credentials from kobly_authenticated, kobly_an
 -- Instâncias Uazapi (0080): token da instância não legível; escrita só pelo serviço.
 revoke all on public.whatsapp_uazapi_instances from kobly_authenticated, kobly_anon;
 grant select (id, organization_id, label, status, phone, profile_name, last_error, connected_at, created_at, updated_at) on public.whatsapp_uazapi_instances to kobly_authenticated;
+-- Servidores Uazapi da Kobly (0081): só o serviço.
+revoke all on public.uazapi_servers from kobly_authenticated, kobly_anon;
 `;
 writeFileSync(join(out, '900_grants.sql'), grants);
 manifest.push({ file: '900_grants.sql', sha256: createHash('sha256').update(grants).digest('hex') });

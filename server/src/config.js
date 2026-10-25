@@ -34,6 +34,8 @@ export function loadConfig(env = process.env) {
     // WhatsApp por QR Code (Uazapi): servidor e token de administrador da Kobly; sem eles a opção fica desligada
     uazapiBase: env.UAZAPI_BASE_URL || '',
     uazapiAdminToken: env.UAZAPI_ADMIN_TOKEN || '',
+    // limite de números do servidor do ambiente (Servidor PRO = 300); outros servidores são cadastrados na tela do Administrador
+    uazapiCapacity: Number(env.UAZAPI_CAPACITY || 300),
     // Gateway XPag (cada empresa cadastra a própria credencial; aqui só a URL da API)
     xpagBase: env.XPAG_BASE_URL || 'https://api.xpag.global',
   };
