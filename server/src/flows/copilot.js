@@ -97,7 +97,7 @@ export function analyzeFlow(graph, byNode, paths = []) {
     return ps.some((p) => (RESPOSTA.has(p.type) ? false : QUEBRA.has(p.type) ? true : semResposta(p.ref, seen)));
   };
   for (const n of (graph.nodes || []).filter((x) => x.type === 'send_text' && !(x.data && x.data.fallback_template_id) && !(x.next && x.next.window_closed))) {
-    if (semResposta(n.ref)) add(n.ref, 'media', 'Texto livre sem plano B', 'Este texto pode chegar com a janela de 24 h fechada (há caminho até ele sem uma resposta recente do lead).', 'Escolha um "modelo reserva" no bloco ou ligue a saída "Janela fechada".');
+    if (semResposta(n.ref)) add(n.ref, 'media', 'Texto livre sem plano B', 'Este texto pode chegar com a janela de 24 h fechada (há caminho até ele sem uma resposta recente do lead).', 'Escolha um "modelo reserva" no bloco: a Kobly troca sozinha para o modelo aprovado quando a janela fecha.');
   }
 
   const order = { alta: 0, media: 1, info: 2 };

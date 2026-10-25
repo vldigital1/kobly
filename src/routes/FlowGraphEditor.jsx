@@ -396,7 +396,8 @@ function BlockFields({ node, onChange }) {
     </>);
     case 'send_text': return (<>
       <TextArea label="Mensagem" value={d.text} onChange={(v) => set({ text: v })} rows={6} hint={VARS_HELP} />
-      <Select label="Modelo reserva (janela fechada)" value={d.fallback_template_id || ''} onChange={(e) => set({ fallback_template_id: e.target.value || undefined, fallback_vars: [] })} options={[{ value: '', label: 'Nenhum — sair por "Janela fechada"' }, ...tplOptions.slice(1)]} />
+      <Select label="Modelo reserva (só API Oficial)" value={d.fallback_template_id || ''} onChange={(e) => set({ fallback_template_id: e.target.value || undefined, fallback_vars: [] })} options={[{ value: '', label: 'Nenhum' }, ...tplOptions.slice(1)]} />
+      <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', marginTop: -6, lineHeight: 1.5 }}>A Meta só aceita texto livre até 24 h depois da última mensagem do lead. Passou disso, a Kobly manda este modelo no lugar. No WhatsApp por QR Code não há esse limite.</div>
       {varsFor(d.fallback_template_id, d.fallback_vars, 'fallback_vars')}
       <DeleteOnTag d={d} set={set} tags={tags} />
     </>);
