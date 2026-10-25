@@ -218,13 +218,14 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
     if (!cs.rowCount) await pool.query(`insert into public.campaign_stats (campaign_id, organization_id, whatsapp_enviados, ultimo_calculo) values ($1,$2,1,now())`, [ex.campaign_id, ex.organization_id]);
   }
   // preview = texto que aparece no chat ao vivo; source = fluxo | agente
-  async function send(ex, ctx, fn, preview = '', source = 'fluxo') {
+  async function send(ex, ctx, fn, preview = '', source = 'fluxo', deleteOnTag = null) {
     const reserved = await pool.query(`select public.bulk_reserve_usage($1, 1) as ok`, [ex.organization_id]).then((r) => r.rows[0].ok !== false).catch(() => false);
     try {
       const out = await fn();
       await recordSend(ex, ctx, { ok: true, msgId: out.id });
       await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, campaign_id, to_phone, source, body, wa_message_id, channel) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [ex.organization_id, ex.lead_id, ex.campaign_id, out.to || ctx.lead.telefone, source, String(preview || '').slice(0, 4096), out.id || null, out.channel === 'uazapi' ? 'uazapi' : 'oficial']).catch((e) => console.error('[flows] conversa não registrada:', e.message));
+      if (deleteOnTag && out.channel === 'uazapi' && out.id && out.instanceId) await scheduleDeletion(ex, deleteOnTag, out).catch((e) => console.error('[flows] apagar-ao-etiquetar não registrado:', e.message));
       return { exit: 'sent', detail: out.id };
     } catch (e) {
       const err = String(e.message || e).slice(0, 200);
@@ -233,6 +234,31 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
       await recordSend(ex, ctx, { ok: false, err });
       return { exit: 'failed', detail: err };
     }
+  }
+  // "Apagar mensagem ao aplicar etiqueta": se o lead já tem a etiqueta, apaga na próxima volta
+  const TAG_ID = /^[0-9a-f-]{36}$/i;
+  async function scheduleDeletion(ex, tagId, out) {
+    await pool.query(`insert into public.flow_message_deletions (organization_id, lead_id, tag_id, instance_id, wa_message_id, status, due_at)
+      select $1, $2, t.id, $4, $5,
+             case when exists (select 1 from public.lead_tags lt where lt.lead_id = $2 and lt.tag_id = t.id) then 'due' else 'waiting' end,
+             case when exists (select 1 from public.lead_tags lt where lt.lead_id = $2 and lt.tag_id = t.id) then now() end
+        from public.tags t where t.id = $3::uuid and t.organization_id = $1`, [ex.organization_id, ex.lead_id, tagId, out.instanceId, out.id]);
+  }
+  async function processDeletions() {
+    if (!whatsapp.deleteMessage) return 0;
+    const { rows } = await pool.query(`update public.flow_message_deletions d set due_at = now() + interval '5 minutes', attempts = attempts + 1
+       where d.id in (select id from public.flow_message_deletions where status = 'due' and due_at <= now() order by due_at limit 50 for update skip locked)
+       returning d.*`);
+    for (const r of rows) {
+      try {
+        await whatsapp.deleteMessage(r.organization_id, { instanceId: r.instance_id, messageId: r.wa_message_id });
+        await pool.query(`update public.flow_message_deletions set status = 'done', done_at = now(), last_error = null where id = $1`, [r.id]);
+      } catch (e) {
+        const err = String(e.message || e).slice(0, 200);
+        await pool.query(`update public.flow_message_deletions set status = case when attempts >= 3 then 'failed' else 'due' end, last_error = $2 where id = $1`, [r.id, err]);
+      }
+    }
+    return rows.length;
   }
   async function sendTemplate(ex, ctx, templateId, varsList) {
     const tpl = (await pool.query(`select id, name, components from public.whatsapp_templates where id::text = $1 and organization_id = $2`, [String(templateId), ex.organization_id])).rows[0];
@@ -263,14 +289,15 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
       case 'send_buttons': {
         if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };
         if (!ctx.lead.telefone) return { exit: 'failed', detail: 'lead sem telefone' };
-        if (!isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora)) {
+        const livre = node.type === 'send_media' && whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id) : false;
+        if (!livre && !isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora)) {
           const fechada = node.type === 'send_media' && nextOf(node, 'window_closed') ? 'window_closed' : 'failed';
           return { exit: fechada, detail: 'janela de 24 h fechada (mídia e botões só com conversa aberta; use um modelo antes)' };
         }
         if (node.type === 'send_media') {
           const url = render(d.url, ctx).trim();
           if (!/^https:\/\/\S+$/i.test(url)) return { exit: 'failed', detail: `link da mídia inválido ou vazio${/\{\{/.test(d.url) ? ` (a variável ${d.url} não tem um link https)` : ''}` };
-          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.telefone, kind: d.kind, url, caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }), `[${d.kind || 'mídia'}] ${d.caption ? render(d.caption, ctx) : url}`);
+          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.telefone, kind: d.kind, url, caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }), `[${d.kind || 'mídia'}] ${d.caption ? render(d.caption, ctx) : url}`, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null);
         }
         const r = await send(ex, ctx, () => whatsapp.sendInteractiveTo(ex.organization_id, { to: ctx.lead.telefone, interactive: buildInteractive(d, render(d.text, ctx)) }), render(d.text, ctx));
         if (r.exit !== 'sent') return r;
@@ -450,7 +477,7 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
         if (node.type === 'send_template') return sendTemplate(ex, ctx, d.template_id, d.vars);
         // WhatsApp comum (QR Code, sem API oficial) não tem janela de 24 h
         const aberta = isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora) || (whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id) : false);
-        if (aberta) { const text = render(d.text, ctx); return send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text }), text); }
+        if (aberta) { const text = render(d.text, ctx); return send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text }), text, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null); }
         // Janela fechada: com modelo reserva, troca sozinho para o modelo aprovado (diferencial Kobly).
         if (d.fallback_template_id) { const r = await sendTemplate(ex, ctx, d.fallback_template_id, d.fallback_vars); return { ...r, detail: `janela fechada → modelo reserva${r.detail ? ': ' + r.detail : ''}` }; }
         return { exit: nextOf(node, 'window_closed') ? 'window_closed' : 'failed', detail: 'janela de 24 h fechada e sem modelo reserva' };
@@ -564,11 +591,12 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
         }
         if (due.length === BATCH) again = true;
       } while (again);
+      stats.deleted = await processDeletions().catch((e) => { console.error('[flows] apagar mensagens:', e.message); return 0; });
     } finally { running = false; }
     return stats;
   }
   // Retomada rápida (resposta do lead / evento novo) sem esperar o próximo ciclo.
   function kick() { if (autoKick) setImmediate(() => { tick().catch((e) => console.error('[flows] tick:', e.message)); }); }
 
-  return { startForEvent, onInbound, onPaymentConfirmed, tick, kick, process, runNode, loadGraph };
+  return { startForEvent, onInbound, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
 }

@@ -88,6 +88,12 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       try { return await whatsapp.sendTextTo(orgId, a); }
       catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendTextTo(orgId, a); throw e; }
     },
+    async sendMediaTo(orgId, a) {
+      try { return await whatsapp.sendMediaTo(orgId, a); }
+      catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendMediaTo(orgId, a); throw e; }
+    },
+    // apagar para todos só existe no WhatsApp por QR Code (a API oficial da Meta não apaga)
+    deleteMessage: (orgId, a) => uazapi.deleteMessage(orgId, a),
     // sem a API oficial, o WhatsApp comum não tem janela de 24 h
     freeTextAllowed: async (orgId) => !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
   };
@@ -213,18 +219,19 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         const r = await payments.receiveWebhook(pm[1], pm[2], (await readBody(req, 256 * 1024)).toString('utf8'), (charge) => flows.onPaymentConfirmed(charge));
         return send(res, r.status, r.body);
       }
-      const sp = /^\/storage\/v1\/object\/(?:(public)\/)?([a-z]+)\/([^/]+)\/([^/]+)$/.exec(path);
+      const sp = /^\/storage\/v1\/object\/(?:(public)\/)?([a-z-]+)\/([^/]+)\/([^/]+)$/.exec(path);
       if (sp) {
         if (sp[1] && req.method === 'GET') {
           const f = await storage.read(sp[2], sp[3], decodeURIComponent(sp[4]));
           if (!f) return send(res, 404, { code: 'not_found', message: 'Not found' });
           res.statusCode = 200; res.setHeader('Content-Type', f.type); res.setHeader('X-Content-Type-Options', 'nosniff');
           res.setHeader('Cache-Control', 'public, max-age=300'); res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+          if (f.download) res.setHeader('Content-Disposition', 'attachment');
           return res.end(f.body);
         }
         if (!sp[1] && req.method === 'POST') {
           const user = await auth.userFromAccessToken(bearer(req));
-          return send(res, 200, await storage.upload(user, sp[2], sp[3], decodeURIComponent(sp[4]), await readBody(req, storage.MAX_BYTES + 1024)));
+          return send(res, 200, await storage.upload(user, sp[2], sp[3], decodeURIComponent(sp[4]), await readBody(req, storage.maxFor(sp[2]) + 1024)));
         }
       }
       if (path === '/functions/v1/unsubscribe' && (req.method === 'GET' || req.method === 'POST')) {

@@ -14,8 +14,8 @@ export const BLOCKS = {
     exits: [['sent', 'Enviado'], ['failed', 'Falhou']], make: () => ({ template_id: '', vars: [] }) },
   send_text: { label: 'Texto', group: 'Mensagens', icon: 'message-circle', tone: 'green', hint: 'Texto livre (janela de 24 h aberta). Com modelo reserva, troca sozinho quando a janela fecha.',
     exits: [['sent', 'Enviado'], ['window_closed', 'Janela fechada'], ['failed', 'Falhou']], make: () => ({ text: 'Oi {{primeiro_nome}}!' }) },
-  send_media: { label: 'Mídia', group: 'Mensagens', icon: 'image', tone: 'green', hint: 'Imagem, áudio, vídeo ou PDF por link https.',
-    exits: [['sent', 'Enviado'], ['window_closed', 'Janela fechada'], ['failed', 'Falhou']], make: () => ({ kind: 'document', url: '', caption: '' }) },
+  send_media: { label: 'Mídia', group: 'Mensagens', icon: 'image', tone: 'green', hint: 'Imagem, vídeo, áudio ou arquivo: envie do computador ou use um link.',
+    exits: [['sent', 'Enviado'], ['window_closed', 'Janela fechada'], ['failed', 'Falhou']], make: (kind = 'image') => ({ kind, url: '', caption: '' }) },
   send_buttons: { label: 'Botões / lista', group: 'Mensagens', icon: 'list', tone: 'green', hint: 'Pergunta com opções; cada opção vira uma saída. Espera a resposta.',
     exits: [['other', 'Outra resposta'], ['timeout', 'Sem resposta'], ['failed', 'Falhou']],
     dynamic: (d) => (d.options || []).map((o) => [`opt_${o.id}`, o.title || o.id]),
@@ -58,6 +58,36 @@ export const BLOCKS = {
   end: { label: 'Fim', group: 'Ações', icon: 'flag', tone: 'neutral', hint: 'Encerra o fluxo para o lead.', exits: [], make: () => ({}) },
 };
 export const PALETTE_GROUPS = ['Mensagens', 'Controle', 'IA', 'Dinheiro', 'Ações'];
+
+// Cada tipo de mídia é um bloco próprio na paleta e no canvas (o bloco salvo continua send_media + kind).
+export const MEDIA = {
+  image: { label: 'Imagem', icon: 'image', accept: 'image/jpeg,image/png,image/webp', maxMb: 5, formats: 'JPG, PNG ou WEBP · até 5 MB' },
+  video: { label: 'Vídeo', icon: 'video', accept: 'video/mp4,video/3gpp', maxMb: 16, formats: 'MP4 · até 16 MB' },
+  audio: { label: 'Áudio', icon: 'mic', accept: 'audio/ogg,audio/mpeg,audio/mp4,audio/aac,audio/amr,.ogg,.opus,.mp3,.m4a', maxMb: 16, formats: 'OGG, MP3 ou M4A · até 16 MB · chega como áudio gravado' },
+  document: { label: 'Arquivo', icon: 'paperclip', accept: '.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.ppt,.pptx', maxMb: 30, formats: 'PDF, DOC, DOCX, TXT, XLS, XLSX · até 30 MB' },
+};
+// Itens da paleta por grupo: o bloco "Mídia" vira Imagem, Vídeo, Áudio e Arquivo.
+export function paletteItems(group) {
+  const out = [];
+  for (const [type, b] of Object.entries(BLOCKS)) {
+    if (b.group !== group) continue;
+    if (type === 'send_media') for (const [kind, m] of Object.entries(MEDIA)) out.push({ key: `send_media:${kind}`, type, kind, label: m.label, icon: m.icon, tone: b.tone, hint: m.formats });
+    else out.push({ key: type, type, label: b.label, icon: b.icon, tone: b.tone, hint: b.hint });
+  }
+  return out;
+}
+// Rótulo e ícone do bloco no canvas (mídia mostra o tipo).
+export function metaOf(type, d = {}) {
+  const b = BLOCKS[type] || { label: type, icon: 'circle', tone: 'neutral', hint: '' };
+  if (type === 'send_media' && MEDIA[d.kind]) return { ...b, label: MEDIA[d.kind].label, icon: MEDIA[d.kind].icon, hint: MEDIA[d.kind].formats };
+  return b;
+}
+// Cor da linha pela saída: falha/erro em vermelho, desvios em âmbar, o resto no tom da marca.
+export function edgeTone(exit) {
+  if (['failed', 'error'].includes(exit)) return 'danger';
+  if (['window_closed', 'timeout', 'other', 'missing', 'no', 'expiration'].includes(exit)) return 'warn';
+  return 'ok';
+}
 // Moeda → métodos do bloco Cobrança (espelha o servidor).
 export const PAYMENT_METHODS = {
   BRL: [['PIX', 'Pix']], MXN: [['SPEI', 'SPEI (transferência)'], ['OXXO', 'OXXO (dinheiro na loja)']], COP: [['NEQUI', 'Nequi'], ['BREB', 'Bre-B']],
@@ -101,7 +131,7 @@ export function toCanvas(graph) {
   }));
   const edges = [];
   for (const n of graph.nodes || []) for (const [exit, target] of Object.entries(n.next || {})) {
-    if (target) edges.push({ id: `${n.ref}:${exit}`, source: n.ref, sourceHandle: exit, target, type: 'smoothstep' });
+    if (target) edges.push({ id: `${n.ref}:${exit}`, source: n.ref, sourceHandle: exit, target, type: 'kobly' });
   }
   return { nodes, edges };
 }
@@ -124,7 +154,7 @@ export function summaryOf(type, d, lookups = {}) {
     case 'trigger': return (d.events || []).join(', ') || 'Escolha o evento';
     case 'send_template': return (lookups.templates || []).find((t) => t.id === d.template_id)?.name || 'Escolha o modelo';
     case 'send_text': return d.text || '';
-    case 'send_media': return `${{ image: 'Imagem', audio: 'Áudio', video: 'Vídeo', document: 'Documento' }[d.kind] || 'Mídia'}${d.url ? ' · ' + d.url.split('/').pop() : ''}`;
+    case 'send_media': return d.url ? (d.filename || decodeURIComponent(d.url.split('/').pop() || '')) + (d.caption ? ` · ${d.caption}` : '') : 'Envie um arquivo ou cole um link';
     case 'send_buttons': return d.text || '';
     case 'delay': {
       const a = d.min_seconds ?? d.seconds ?? 0, b = d.max_seconds ?? d.seconds ?? a;

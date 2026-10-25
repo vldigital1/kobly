@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BLOCKS, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf } from '@/lib/flowGraph.js';
+import { BLOCKS, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf, paletteItems, metaOf, edgeTone } from '@/lib/flowGraph.js';
 
 describe('fluxo em grafo (editor)', () => {
   it('grafo ⇄ canvas preserva blocos, ligações e posições', () => {
@@ -38,5 +38,23 @@ describe('fluxo em grafo (editor)', () => {
       expect(typeof summaryOf(type, b.make(), { templates: [] })).toBe('string');
     }
     expect(summaryOf('delay', { min_seconds: 3, max_seconds: 5, typing: true })).toBe('3 s a 5 s · digitando');
+  });
+
+  it('mídia vira quatro blocos na paleta, cada um com seu tipo', () => {
+    const msgs = paletteItems('Mensagens');
+    expect(msgs.filter((i) => i.type === 'send_media').map((i) => i.kind)).toEqual(['image', 'video', 'audio', 'document']);
+    expect(msgs.some((i) => i.key === 'send_media')).toBe(false);
+    expect(BLOCKS.send_media.make('video').kind).toBe('video');
+    expect(metaOf('send_media', { kind: 'audio' }).label).toBe('Áudio');
+    expect(metaOf('send_media', { kind: 'document' }).icon).toBe('paperclip');
+    expect(summaryOf('send_media', { kind: 'document', url: 'https://x/y/Catalogo%202026.pdf' })).toBe('Catalogo 2026.pdf');
+  });
+
+  it('linhas: falha em vermelho, desvio em âmbar, o resto no tom normal', () => {
+    expect(edgeTone('failed')).toBe('danger');
+    expect(edgeTone('window_closed')).toBe('warn');
+    expect(edgeTone('sent')).toBe('ok');
+    expect(toCanvas(emptyGraph()).edges).toEqual([]);
+    expect(toCanvas({ version: 1, start: 'ini', nodes: [{ ref: 'ini', type: 'trigger', data: {}, next: { default: 'ini' } }] }).edges[0].type).toBe('kobly');
   });
 });

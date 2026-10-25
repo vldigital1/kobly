@@ -704,6 +704,21 @@ export const KoblyApi = {
     const { data } = supabase.storage.from('branding').getPublicUrl(path);
     return { url: data.publicUrl };
   },
+  // Arquivo dos blocos de mídia dos fluxos (bucket público flow-media; o servidor confere o tipo pelo conteúdo).
+  async uploadFlowMedia(file, empresaId) {
+    const me = await currentProfile();
+    const orgId = empresaId || await firstOrgId(me);
+    if (!orgId || !file) return { error: 'missing' };
+    if (file.size > 30 * 1024 * 1024) return { error: 'O arquivo passa de 30 MB.' };
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
+    const base = file.name.replace(/\.[^.]*$/, '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'arquivo';
+    const path = `${orgId}/${base}-${Date.now().toString(36)}.${ext}`;
+    const { data: up, error } = await supabase.storage.from('flow-media').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+    if (error) return { error: error.message || String(error) };
+    const finalPath = (up && up.path) || path; // o servidor pode corrigir a extensão pelo conteúdo
+    const { data } = supabase.storage.from('flow-media').getPublicUrl(finalPath.replace(/^flow-media\//, ''));
+    return { url: data.publicUrl, name: file.name };
+  },
 
   // ---- Postback Tokens ----------------------------------------------------
   async getPostbackTokens() {

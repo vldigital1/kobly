@@ -44,6 +44,13 @@ export const exitsOf = (node) => {
   return [...(spec.dynamic ? spec.dynamic(d) : []), ...spec.exits];
 };
 export const MEDIA_KINDS = ['image', 'audio', 'video', 'document'];
+// arquivo enviado no ambiente local (http://localhost:4120/storage/...): só para testar o editor
+export const LOCAL_URL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/\S+$/i;
+// "Apagar mensagem ao aplicar etiqueta" (texto e mídia): id de uma etiqueta da conta
+function deleteOnTag(d, at, err) {
+  if (d.delete_on_tag === undefined || d.delete_on_tag === null || d.delete_on_tag === '') return;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(d.delete_on_tag))) err(`${at}: escolha a etiqueta que dispara a exclusão.`);
+}
 // Moeda → métodos do bloco de cobrança (espelha payments/xpag.js; o graph.js fica sem dependências).
 export const PAYMENT_METHODS = { BRL: ['PIX'], MXN: ['SPEI', 'OXXO'], COP: ['NEQUI', 'BREB'], ARS: ['BANK_TRANSFER'], CLP: ['BANK_TRANSFER', 'CARD', 'WALLET'] };
 const KEY = /^[a-z0-9_]{1,20}$/;
@@ -85,6 +92,7 @@ function checkData(node, err) {
     case 'send_text':
       if (!str(d.text, 4096)) err(`${at}: escreva a mensagem (até 4096 caracteres).`);
       if (d.fallback_template_id !== undefined && d.fallback_template_id !== null && !str(d.fallback_template_id, 64)) err(`${at}: modelo reserva inválido.`);
+      deleteOnTag(d, at, err);
       break;
     case 'delay': {
       // segundos (fixo ou faixa aleatória) ou, no formato antigo, minutos
@@ -99,9 +107,10 @@ function checkData(node, err) {
     case 'send_media':
       if (!MEDIA_KINDS.includes(d.kind)) err(`${at}: escolha o tipo de mídia (imagem, áudio, vídeo ou documento).`);
       // link https fixo ou uma variável (ex.: {{pagamento_qr}} gerado pelo bloco de cobrança)
-      if (!(typeof d.url === 'string' && d.url.length <= 2048 && (/^https:\/\/[^\s]+$/i.test(d.url.trim()) || /^\{\{\s*[a-z_][a-z0-9_.]*\s*\}\}$/i.test(d.url.trim())))) err(`${at}: a mídia precisa de um link público https (ou uma variável como {{pagamento_qr}}).`);
+      if (!(typeof d.url === 'string' && d.url.length <= 2048 && (/^https:\/\/[^\s]+$/i.test(d.url.trim()) || LOCAL_URL.test(d.url.trim()) || /^\{\{\s*[a-z_][a-z0-9_.]*\s*\}\}$/i.test(d.url.trim())))) err(`${at}: a mídia precisa de um link público https (ou uma variável como {{pagamento_qr}}).`);
       if (d.caption !== undefined && d.caption !== null && (typeof d.caption !== 'string' || d.caption.length > 1024)) err(`${at}: legenda até 1024 caracteres.`);
       if (d.kind === 'audio' && d.caption) err(`${at}: o WhatsApp não aceita legenda em áudio.`);
+      deleteOnTag(d, at, err);
       break;
     case 'send_buttons': {
       if (!str(d.text, 1024)) err(`${at}: escreva a pergunta (até 1024 caracteres).`);

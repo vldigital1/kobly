@@ -205,6 +205,7 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
   async function connectedRow(orgId) {
     return (await pool.query(`select * from public.whatsapp_uazapi_instances where organization_id = $1 and status = 'connected' order by connected_at desc nulls last limit 1`, [orgId])).rows[0] || null;
   }
+  const msgIdOf = (r) => r.messageid || r.id || (r.message && r.message.messageid) || null;
   // Envio de texto por uma instância conectada da empresa (sem janela de 24 h: é o WhatsApp comum)
   async function sendTextTo(orgId, { to, text }) {
     const row = secretKey ? await connectedRow(orgId) : null;
@@ -212,8 +213,26 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     const number = digits(to);
     if (number.length < 10) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDI + DDD + número.');
     const r = await call(await serverOf(row), '/send/text', { method: 'POST', token: tokenOf(row), body: { number, text: String(text || '').slice(0, 4096) } });
-    return { ok: true, id: r.messageid || r.id || (r.message && r.message.messageid) || null, to: number, channel: 'uazapi' };
+    return { ok: true, id: msgIdOf(r), to: number, channel: 'uazapi', instanceId: row.id };
+  }
+  // Mídia por link público: POST /send/media { number, type, file, text, docName }
+  async function sendMediaTo(orgId, { to, kind, url, caption, filename }) {
+    const row = secretKey ? await connectedRow(orgId) : null;
+    if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
+    const number = digits(to);
+    if (number.length < 10) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDI + DDD + número.');
+    const type = { image: 'image', video: 'video', audio: 'ptt', document: 'document' }[kind] || 'document';
+    const body = { number, type, file: url, ...(caption && kind !== 'audio' ? { text: String(caption).slice(0, 1024) } : {}), ...(kind === 'document' && filename ? { docName: String(filename).slice(0, 120) } : {}) };
+    const r = await call(await serverOf(row), '/send/media', { method: 'POST', token: tokenOf(row), body });
+    return { ok: true, id: msgIdOf(r), to: number, channel: 'uazapi', instanceId: row.id };
+  }
+  // Apaga para todos uma mensagem enviada pela instância: POST /message/delete { id }
+  async function deleteMessage(orgId, { instanceId, messageId }) {
+    const row = await own(orgId, instanceId);
+    if (row.status !== 'connected') throw new AuthError(409, 'not_connected', 'O WhatsApp desta mensagem está desconectado.');
+    await call(await serverOf(row), '/message/delete', { method: 'POST', token: tokenOf(row), body: { id: String(messageId) } });
+    return { ok: true };
   }
   const hasConnected = async (orgId) => !!secretKey && !!(await connectedRow(orgId));
-  return { handle, handleServers, receiveWebhook, sendTextTo, hasConnected, configured };
+  return { handle, handleServers, receiveWebhook, sendTextTo, sendMediaTo, deleteMessage, hasConnected, configured };
 }

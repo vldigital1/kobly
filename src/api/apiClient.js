@@ -361,7 +361,9 @@ export function createApiClient({ baseUrl, fetchImpl, storage, pollMs = 4000, no
             method: 'POST', headers: { 'Content-Type': opts.contentType || (file && file.type) || 'application/octet-stream', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) }, body: file,
           });
           if (!res.ok) { let j = null; try { j = await res.json(); } catch { /* */ } return { data: null, error: err((j && j.message) || 'Falha no envio do arquivo', { status: res.status }) }; }
-          return { data: { path }, error: null };
+          // o servidor pode corrigir a extensão pelo conteúdo real: vale o caminho que ele devolve
+          let out = null; try { out = await res.json(); } catch { /* sem corpo */ }
+          return { data: { path: (out && typeof out.path === 'string' && out.path) || path }, error: null };
         },
         getPublicUrl: (path) => ({ data: { publicUrl: `${baseUrl}/storage/v1/object/public/${bucket}/${path}` } }),
       }),

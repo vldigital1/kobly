@@ -145,6 +145,14 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - Pausar um servidor tira ele da distribuição (os números que já estão continuam funcionando). Servidor com números não pode ser removido. A tela avisa quando a ocupação total passa de 80%.
 - Teste: `test/uazapi_servers.integration.test.js`.
 
+### Mídia com upload e "apagar ao aplicar etiqueta" (migração `0082`)
+- Bucket `flow-media` (`storage.js`): imagem, vídeo, áudio e arquivo dos blocos de mídia, até 30 MB (limites do WhatsApp por tipo: imagem 5, vídeo/áudio 16, documento 30). O tipo vem do conteúdo (`sniffMedia`); a extensão é corrigida para o tipo real e documentos são servidos como download. **Produção (Supabase):** criar o bucket público `flow-media` antes de publicar o front.
+- No editor, cada mídia é um bloco próprio (Imagem, Vídeo, Áudio, Arquivo) com aba Arquivo (upload) ou URL. O bloco salvo continua `send_media` + `kind`.
+- Mídia pelo WhatsApp por QR Code não depende da janela de 24 h (como o texto). Envio: `POST /send/media { number, type, file, text, docName }` na Uazapi (`audio` vai como `ptt`).
+- Texto e mídia aceitam `delete_on_tag` (id de etiqueta). Enviado pela Uazapi, o id da mensagem vai para `flow_message_deletions` (`waiting`); o gatilho em `lead_tags` marca `due` quando a etiqueta entra (pelo fluxo ou à mão) e o `tick()` apaga com `POST /message/delete { id }` (até 3 tentativas, 5 min entre elas). Pela API oficial da Meta a opção não tem efeito (a Meta não apaga mensagem enviada).
+- **Conferir com um servidor Uazapi real:** os corpos de `/send/media` e `/message/delete` seguem a documentação pública, mas não foram testados contra um servidor.
+- Testes: `test/flow_media.unit.test.js`, `test/delete_on_tag.integration.test.js`.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.
