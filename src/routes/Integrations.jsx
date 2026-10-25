@@ -10,6 +10,7 @@ import { useAsync } from '@/lib/hooks.jsx';
 import { Segmented, Modal, PhoneField, ErrorState, SkeletonForm, SkeletonTable, SkeletonRow } from '@/lib/ui.jsx';
 import { renderEmail } from '@/lib/emailTemplate.js';
 import { useKobly } from '@/store/store.jsx';
+import { useBreakpoint } from '@/lib/responsive.jsx';
 import { KoblyEmailEditor } from '@/routes/EmailEditor.jsx';
 import { WhatsappMetaTab } from '@/routes/WhatsappMeta.jsx';
 import { KoblySmsEditor } from '@/routes/SmsEditor.jsx';
@@ -1085,24 +1086,28 @@ function BrandsList({ empresaId, onSaved }) {
 //   Seção  →  Configuração da loja | Postback | Tags | Modelos
 //   Sub    →  (só em Config) Identidade | Remetente | WhatsApp | SMS
 // Conteúdo de e-mail de campanha NÃO mora aqui — fica no FlowBuilder.
+// Menu vertical de Integrações (a ordem é a da tela). Conexões primeiro: sem WhatsApp nada funciona.
 const SECTIONS = [
-  { value: 'plataformas', label: 'Plataformas', icon: 'layout-grid', help: 'Plataformas de venda (Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt) e gateways de pagamento: cada uma com a sua página de conexão.' },
-  { value: 'loja', label: 'Configuração da loja', icon: 'store', help: 'Identidade, remetente e canais' },
-  { value: 'postback', label: 'Postback', icon: 'webhook', help: 'Webhooks de checkout' },
+  { value: 'conexoes', label: 'Conexões', icon: 'smartphone', help: 'Todos os canais da conta: WhatsApp por QR Code, API Oficial da Meta e Telegram.' },
+  { value: 'gateways', label: 'Gateways de pagamento', icon: 'credit-card', help: 'Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt, XPag, Mercado Pago, PushinPay, SyncPay, Woovi e Zenith: cada um com a sua página de conexão.' },
+  { value: 'trackeamento', label: 'Trackeamento', icon: 'chart-line', help: 'Pixels (Meta, TikTok e Google), UTMify e de onde vêm os leads.' },
+  { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },
+  { value: 'postback', label: 'Postback', icon: 'webhook', help: 'URLs de postback para checkouts e integrações próprias.' },
+  { value: 'loja', label: 'Configuração da loja', icon: 'store', help: 'Identidade visual e remetente dos e-mails.' },
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
-  { value: 'pagamentos', label: 'Pagamentos e alertas', icon: 'credit-card', help: 'Conta do gateway (XPag, Mercado Pago, PushinPay, SyncPay ou Woovi) para cobrar nos fluxos, Pixel da Meta (API de Conversões) e alertas no Telegram.' },
-  { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },
   { value: 'mcp', label: 'Acesso de IA', icon: 'bot', help: 'Tokens para assistentes de IA (MCP) criarem rascunhos de fluxo.' },
 ];
-const KoblyPaymentsTab = React.lazy(() => import('@/routes/PaymentsTab.jsx').then((m) => ({ default: m.KoblyPaymentsTab })));
+// Outras telas abrem uma seção daqui gravando o id nesta chave antes de navegar (ex.: Configurações → Trackeamento).
+export const INTEGRATIONS_SECTION_KEY = 'kobly:int-section';
+const KoblyConnections = React.lazy(() => import('@/routes/Connections.jsx').then((m) => ({ default: m.KoblyConnections })));
+const TrackingPanel = React.lazy(() => import('@/routes/Tracking.jsx').then((m) => ({ default: m.TrackingPanel })));
 const KoblyPlatformsTab = React.lazy(() => import('@/routes/PlatformsTab.jsx').then((m) => ({ default: m.KoblyPlatformsTab })));
 const KoblyAiKeysTab = React.lazy(() => import('@/routes/AiKeysTab.jsx').then((m) => ({ default: m.KoblyAiKeysTab })));
 const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
   { value: 'marca', label: 'Identidade', icon: 'palette' },
   { value: 'dominio', label: 'Remetente', icon: 'globe' },
-  { value: 'whatsapp', label: 'WhatsApp', icon: 'message-circle' },
   ...(SMS_ENABLED ? [{ value: 'sms', label: 'SMS', icon: 'smartphone' }] : []),
 ];
 
@@ -1111,7 +1116,11 @@ function KoblyIntegrations() {
   const isGestor = store.role === 'Gestor';
   const a = useAsync(() => KoblyApi.getIntegrations(), [store.role]);
   const clients = useAsync(() => (isGestor ? KoblyApi.listClients() : Promise.resolve([])), [store.role]);
-  const [section, setSection] = useState('plataformas');
+  const { isMobile } = useBreakpoint();
+  const [section, setSection] = useState(() => {
+    try { const s = sessionStorage.getItem(INTEGRATIONS_SECTION_KEY); if (s) { sessionStorage.removeItem(INTEGRATIONS_SECTION_KEY); if (SECTIONS.some((x) => x.value === s)) return s; } } catch { /* sem armazenamento */ }
+    return 'conexoes';
+  });
   const [lojaSub, setLojaSub] = useState('marca');
   const [contaId, setContaId] = useState(null);
   const empresaId = isGestor ? contaId : store.session.empresaId;
@@ -1122,8 +1131,22 @@ function KoblyIntegrations() {
   const sectionHelp = (SECTIONS.find((s) => s.value === section) || {}).help || '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <PageHeader tabs={<Tabs value={section} onChange={setSection} options={SECTIONS.map(({ value, label, icon }) => ({ value, label, icon }))} />}>
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '236px minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
+      {isMobile ? (
+        <Select label="Seção" value={section} onChange={(e) => setSection(e.target.value)} options={SECTIONS.map(({ value, label }) => ({ value, label }))} />
+      ) : (
+        <nav aria-label="Seções de integrações" style={{ position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', gap: 2, padding: 8, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', background: 'var(--surface-card)' }}>
+          {SECTIONS.map((x) => (
+            <button key={x.value} type="button" onClick={() => setSection(x.value)} aria-current={section === x.value ? 'page' : undefined}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'start', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                background: section === x.value ? 'var(--accent-soft)' : 'transparent', color: section === x.value ? 'var(--accent)' : 'var(--text-body)', fontWeight: section === x.value ? 'var(--fw-semibold)' : 'var(--fw-medium)' }}>
+              <Icon name={x.icon} size={16} />{x.label}
+            </button>
+          ))}
+        </nav>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+      <PageHeader>
         {section === 'loja'
           ? 'Tudo que define a cara e o envio da loja: identidade visual, From e canais. O texto do e-mail de recuperação fica na campanha.'
           : section === 'emails'
@@ -1200,12 +1223,17 @@ function KoblyIntegrations() {
           {section === 'postback' && <PostbackTab data={a.data} empresaId={empresaId} />}
           {section === 'tags' && <TagsTab data={a.data} reload={a.reload} />}
           {section === 'emails' && <EmailTemplatesTab data={a.data} reload={a.reload} empresaId={empresaId} />}
-          {section === 'pagamentos' && (
+          {section === 'conexoes' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
-              <KoblyPaymentsTab empresaId={empresaId} notify={store.notify} />
+              <KoblyConnections empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
           )}
-          {section === 'plataformas' && (
+          {section === 'trackeamento' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <TrackingPanel orgId={empresaId} canEdit={store.role !== 'Suporte'} notify={store.notify} />
+            </React.Suspense>
+          )}
+          {section === 'gateways' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
               <KoblyPlatformsTab empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
@@ -1222,6 +1250,7 @@ function KoblyIntegrations() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

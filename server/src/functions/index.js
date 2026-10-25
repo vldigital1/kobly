@@ -73,6 +73,7 @@ export function createFunctions(ctx) {
     'ai-keys': () => orgUserRoute('aiKeys', 'ai-keys'),
     'meta-ads': () => orgUserRoute('metaAds', 'meta-ads'),
     'platforms': () => orgUserRoute('platforms', 'platforms'),
+    'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
   };
   return {
     names: () => Object.keys(handlers),

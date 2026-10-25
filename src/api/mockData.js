@@ -353,7 +353,6 @@ const NAV = {
   disparos:      { id: 'disparos',      icon: 'send',             label: 'Disparo em massa',     section: 'Operações' },
   integracoes:   { id: 'integracoes',   icon: 'plug',             label: 'Integrações',          section: 'Operações' },
   produtos:      { id: 'produtos',      icon: 'package',          label: 'Produtos',             section: 'Operações' },
-  trackeamento:  { id: 'trackeamento',  icon: 'chart-line',       label: 'Trackeamento',         section: 'Operações' },
   anuncios:      { id: 'anuncios',      icon: 'target',           label: 'Facebook Ads',         section: 'Operações' },
   relatorios:    { id: 'relatorios',    icon: 'chart-column',     label: 'Relatórios',           section: 'Operações' },
   configuracoes: { id: 'configuracoes', icon: 'settings',         label: 'Configurações',        section: 'Gestão' },
@@ -369,14 +368,14 @@ const roles = {
   Cliente: {
     label: 'Cliente',
     descricao: 'Dono da conta — dashboard, pipeline, campanhas, leads, integrações.',
-    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'trackeamento', 'anuncios', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'anuncios', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: false, createPlan: false, manageUsers: false, answerTickets: false },
   },
   Gestor: {
     label: 'Gestor',
     descricao: 'Agência — visão consolidada de várias contas.',
-    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'trackeamento', 'anuncios', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'campanhas', 'agentes', 'disparos', 'integracoes', 'produtos', 'anuncios', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: true, createPlan: false, manageUsers: false, answerTickets: false },
   },
@@ -412,7 +411,7 @@ const roleDefFor = (role, teamRole) => (role === 'Cliente' && teamRole === 'aten
 
 // Títulos de rota (topbar)
 const routeTitle = {
-  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', trackeamento: 'Trackeamento', anuncios: 'Facebook Ads', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
+  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Facebook Ads', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
   disparos: 'Disparo em massa',
   leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança',
   seguranca: 'Segurança', chamados: 'Chamados', ajuda: 'Central de ajuda', perfil: 'Perfil',

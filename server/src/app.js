@@ -20,6 +20,7 @@ import { createXpag } from './payments/xpag.js';
 import { createMercadoPago, createWoovi, createPushinPay, createSyncPay } from './payments/pix_br.js';
 import { createZenith } from './payments/zenith.js';
 import { createPlatforms } from './platforms/service.js';
+import { createUazapi } from './whatsapp/uazapi.js';
 import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
 import { createCopilot } from './flows/copilot.js';
@@ -75,7 +76,22 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     async createCharge(a) { const c = await paymentsCore.createCharge(a); if (c && c.status === 'pending') toUtmify(c, 'waiting_payment'); return c; },
     receiveWebhook: (prov, tok, raw, onConfirmed) => paymentsCore.receiveWebhook(prov, tok, raw, async (charge) => { await toUtmify(charge, 'paid'); if (onConfirmed) await onConfirmed(charge); }),
   };
-  const flows = createFlowRuntime({ pool, whatsapp, llm, payments, pixel, notifier });
+  // WhatsApp por QR Code (Uazapi). Mensagens recebidas entram na mesma caixa e nos mesmos fluxos.
+  let flows = null;
+  const uazapi = createUazapi({ pool, secretKey: secretKeyBuf, base: config.uazapiBase, adminToken: config.uazapiAdminToken, publicBaseUrl: config.publicBaseUrl || '', fetchImpl,
+    onInbound: (a) => flows.onInbound(a) });
+  // Envio de texto: API oficial quando a empresa tem; senão o número conectado por QR Code.
+  const officialConnected = async (orgId) => (await pool.query(`select 1 from public.whatsapp_accounts where organization_id = $1 and status = 'connected'`, [orgId])).rowCount > 0;
+  const waRouted = {
+    ...whatsapp,
+    async sendTextTo(orgId, a) {
+      try { return await whatsapp.sendTextTo(orgId, a); }
+      catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendTextTo(orgId, a); throw e; }
+    },
+    // sem a API oficial, o WhatsApp comum não tem janela de 24 h
+    freeTextAllowed: async (orgId) => !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
+  };
+  flows = createFlowRuntime({ pool, whatsapp: waRouted, llm, payments, pixel, notifier });
   whatsapp.setInboundHandler(flows.onInbound);
   const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }) });
   const mcp = createMcp({ pool, flowAdmin });
@@ -84,13 +100,13 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const storage = createStorage({ dir: config.storageDir || '/var/lib/kobly-storage', canAccessOrg: async (user, org) => { try { return (await whatsapp.resolveOrg(user, org)).role !== 'Suporte'; } catch { return false; } } });
   const unsub = createUnsubscribe({ pool, secret: config.unsubscribeSecret });
   const workspaceSettings = createWorkspaceSettings({ pool });
-  const inbox = createInbox({ pool, whatsapp });
+  const inbox = createInbox({ pool, whatsapp: waRouted });
   const team = createTeam({ pool, auth, mailer });
   const tracking = createTracking({ pool, utmify });
   const products = createProducts({ pool });
   const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms, uazapi });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -177,6 +193,12 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
           const { status: st, ...counts } = r;
           return send(res, st, st === 200 ? { ok: true, ...counts } : { code: 'rejected' });
         }
+      }
+      // Aviso da Uazapi (WhatsApp por QR Code): a URL identifica a instância; o token no corpo prova a origem.
+      const uz = /^\/webhooks\/uazapi\/([0-9a-f-]{36})$/.exec(path);
+      if (uz && req.method === 'POST') {
+        const r = await uazapi.receiveWebhook(uz[1], (await readBody(req, 1024 * 1024)).toString('utf8'));
+        return send(res, r.status, { ok: r.status === 200 });
       }
       // MCP da Kobly (assistentes de IA): token próprio da empresa no Authorization; só rascunhos.
       if (path === '/mcp') {

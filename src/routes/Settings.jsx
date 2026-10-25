@@ -88,10 +88,10 @@ function KoblySettings() {
   const common = { orgId, canEdit, notify: store.notify, onSaved: () => load(true) };
   const atalhos = [
     ['agentes', 'bot', 'Agentes de IA', 'Atendentes de IA reaproveitáveis nos fluxos'],
-    ['integracoes', 'plug', 'Integrações', 'Checkout, WhatsApp, pagamentos, Pixel, Telegram e MCP'],
+    ['integracoes', 'plug', 'Integrações', 'Conexões, gateways de pagamento, pixels e IA'],
     ['leads', 'tag', 'Etiquetas e leads', 'Contatos, etiquetas e histórico'],
     ['produtos', 'package', 'Produtos', 'Catálogo e vendas por produto'],
-    ['trackeamento', 'chart-line', 'Trackeamento', 'UTMs por origem e UTMify'],
+    ['integracoes', 'chart-line', 'Trackeamento', 'Pixels, UTMify e UTMs por origem', 'trackeamento'],
     ['fluxos', 'git-branch', 'Fluxos', 'Fluxos de conversa em grafo'],
   ];
 
@@ -147,8 +147,8 @@ function KoblySettings() {
           <Card>
             <div style={{ fontWeight: 600, color: 'var(--text-strong)', marginBottom: 10 }}>Mais configurações</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-              {atalhos.map(([id, icon, label, desc]) => (
-                <button key={id} type="button" onClick={() => store.navigate(id)} style={{ display: 'flex', gap: 10, textAlign: 'start', padding: 12, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+              {atalhos.map(([id, icon, label, desc, sec]) => (
+                <button key={label} type="button" onClick={() => { if (sec) { try { sessionStorage.setItem('kobly:int-section', sec); } catch { /* ok */ } } store.navigate(id); }} style={{ display: 'flex', gap: 10, textAlign: 'start', padding: 12, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
                   <span style={{ color: 'var(--accent)' }}><Icon name={icon} size={18} /></span>
                   <span><span style={{ display: 'block', color: 'var(--text-strong)', fontWeight: 600 }}>{label}</span><span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{desc}</span></span>
                 </button>

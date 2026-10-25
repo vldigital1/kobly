@@ -124,13 +124,13 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
   }
 
   // ---- Entrada: mensagem do lead -------------------------------------------
-  async function onInbound({ orgId, accountId, message, contacts }) {
+  async function onInbound({ orgId, accountId, instanceId = null, message, contacts }) {
     const from = digitsOf(message.from);
     if (!message.id || from.length < 8) return false;
     const text = inboundText(message).slice(0, 4096);
-    const ins = await pool.query(`insert into public.whatsapp_inbound_messages (organization_id, account_id, wa_message_id, from_phone, msg_type, body, payload)
-      values ($1,$2,$3,$4,$5,$6,$7::jsonb) on conflict (wa_message_id) do nothing returning id`,
-      [orgId, accountId, message.id, from, message.type || 'unknown', text, JSON.stringify({ message, contact: (contacts || [])[0] || null })]);
+    const ins = await pool.query(`insert into public.whatsapp_inbound_messages (organization_id, account_id, instance_id, wa_message_id, from_phone, msg_type, body, payload)
+      values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb) on conflict (wa_message_id) do nothing returning id`,
+      [orgId, accountId, instanceId, message.id, from, message.type || 'unknown', text, JSON.stringify({ message, contact: (contacts || [])[0] || null })]);
     if (!ins.rows[0]) return false; // reentrega da Meta: já tratada
     const tail = from.slice(-10); // casa com ou sem DDI e com/sem o 9 (mesma regra do descadastro)
     const lead = (await pool.query(`select id, automation_paused from public.leads where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 order by updated_at desc limit 1`, [orgId, tail])).rows[0];
@@ -223,8 +223,8 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
     try {
       const out = await fn();
       await recordSend(ex, ctx, { ok: true, msgId: out.id });
-      await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, campaign_id, to_phone, source, body, wa_message_id) values ($1,$2,$3,$4,$5,$6,$7)`,
-        [ex.organization_id, ex.lead_id, ex.campaign_id, out.to || ctx.lead.telefone, source, String(preview || '').slice(0, 4096), out.id || null]).catch((e) => console.error('[flows] conversa não registrada:', e.message));
+      await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, campaign_id, to_phone, source, body, wa_message_id, channel) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [ex.organization_id, ex.lead_id, ex.campaign_id, out.to || ctx.lead.telefone, source, String(preview || '').slice(0, 4096), out.id || null, out.channel === 'uazapi' ? 'uazapi' : 'oficial']).catch((e) => console.error('[flows] conversa não registrada:', e.message));
       return { exit: 'sent', detail: out.id };
     } catch (e) {
       const err = String(e.message || e).slice(0, 200);
@@ -448,7 +448,8 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
         if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };
         if (!ctx.lead.telefone) return { exit: 'failed', detail: 'lead sem telefone' };
         if (node.type === 'send_template') return sendTemplate(ex, ctx, d.template_id, d.vars);
-        const aberta = isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora);
+        // WhatsApp comum (QR Code, sem API oficial) não tem janela de 24 h
+        const aberta = isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora) || (whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id) : false);
         if (aberta) { const text = render(d.text, ctx); return send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text }), text); }
         // Janela fechada: com modelo reserva, troca sozinho para o modelo aprovado (diferencial Kobly).
         if (d.fallback_template_id) { const r = await sendTemplate(ex, ctx, d.fallback_template_id, d.fallback_vars); return { ...r, detail: `janela fechada → modelo reserva${r.detail ? ': ' + r.detail : ''}` }; }

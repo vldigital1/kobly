@@ -48,7 +48,9 @@ export function createInbox({ pool, whatsapp, now = () => new Date() }) {
           ) m order by at desc limit 300`, [orgId, lead.id]);
         const flows = (await pool.query(`select e.id, e.status, e.current_ref, e.wait_kind, c.nome as campanha from public.flow_executions e join public.campaigns c on c.id = e.campaign_id
           where e.lead_id = $1 and e.organization_id = $2 and e.status in ('running','waiting')`, [lead.id, orgId])).rows;
-        return { lead: view(lead), messages: rows.reverse(), flows };
+        // WhatsApp por QR Code (sem API oficial): não há janela de 24 h
+        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId) : false;
+        return { lead: { ...view(lead), ...(livre ? { janela_aberta: true } : {}) }, messages: rows.reverse(), flows };
       }
       case 'send': {
         canAct(ctx);
@@ -57,11 +59,12 @@ export function createInbox({ pool, whatsapp, now = () => new Date() }) {
         if (!msg) throw new AuthError(422, 'empty_text', 'Escreva a mensagem.');
         if (msg.length > 4096) throw new AuthError(422, 'validation_failed', 'Mensagem até 4096 caracteres.');
         if (lead.whatsapp_opt_out) throw new AuthError(409, 'opt_out', 'Este lead pediu para não receber WhatsApp.');
-        if (!isWindowOpen(lead.whatsapp_last_inbound_at, now())) throw new AuthError(409, 'window_closed', 'A janela de 24 h está fechada: o lead precisa mandar uma mensagem antes (ou use um modelo aprovado num fluxo).');
+        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId) : false; // WhatsApp por QR Code: sem janela
+        if (!livre && !isWindowOpen(lead.whatsapp_last_inbound_at, now())) throw new AuthError(409, 'window_closed', 'A janela de 24 h está fechada: o lead precisa mandar uma mensagem antes (ou use um modelo aprovado num fluxo).');
         if (!lead.telefone) throw new AuthError(422, 'bad_phone', 'Lead sem telefone.');
         const out = await whatsapp.sendTextTo(orgId, { to: lead.telefone, text: msg });
-        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by)
-          values ($1,$2,$3,'humano',$4,$5,$6) returning id::text, 'humano' as de, body, 'text' as tipo, created_at as at`, [orgId, lead.id, out.to || lead.telefone, msg, out.id || null, (user && user.id) || null]);
+        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel)
+          values ($1,$2,$3,'humano',$4,$5,$6,$7) returning id::text, 'humano' as de, body, 'text' as tipo, created_at as at`, [orgId, lead.id, out.to || lead.telefone, msg, out.id || null, (user && user.id) || null, out.channel === 'uazapi' ? 'uazapi' : 'oficial']);
         return { ok: true, message: r.rows[0] };
       }
       case 'pause': { // assumir (paused=true) ou devolver para a automação (false)

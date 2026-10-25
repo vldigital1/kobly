@@ -31,6 +31,9 @@ export function loadConfig(env = process.env) {
     aiModel: env.AI_MODEL || 'deepseek-chat',
     // Chave da plataforma só vale para empresas SEM chave própria se isto for "true" (padrão: cada cliente paga a sua IA)
     aiPlatformFallback: env.AI_PLATFORM_FALLBACK === 'true',
+    // WhatsApp por QR Code (Uazapi): servidor e token de administrador da Kobly; sem eles a opção fica desligada
+    uazapiBase: env.UAZAPI_BASE_URL || '',
+    uazapiAdminToken: env.UAZAPI_ADMIN_TOKEN || '',
     // Gateway XPag (cada empresa cadastra a própria credencial; aqui só a URL da API)
     xpagBase: env.XPAG_BASE_URL || 'https://api.xpag.global',
   };

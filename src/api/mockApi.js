@@ -1145,6 +1145,8 @@ export const KoblyApi = {
   async metaAds(action, extra = {}, empresaId = null) { return this.serviceCall('meta-ads', action, extra, empresaId); },
   // Plataformas de venda (Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt): conexão e URL de cada uma.
   async platforms(action, extra = {}, empresaId = null) { return this.serviceCall('platforms', action, extra, empresaId); },
+  // WhatsApp por QR Code (Uazapi): criar instância, QR Code, status, desconectar, excluir.
+  async uazapi(action, extra = {}, empresaId = null) { return this.serviceCall('uazapi', action, extra, empresaId); },
   async serviceCall(fn, action, extra = {}, empresaId = null) {
     const { data, error } = await supabase.functions.invoke(fn, { body: { action, ...extra, ...(empresaId ? { org_id: empresaId } : {}) } });
     if (error) {

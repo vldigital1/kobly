@@ -5,7 +5,7 @@ import { Drawer } from '@/lib/ui.jsx';
 import { GATEWAYS, SALES_PLATFORMS } from '@/lib/platforms.js';
 import { fmtDateTime } from '@/lib/workspace.jsx';
 
-// Kobly — Integrações → Plataformas. Um cartão (com a marca) por plataforma de venda e por gateway;
+// Kobly — Integrações → Gateways de pagamento. Um cartão (com a marca) por plataforma de venda e por gateway;
 // cada um abre a página dele: o que a Kobly faz com ela, como conectar e as conexões ativas.
 // Plataformas de venda: pela API (Kiwify, Cakto — a Kobly cria o webhook) ou pela URL (Hotmart, Kirvano,
 // PerfectPay, Payt — com o passo a passo e a chave de validação). Gateways: conta usada no bloco Cobrança. KoblyPlatformsTab
@@ -19,7 +19,7 @@ export function PlatformLogo({ p, size = 40 }) {
   );
 }
 
-function Card({ p, count, onOpen }) {
+function Card({ p, tag, count, onOpen }) {
   return (
     <button type="button" onClick={onOpen} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', textAlign: 'start', padding: 14, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
       background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-sans)', minHeight: 92 }} className="kbly-lift">
@@ -29,6 +29,7 @@ function Card({ p, count, onOpen }) {
           <span style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{p.name}</span>
           {count > 0 && <Badge size="sm" tone="success" dot>{count > 1 ? `${count} conexões` : 'Conectado'}</Badge>}
         </span>
+        {tag && <span style={{ display: 'inline-block', marginTop: 4, fontSize: 'var(--text-2xs, 11px)', color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{tag}</span>}
         <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>{p.desc}</span>
       </span>
       <Icon name="chevron-right" size={16} style={{ color: 'var(--text-subtle)', marginTop: 4 }} />
@@ -173,19 +174,17 @@ function KoblyPlatformsTab({ empresaId, notify = () => {} }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {st.error && <Banner tone="danger">{st.error}</Banner>}
       <section>
-        <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>Plataformas de venda</div>
-        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '2px 0 10px' }}>De onde chegam Pix gerado, carrinho abandonado e vendas que disparam os fluxos.</div>
-        <div style={grid}>{SALES_PLATFORMS.map((p) => <Card key={p.id} p={p} count={connsOf(p.id).length} onOpen={() => setOpen({ kind: 'sales', p })} />)}</div>
-      </section>
-      <section>
         <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>Gateways de pagamento</div>
-        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '2px 0 10px' }}>Contas usadas pelo bloco Cobrança para gerar Pix, SPEI e outros métodos dentro da conversa.</div>
-        <div style={grid}>{GATEWAYS.map((g) => <Card key={g.id} p={g} count={gwsOf(g.id).length} onOpen={() => setOpen({ kind: 'gateway', p: g })} />)}</div>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '2px 0 10px' }}>Conecte de onde chegam as vendas (Pix gerado, carrinho abandonado, compra aprovada) e as contas que cobram dentro da conversa pelo bloco Cobrança.</div>
+        <div style={grid}>
+          {SALES_PLATFORMS.map((p) => <Card key={p.id} p={p} tag="Vendas e abandonos" count={connsOf(p.id).length} onOpen={() => setOpen({ kind: 'sales', p })} />)}
+          {GATEWAYS.map((g) => <Card key={g.id} p={g} tag="Cobrança no WhatsApp" count={gwsOf(g.id).length} onOpen={() => setOpen({ kind: 'gateway', p: g })} />)}
+        </div>
       </section>
 
       <Drawer open={!!open} onClose={() => setOpen(null)} width={520}
         title={open ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><PlatformLogo p={open.p} size={30} />{open.p.name}</span> : ''}
-        subtitle={open ? (open.kind === 'gateway' ? 'Gateway de pagamento' : open.p.mode === 'api' ? 'Plataforma de venda · conexão pela API' : 'Plataforma de venda · conexão pela URL') : ''}>
+        subtitle={open ? (open.kind === 'gateway' ? 'Gateway de pagamento · cobrança no WhatsApp' : open.p.mode === 'api' ? 'Gateway de pagamento · conexão pela API' : 'Gateway de pagamento · conexão pela URL') : ''}>
         {open && open.kind === 'sales' && <SalesPage p={open.p} conns={connsOf(open.p.id)} empresaId={empresaId} notify={notify} reload={load} />}
         {open && open.kind === 'gateway' && <GatewayPage g={open.p} accounts={gwsOf(open.p.id)} empresaId={empresaId} notify={notify} reload={load} />}
       </Drawer>
