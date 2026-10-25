@@ -18,7 +18,6 @@ import { SupportWidget } from '@/shell/SupportWidget.jsx';
 const screen = (load, name) => lazy(() => load().then((m) => ({ default: m[name] })));
 const KoblyDashboard = screen(() => import('@/routes/Dashboard.jsx'), 'KoblyDashboard');
 const KoblyPipeline = screen(() => import('@/routes/Pipeline.jsx'), 'KoblyPipeline');
-const KoblyCampaigns = screen(() => import('@/routes/Campaigns.jsx'), 'KoblyCampaigns');
 const KoblyBulkSend = screen(() => import('@/routes/BulkSend.jsx'), 'KoblyBulkSend');
 const KoblyLeads = screen(() => import('@/routes/Leads.jsx'), 'KoblyLeads');
 const KoblyIntegrations = screen(() => import('@/routes/Integrations.jsx'), 'KoblyIntegrations');
@@ -37,7 +36,7 @@ const KoblyProducts = screen(() => import('@/routes/Products.jsx'), 'KoblyProduc
 const KoblyMetaAds = screen(() => import('@/routes/MetaAds.jsx'), 'KoblyMetaAds');
 const KoblyServers = screen(() => import('@/routes/Servers.jsx'), 'KoblyServers');
 
-// Route id -> screen component (FlowBuilder / EmailEditor are sub-screens of Campanhas).
+// Route id -> screen component.
 const SCREENS = {
   painel: KoblyDashboard,
   chats: KoblyChats,
@@ -49,7 +48,6 @@ const SCREENS = {
   servidores: KoblyServers,
   clientes: KoblyClients,
   pipeline: KoblyPipeline,
-  campanhas: KoblyCampaigns,
   disparos: KoblyBulkSend,
   leads: KoblyLeads,
   integracoes: KoblyIntegrations,

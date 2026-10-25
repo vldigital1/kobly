@@ -29,6 +29,8 @@ function KoblyFlows() {
   // vindo do "Novo fluxo" da tela Campanhas: abre direto a criação (lido uma vez, num efeito)
   useEffect(() => { try { if (sessionStorage.getItem('kobly:newflow')) { sessionStorage.removeItem('kobly:newflow'); sessionStorage.removeItem(OPEN_KEY); setOpen(null); setNovo(''); } } catch { /* ok */ } }, []);
   const [busy, setBusy] = useState(false);
+  // Campanhas do formato antigo (lista de etapas): a tela Campanhas saiu; as que ainda existem aparecem aqui só para pausar ou excluir
+  const legacy = useAsync(async () => (orgId ? ((await KoblyApi.listCampaigns()).campaigns || []).filter((c) => c.empresaId === orgId) : []), [orgId]);
 
   const openFlow = (f) => { setOpen(f); try { f ? sessionStorage.setItem(OPEN_KEY, JSON.stringify(f)) : sessionStorage.removeItem(OPEN_KEY); } catch { /* ok */ } };
 
@@ -42,6 +44,19 @@ function KoblyFlows() {
       store.notify('success', `Fluxo "${c.nome}" criado. Monte os blocos e publique.`);
       openFlow({ id: c.id, nome: c.nome, empresaId: c.empresaId });
     } catch (e) { store.notify('danger', e.message || 'Não foi possível criar o fluxo.'); } finally { setBusy(false); }
+  }
+  async function toggleLegacy(c) {
+    const status = c.status === 'Ativa' ? 'Pausada' : 'Ativa';
+    await KoblyApi.setCampaignStatus(c.id, status);
+    legacy.setData((d) => d.map((x) => (x.id === c.id ? { ...x, status } : x)));
+    store.notify('info', `"${c.nome}" → ${status}`);
+  }
+  async function removeLegacy(c) {
+    if (!confirm(`Excluir a campanha "${c.nome}"? Os envios agendados dela param e isso não pode ser desfeito.`)) return;
+    const r = await KoblyApi.deleteCampaign(c.id);
+    if (r.error) { store.notify('danger', r.error); return; }
+    legacy.setData((d) => d.filter((x) => x.id !== c.id));
+    store.notify('success', `Campanha "${c.nome}" excluída.`);
   }
   async function toggle(f) {
     const status = f.status === 'Ativa' ? 'Pausada' : 'Ativa';
@@ -60,6 +75,8 @@ function KoblyFlows() {
   }
 
   const flows = list.data || [];
+  const flowIds = new Set(flows.map((f) => f.campaign_id));
+  const oldOnes = (legacy.data || []).filter((c) => !flowIds.has(c.id));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button> : null}>
@@ -74,7 +91,7 @@ function KoblyFlows() {
             zebra
             empty={!orgId
               ? <EmptyState compact icon="users" title="Selecione uma conta" message="Escolha a conta do cliente acima para ver os fluxos." />
-              : <EmptyState compact icon="git-branch" title="Nenhum fluxo ainda" message="Crie um fluxo do zero ou abra uma campanha e use o botão de fluxo em grafo." action={canEdit ? <Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button> : null} />}
+              : <EmptyState compact icon="git-branch" title="Nenhum fluxo ainda" message="Crie seu primeiro fluxo: e-mail, WhatsApp ou os dois no mesmo desenho." action={canEdit ? <Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button> : null} />}
             columns={[
               { key: 'nome', header: 'Fluxo', render: (r) => (
                 <button onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'start', fontFamily: 'var(--font-sans)' }}>
@@ -102,6 +119,33 @@ function KoblyFlows() {
         </Card>
       )}
       {flows.some((f) => f.status === 'Ativa' && !f.active_version) && <Banner tone="warning">Há fluxo ativo sem versão publicada: ele não roda até você publicar no editor.</Banner>}
+
+      {oldOnes.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>Campanhas antigas</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
+              Criadas no formato antigo (lista de etapas). As ativas continuam enviando. Para mudar alguma, crie um fluxo novo com os mesmos e-mails (bloco E-mail → copiar) e depois pause ou exclua a antiga.
+            </div>
+          </div>
+          <Card pad={false}>
+            <DataTable rowKey="id" zebra rows={oldOnes} columns={[
+              { key: 'nome', header: 'Campanha', render: (c) => (<>
+                <span style={{ display: 'block', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{c.nome}</span>
+                <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{(c.fluxo || []).length} etapas · criada {c.criadoEm || '—'}</span>
+              </>) },
+              { key: 'status', header: 'Situação', render: (c) => <Badge tone={c.status === 'Ativa' ? 'success' : c.status === 'Pausada' ? 'warning' : 'neutral'} dot>{c.status}</Badge> },
+              { key: 'env', header: 'E-mails enviados', align: 'end', render: (c) => (c.stats && c.stats.emailsEnviados) || 0 },
+              { key: 'acao', header: '', align: 'end', width: 110, render: (c) => (
+                <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                  {canEdit && c.status !== 'Rascunho' && <IconButton icon={c.status === 'Ativa' ? 'pause' : 'play'} size="sm" aria-label={c.status === 'Ativa' ? 'Pausar campanha' : 'Ativar campanha'} onClick={() => toggleLegacy(c)} />}
+                  {canEdit && <IconButton icon="trash-2" size="sm" variant="danger" aria-label="Excluir campanha" onClick={() => removeLegacy(c)} />}
+                </div>
+              ) },
+            ]} />
+          </Card>
+        </div>
+      )}
 
       <Modal open={novo !== null} onClose={() => setNovo(null)} title="Novo fluxo" subtitle="Você monta os blocos no editor; nada roda até publicar e ativar."
         footer={<><Button variant="ghost" onClick={() => setNovo(null)}>Cancelar</Button><Button variant="primary" iconLeft="arrow-right" disabled={busy} onClick={create}>Criar e abrir editor</Button></>}>

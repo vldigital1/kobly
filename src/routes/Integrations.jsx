@@ -378,9 +378,9 @@ function PostbackTab({ data, empresaId }) {
           tone="success"
           icon="check-circle-2"
           title="Recebendo eventos"
-          action={<Button size="sm" variant="primary" iconLeft="arrow-right" onClick={() => store.navigate('campanhas')}>Ir para Campanhas</Button>}
+          action={<Button size="sm" variant="primary" iconLeft="arrow-right" onClick={() => store.navigate('fluxos')}>Ir para Fluxos</Button>}
         >
-          Sua integração está ativa. Próximo passo: crie a campanha que vai reagir a esses eventos.
+          Sua integração está ativa. Próximo passo: crie o fluxo que vai reagir a esses eventos.
         </Banner>
       ) : (
         <Banner tone="info" title="Aguardando o primeiro evento">
@@ -603,12 +603,12 @@ function EmailTemplatesTab({ data, reload, empresaId }) {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Banner tone="info">
-            <b>Use esta aba só se</b> quiser guardar um HTML para copiar em várias campanhas.
-            No dia a dia: <b>Campanhas → abrir fluxo → card Envio de e-mail → Criar e-mail</b>.
+            <b>Use esta aba só se</b> quiser guardar um HTML para copiar em vários fluxos.
+            No dia a dia: <b>Fluxos → abrir o fluxo → bloco E-mail → Criar o e-mail</b>.
           </Banner>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <Button variant="primary" size="sm" iconLeft="git-branch" onClick={() => store.navigate('campanhas')}>
-              Ir para campanhas
+            <Button variant="primary" size="sm" iconLeft="git-branch" onClick={() => store.navigate('fluxos')}>
+              Ir para Fluxos
             </Button>
             <Button variant="secondary" size="sm" iconLeft="plus" onClick={openNew}>
               Novo modelo na biblioteca
@@ -1183,7 +1183,7 @@ function KoblyIntegrations() {
                     key={item.n}
                     type="button"
                     onClick={() => {
-                      if (item.cta) store.navigate('campanhas');
+                      if (item.cta) store.navigate('fluxos');
                       else if (item.sub) setLojaSub(item.sub);
                     }}
                     style={{
