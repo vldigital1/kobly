@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { KoblyAI } from '@/api/ai.js';
 import { KoblyMockDB } from '@/api/mockData.js';
-import { Badge, Button, Card, DataTable, Icon, IconButton, Input, PageHeader, Select, TemplateCard } from '@/ds';
+import { Badge, Banner, Button, Card, DataTable, Icon, IconButton, Input, PageHeader, Select, TemplateCard } from '@/ds';
 import { useAsync } from '@/lib/hooks.jsx';
 import { AISuggestion, EmptyState, ErrorState, SkeletonTable } from '@/lib/ui.jsx';
 import { KoblyFlowBuilder } from '@/routes/FlowBuilder.jsx';
@@ -188,6 +188,8 @@ function KoblyCampaigns() {
   // MARCA-1: marcas da conta em foco — alimentam o seletor de marca da nova campanha.
   const brandsA = useAsync(() => (targetOrgId ? KoblyApi.listBrands(targetOrgId) : Promise.resolve([])), [targetOrgId]);
   const hasIntegration = (events.data || []).length > 0;
+  // Automação nova é criada em Fluxos (e-mail + WhatsApp no mesmo editor); a tela abre já no "Novo fluxo".
+  const newFlow = () => { try { sessionStorage.setItem('kobly:newflow', '1'); } catch { /* ok */ } store.navigate('fluxos'); };
   const hasCampaign = campaigns.length > 0;
   const hasActive = campaigns.some((c) => c.status === 'Ativa');
   const onboardingSteps = [
@@ -257,13 +259,20 @@ function KoblyCampaigns() {
     ? <EmptyState compact icon="users" title="Selecione uma conta" message="Escolha uma conta de cliente acima para ver e criar campanhas." />
     : !hasIntegration
       ? <EmptyState compact icon="plug-zap" title="Conecte seu checkout" message="Antes de criar campanhas, conecte sua integração de checkout. Depois volte aqui para criar a primeira." action={<Button variant="secondary" iconLeft="arrow-right" onClick={() => store.navigate('integracoes')}>Ir para Integrações</Button>} />
-      : <EmptyState compact icon="megaphone" title="Nenhuma campanha ainda" message="Crie sua primeira campanha de recuperação — gere com IA ou comece por um modelo." action={canEdit ? <Button variant="primary" iconLeft="plus" onClick={() => setMode('new')}>Nova campanha</Button> : null} />;
+      : <EmptyState compact icon="git-branch" title="Nenhuma campanha no formato antigo" message="Automações novas (e-mail, WhatsApp ou os dois) agora são criadas em Fluxos." action={canEdit ? <Button variant="primary" iconLeft="plus" onClick={newFlow}>Novo fluxo</Button> : null} />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <PageHeader action={canEdit && targetOrgId ? <Button variant="primary" iconLeft="plus" onClick={() => setMode('new')}>Nova campanha</Button> : null} style={{ marginBottom: 0 }}>
-        Campanhas de recuperação por e-mail. Abra uma campanha para editar o fluxo de automação (gatilhos, tags e envios).
+      <PageHeader action={canEdit && targetOrgId ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Button variant="ghost" size="sm" onClick={() => setMode('new')} title="Lista de etapas em sequência (formato antigo)">Criar no formato antigo</Button>
+          <Button variant="primary" iconLeft="plus" onClick={newFlow}>Novo fluxo</Button>
+        </div>) : null} style={{ marginBottom: 0 }}>
+        Campanhas no formato antigo (lista de etapas). As que já existem continuam rodando normalmente.
       </PageHeader>
+      <Banner tone="info" icon="git-branch" title="Campanhas e fluxos agora ficam juntos em Fluxos">
+        Lá tem o bloco E-mail junto com WhatsApp, condições, espera, IA e cobrança: dá para montar um funil só de e-mail, só de WhatsApp ou misto.
+      </Banner>
       {isGestor && (
         <Select
           label="Conta"

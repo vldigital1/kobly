@@ -19,6 +19,7 @@ export const NODE_TYPES = {
   send_template: { label: 'Modelo do WhatsApp', exits: ['sent', 'failed'], required: ['sent'] },
   send_text: { label: 'Mensagem de texto', exits: ['sent', 'failed', 'window_closed'], required: ['sent'] },
   send_media: { label: 'Mídia', exits: ['sent', 'failed', 'window_closed'], required: ['sent'] },
+  send_email: { label: 'Enviar e-mail', exits: ['default'], required: [] },
   send_buttons: { label: 'Botões / lista', exits: ['other', 'timeout', 'failed'], dynamic: (d) => (d.options || []).map((o) => `opt_${o.id}`), required: [] },
   delay: { label: 'Esperar', exits: ['default'], required: ['default'] },
   wait_reply: { label: 'Aguardar resposta', exits: ['reply', 'timeout'], required: ['reply'] },
@@ -104,6 +105,9 @@ function checkData(node, err) {
       if (s[0] > s[1]) err(`${at}: o mínimo não pode passar do máximo.`);
       break;
     }
+    case 'send_email':
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(d.email_id || ''))) err(`${at}: crie ou escolha o e-mail deste bloco.`);
+      break;
     case 'send_media':
       if (!MEDIA_KINDS.includes(d.kind)) err(`${at}: escolha o tipo de mídia (imagem, áudio, vídeo ou documento).`);
       // link https fixo ou uma variável (ex.: {{pagamento_qr}} gerado pelo bloco de cobrança)

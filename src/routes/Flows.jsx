@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, DataTable, IconButton, Input, PageHeader } from '@/ds';
 import { starterGraph } from '@/lib/flowGraph.js';
@@ -10,7 +10,7 @@ import { useKobly } from '@/store/store.jsx';
 // Editor do fluxo em grafo: carregado só quando aberto (traz o React Flow junto).
 const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.jsx').then((m) => ({ default: m.KoblyFlowGraphEditor })));
 
-// Kobly — Fluxos. Todos os fluxos de WhatsApp em grafo da conta (publicados e rascunhos),
+// Kobly — Fluxos. Todos os fluxos (WhatsApp e e-mail) em grafo da conta (publicados e rascunhos),
 // quantos leads estão em cada um e atalho para criar um fluxo novo do zero. KoblyFlows
 
 const OPEN_KEY = 'kobly:openflow';
@@ -26,6 +26,8 @@ function KoblyFlows() {
   }, [orgId]);
   const [open, setOpen] = useState(() => { try { const s = sessionStorage.getItem(OPEN_KEY); return s ? JSON.parse(s) : null; } catch { return null; } });
   const [novo, setNovo] = useState(null); // nome do fluxo em criação
+  // vindo do "Novo fluxo" da tela Campanhas: abre direto a criação (lido uma vez, num efeito)
+  useEffect(() => { try { if (sessionStorage.getItem('kobly:newflow')) { sessionStorage.removeItem('kobly:newflow'); sessionStorage.removeItem(OPEN_KEY); setOpen(null); setNovo(''); } } catch { /* ok */ } }, []);
   const [busy, setBusy] = useState(false);
 
   const openFlow = (f) => { setOpen(f); try { f ? sessionStorage.setItem(OPEN_KEY, JSON.stringify(f)) : sessionStorage.removeItem(OPEN_KEY); } catch { /* ok */ } };
@@ -61,7 +63,7 @@ function KoblyFlows() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button> : null}>
-        Fluxos de conversa no WhatsApp: gatilho do checkout, mensagens, botões, IA, cobrança e venda, tudo num desenho só.
+        Automações de WhatsApp e e-mail: gatilho do checkout, mensagens, e-mails, botões, IA, cobrança e venda, tudo num desenho só.
         Cada fluxo tem rascunhos e versões; só a versão publicada roda.
       </PageHeader>
       {picker}

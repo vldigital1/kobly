@@ -49,6 +49,18 @@ export function render(text, ctx) {
   });
 }
 
+// Mesmo que render(), para HTML de e-mail: o valor que entra é escapado (nome do lead não vira código)
+const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export function renderHtml(text, ctx) {
+  if (typeof text !== 'string') return '';
+  const fields = buildFields(ctx);
+  return text.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_.]{0,80})\s*\}\}/g, (all, path) => {
+    if (path === 'unsubscribe_url') return all; // o envio troca pelo link assinado
+    const v = lookup(path, ctx, fields);
+    return v == null ? '' : escHtml(typeof v === 'object' ? JSON.stringify(v) : String(v));
+  });
+}
+
 const num = (v) => { if (typeof v === 'number') return v; const s = String(v ?? '').replace(/[^\d,.-]/g, ''); const n = Number(s.includes(',') && !s.includes('.') ? s.replace(',', '.') : s.replace(/,/g, '')); return Number.isFinite(n) ? n : NaN; };
 const norm = (v) => String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 

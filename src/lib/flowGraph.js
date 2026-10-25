@@ -20,6 +20,8 @@ export const BLOCKS = {
     exits: [['other', 'Outra resposta'], ['timeout', 'Sem resposta']],
     dynamic: (d) => (d.options || []).map((o) => [`opt_${o.id}`, o.title || o.id]),
     make: () => ({ text: 'Posso te enviar agora?', options: [{ id: 'sim', title: 'Sim' }, { id: 'nao', title: 'Não' }], timeout_minutes: 60 }) },
+  send_email: { label: 'E-mail', group: 'Mensagens', icon: 'mail', tone: 'blue', hint: 'E-mail com a marca da empresa e link de descadastro. Lead sem e-mail ou descadastrado segue o fluxo sem receber.',
+    exits: [['default', 'Próximo']], make: () => ({ email_id: '' }) },
   delay: { label: 'Esperar', group: 'Controle', icon: 'clock', tone: 'amber', hint: 'Pausa fixa ou aleatória, com "digitando..."',
     exits: [['default', 'Depois']], make: () => ({ min_seconds: 3, max_seconds: 6, typing: true }) },
   wait_reply: { label: 'Aguardar resposta', group: 'Controle', icon: 'message-square-reply', tone: 'amber', hint: 'Espera o lead responder e guarda o texto numa variável.',
@@ -156,6 +158,7 @@ export function summaryOf(type, d, lookups = {}) {
     case 'send_text': return d.text || '';
     case 'send_media': return d.url ? (d.filename || decodeURIComponent(d.url.split('/').pop() || '')) + (d.caption ? ` · ${d.caption}` : '') : 'Envie um arquivo ou cole um link';
     case 'send_buttons': return d.text || '';
+    case 'send_email': { const e = (lookups.emails || []).find((x) => x.id === d.email_id); return e ? (e.assunto || e.titulo || 'E-mail') : 'Crie o e-mail deste bloco'; }
     case 'delay': {
       const a = d.min_seconds ?? d.seconds ?? 0, b = d.max_seconds ?? d.seconds ?? a;
       const f = (s) => (s >= 3600 ? `${Math.round(s / 360) / 10} h` : s >= 60 ? `${Math.round(s / 6) / 10} min` : `${s} s`);

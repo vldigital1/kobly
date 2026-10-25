@@ -153,6 +153,14 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - **Conferir com um servidor Uazapi real:** os corpos de `/send/media` e `/message/delete` seguem a documentação pública, mas não foram testados contra um servidor.
 - Testes: `test/flow_media.unit.test.js`, `test/delete_on_tag.integration.test.js`.
 
+### Bloco "Enviar e-mail" e campanhas dentro de Fluxos
+- `send_email` (`email_id` de `public.emails`) no motor de grafo, com o mesmo envio do `process-steps` (`src/email/flowEmail.js`): remetente do domínio verificado da empresa → `<sender_local>@RESEND_SENDING_DOMAIN` → `MAIL_FROM`; link de descadastro assinado (`{{unsubscribe_url}}` e "Descadastrar" do rodapé) e `List-Unsubscribe` one-click; `reply_to` da empresa; quem está em `email_suppressions` não recebe.
+- Variáveis do fluxo valem no assunto e no HTML (no HTML o valor entra escapado). Uma saída só ("Próximo"): lead sem e-mail ou descadastrado segue sem receber; 4xx definitivo do Resend encerra o fluxo do lead; 5xx/429/rede repetem.
+- Conta em `email_events` (canal `email`), `lead_metrics.enviados` e `campaign_stats.emails_enviados`, como as campanhas.
+- Variáveis de ambiente: `RESEND_API_KEY`, `MAIL_FROM`, `RESEND_SENDING_DOMAIN`, `UNSUBSCRIBE_SECRET`, `PUBLIC_BASE_URL`.
+- Front: "Novo fluxo" na tela Campanhas leva para Fluxos; campanhas no formato antigo seguem rodando e editáveis ("Criar no formato antigo" ainda existe).
+- Teste: `test/email_block.integration.test.js`.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.

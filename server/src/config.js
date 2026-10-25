@@ -17,6 +17,8 @@ export function loadConfig(env = process.env) {
     unsubscribeSecret: env.UNSUBSCRIBE_SECRET || (env.KOBLY_SECRET_KEY ? `unsub:${env.KOBLY_SECRET_KEY}` : ''),
     resendApiKey: env.RESEND_API_KEY || '',
     mailFrom: env.MAIL_FROM || 'Kobly <onboarding@resend.dev>',
+    // Subdomínio de envio verificado no Resend (ex.: envio.koblay.io): remetente <sender_local>@<este domínio>
+    resendSendingDomain: env.RESEND_SENDING_DOMAIN || '',
     postgrestUrl: env.POSTGREST_URL || '',
     // WhatsApp (Meta): chave que cifra tokens dos clientes, URL pública p/ webhook, segredo do app Kobly (opcional)
     secretKey: env.KOBLY_SECRET_KEY || '',

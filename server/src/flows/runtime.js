@@ -9,7 +9,7 @@
 // (MAX_ATTEMPTS) e depois segue pela saída "failed"; lead que pediu SAIR encerra a execução;
 // compra aprovada encerra execuções de recuperação (stop_on_purchase).
 import { nodeOf, nextOf, EVENTOS_RECUPERACAO, MAX_WAIT_MINUTES, delaySecondsRange } from './graph.js';
-import { render, buildFields, evalCondition, applySetVar, isWindowOpen, inboundText, digitsOf, DEFAULT_TZ, nextBusinessStart, parseLocalDateTime } from './vars.js';
+import { render, renderHtml, buildFields, evalCondition, applySetVar, isWindowOpen, inboundText, digitsOf, DEFAULT_TZ, nextBusinessStart, parseLocalDateTime } from './vars.js';
 import { resolveCtaLink, retryable } from '../engine/steps.js';
 
 export const MAX_STEPS_PER_RUN = 25;
@@ -76,7 +76,7 @@ export function pickVariant(variants, r) {
   return variants[variants.length - 1].id;
 }
 
-export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   // IA da empresa (chave própria, ai/router.js) ou um cliente fixo (testes / ambiente com uma chave só)
   const aiOf = async (ex) => (llm && llm.forOrg ? llm.forOrg(ex.organization_id) : llm);
   const graphCache = new Map(); // versões são imutáveis: cache seguro
@@ -259,6 +259,36 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
       }
     }
     return rows.length;
+  }
+  // Bloco "Enviar e-mail": segue em frente também quando não há o que enviar (lead sem e-mail ou descadastrado),
+  // para o fluxo continuar pelos outros canais. Falha definitiva encerra o fluxo do lead.
+  async function sendEmail(ex, node, ctx) {
+    const d = node.data || {};
+    const lead = ctx.lead;
+    if (!lead.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) return { exit: 'default', detail: 'pulado: lead sem e-mail' };
+    if (!email) return { stop: 'failed', detail: 'envio de e-mail não configurado neste servidor' };
+    const em = (await pool.query(`select assunto, corpo_html, remetente from public.emails where id::text = $1 and organization_id = $2`, [String(d.email_id || ''), ex.organization_id])).rows[0];
+    if (!em) return { stop: 'failed', detail: 'e-mail do bloco não encontrado' };
+    const ectx = { ...ctx, ctaLink: ctx.ctaLink || '#' };
+    const reserved = await pool.query(`select public.bulk_reserve_usage($1, 1) as ok`, [ex.organization_id]).then((r) => r.rows[0].ok).catch(() => null);
+    if (reserved === false) return { exit: 'default', detail: 'pulado: limite do plano atingido' };
+    const release = () => (reserved ? pool.query(`select public.scheduled_step_release_usage($1, 1)`, [ex.organization_id]).catch(() => {}) : null);
+    const log = (status, msgId, reason) => pool.query(`insert into public.email_events (organization_id, campaign_id, event, channel, email, status, sg_message_id, reason, "timestamp") values ($1,$2,'send','email',$3,$4,$5,$6, now())`,
+      [ex.organization_id, ex.campaign_id, lead.email, status, msgId, reason]).catch((e) => console.error('[flows] evento de e-mail:', e.message));
+    let out;
+    try {
+      out = await email.send(ex.organization_id, { to: lead.email, subject: render(em.assunto || '', ectx), html: renderHtml(em.corpo_html || '', ectx), fromName: em.remetente || (ctx.brand && ctx.brand.nome) });
+    } catch (e) {
+      await release(); await log('falhou', null, String(e.message).slice(0, 200));
+      return e.fatal ? { stop: 'failed', detail: String(e.message).slice(0, 200) } : { retry: String(e.message).slice(0, 200) };
+    }
+    if (out.skipped) { await release(); return { exit: 'default', detail: `pulado: ${out.skipped}` }; }
+    await log('enviado', out.id, null);
+    const lm = await pool.query(`update public.lead_metrics set enviados = coalesce(enviados,0) + 1 where lead_id = $1 returning id`, [ex.lead_id]);
+    if (!lm.rowCount) await pool.query(`insert into public.lead_metrics (lead_id, organization_id, enviados) values ($1,$2,1)`, [ex.lead_id, ex.organization_id]);
+    const cs = await pool.query(`update public.campaign_stats set emails_enviados = coalesce(emails_enviados,0) + 1, ultimo_calculo = now() where campaign_id = $1 returning id`, [ex.campaign_id]);
+    if (!cs.rowCount) await pool.query(`insert into public.campaign_stats (campaign_id, organization_id, emails_enviados, ultimo_calculo) values ($1,$2,1,now())`, [ex.campaign_id, ex.organization_id]);
+    return { exit: 'default', detail: `e-mail enviado${out.id ? ' ' + out.id : ''}` };
   }
   async function sendTemplate(ex, ctx, templateId, varsList) {
     const tpl = (await pool.query(`select id, name, components from public.whatsapp_templates where id::text = $1 and organization_id = $2`, [String(templateId), ex.organization_id])).rows[0];
@@ -470,6 +500,7 @@ export function createFlowRuntime({ pool, whatsapp, llm = null, payments = null,
         if (rem.length) await pool.query(`delete from public.lead_tags where lead_id = $1 and tag_id = any($2::uuid[])`, [ex.lead_id, rem]);
         return { exit: 'default' };
       }
+      case 'send_email': return sendEmail(ex, node, ctx);
       case 'send_template':
       case 'send_text': {
         if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };

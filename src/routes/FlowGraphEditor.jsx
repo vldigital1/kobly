@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, BaseEdge, ConnectionLineType, Controls, EdgeLabelRenderer, MiniMap, Handle, Position, addEdge, getBezierPath, useEdgesState, useNodesState, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { KoblyApi } from '@/api/mockApi.js';
+import { KoblyEmailEditor } from '@/routes/EmailEditor.jsx';
 import { Badge, Button, Icon, IconButton, Input, Select } from '@/ds';
 import { BLOCKS, MEDIA, PALETTE_GROUPS, TONES, TIPOS_EVENTO, PAYMENT_METHODS, CURRENCY_LABEL, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf, paletteItems, metaOf, edgeTone } from '@/lib/flowGraph.js';
 
@@ -18,9 +19,13 @@ const defaultApi = {
   listChannels: () => KoblyApi.notifyChannels('list').then((r) => r.channels || []),
   listAgents: () => KoblyApi.workspaceSettings('get').then((r) => r.agents || []),
   uploadMedia: (file) => KoblyApi.uploadFlowMedia(file),
+  listEmails: () => KoblyApi.getFlowOptions().then((r) => r.emails || []),
+  listBrands: () => KoblyApi.listBrands(),
+  createEmail: (e) => KoblyApi.createEmail(e),
+  updateEmail: (id, p) => KoblyApi.updateEmail(id, p),
 };
 
-const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], agents: [], metrics: null, uploadMedia: null });
+const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], agents: [], metrics: null, uploadMedia: null, emails: [], openEmail: null, copyEmail: null });
 const VARS_HELP = '{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{hora_atual}} {{dia_semana}} {{global.chave}} {{campo.chave}} · depois da Cobrança: {{pagamento_codigo}} {{pagamento_qr}} {{pagamento_link}} {{pagamento_valor}}';
 
 // Linhas: gradiente ciano → violeta (caminho normal), âmbar (desvio) e rosa (falha), com um pulso correndo.
@@ -342,6 +347,50 @@ function MediaFields({ d, set, upload }) {
   );
 }
 
+// E-mail do bloco: criar/editar no mesmo editor das campanhas ou copiar um e-mail que já existe
+function EmailFields({ d, set }) {
+  const { emails = [], openEmail, copyEmail } = React.useContext(LookupsCtx);
+  const [from, setFrom] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cur = emails.find((e) => e.id === d.email_id);
+  const others = emails.filter((e) => e.id !== d.email_id);
+  const create = () => openEmail && openEmail(null, (id) => set({ email_id: id }));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {cur ? (
+        <div className="kf-row" style={{ alignItems: 'center' }}>
+          <span className="kf-ico" style={{ '--tone': TONES.blue }}><Icon name="mail" size={15} /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: 'var(--text-strong)', fontSize: 'var(--text-sm)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cur.assunto || '(sem assunto)'}</div>
+            <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{cur.titulo}{cur.remetente ? ` · de ${cur.remetente}` : ''}</div>
+          </div>
+          <Button size="sm" iconLeft="pencil" onClick={() => openEmail && openEmail(cur.id, null)}>Editar e-mail</Button>
+        </div>
+      ) : (
+        <div className="kf-drop" role="button" tabIndex={0} onClick={create}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); create(); } }}>
+          <span className="kf-ico" style={{ '--tone': TONES.blue, width: 44, height: 44, borderRadius: 14 }}><Icon name="mail" size={20} /></span>
+          <div style={{ color: 'var(--text-strong)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Criar o e-mail deste bloco</div>
+          <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>Assunto e conteúdo com a marca da empresa (logo e cor)</div>
+        </div>
+      )}
+      {others.length > 0 && (
+        <Section title={cur ? 'Trocar por uma cópia de outro e-mail' : 'Ou copiar um e-mail que você já tem'}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}><Select value={from} onChange={(e) => setFrom(e.target.value)} options={[{ value: '', label: 'Escolher e-mail…' }, ...others.map((m) => ({ value: m.id, label: m.titulo || m.assunto || 'E-mail' }))]} /></div>
+            <Button variant="secondary" iconLeft="copy" disabled={!from || !copyEmail} loading={busy}
+              onClick={async () => { setBusy(true); const id = await copyEmail(from); setBusy(false); if (id) { set({ email_id: id }); setFrom(''); } }}>Copiar</Button>
+          </div>
+          <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>A cópia é independente: mudar aqui não altera o original.</span>
+        </Section>
+      )}
+      <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.6 }}>
+        Variáveis: {'{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}}'} e as do fluxo, como {'{{resposta}}'} ou {'{{pagamento_link}}'}. O link de descadastro entra sozinho no rodapé. Para mandar só a quem não comprou, coloque uma Condição "Comprou" antes.
+      </div>
+    </div>
+  );
+}
+
 // ---- Campos de cada bloco ---------------------------------------------------------
 const RULE_KINDS = [
   { value: 'var', label: 'Variável' }, { value: 'tag', label: 'Etiqueta' }, { value: 'purchased', label: 'Comprou' },
@@ -401,6 +450,7 @@ function BlockFields({ node, onChange }) {
       {varsFor(d.fallback_template_id, d.fallback_vars, 'fallback_vars')}
       <DeleteOnTag d={d} set={set} tags={tags} />
     </>);
+    case 'send_email': return <EmailFields d={d} set={set} />;
     case 'send_media': return (<>
       <MediaFields d={d} set={set} upload={lookups.uploadMedia} />
       <DeleteOnTag d={d} set={set} tags={tags} />
@@ -604,6 +654,7 @@ function Editor({ campaign, onBack, api, notify }) {
   const [dirty, setDirty] = useState(false);
   const [metrics, setMetrics] = useState(null); // ref → { leads, here } (contador por bloco)
   const [copilot, setCopilot] = useState(null); // { leads, suggestions, summary }
+  const [emailModal, setEmailModal] = useState(null); // { email, onCreated } — editor de e-mail das campanhas
   async function runCopilot() {
     if (copilot) { setCopilot(null); return; }
     const r = await call('copilot', { campaign_id: campaign.id });
@@ -626,9 +677,9 @@ function Editor({ campaign, onBack, api, notify }) {
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
     const opt = (fn) => (fn ? fn() : Promise.resolve([])).catch(() => []);
-    const [g, templates, tags, integrations, pixels, channels, agents] = await Promise.all([
+    const [g, templates, tags, integrations, pixels, channels, agents, emails, brands] = await Promise.all([
       api.flowGraph('get', { campaign_id: campaign.id }),
-      opt(api.listTemplates), opt(api.getTags), opt(api.listIntegrations), opt(api.listPixels), opt(api.listChannels), opt(api.listAgents),
+      opt(api.listTemplates), opt(api.getTags), opt(api.listIntegrations), opt(api.listPixels), opt(api.listChannels), opt(api.listAgents), opt(api.listEmails), opt(api.listBrands),
     ]);
     if (g.error) { setState((s) => ({ ...s, loading: false, error: g.error })); return; }
     // sem versão publicada: abre o rascunho mais recente (ex.: fluxo criado pela tela Fluxos)
@@ -636,7 +687,7 @@ function Editor({ campaign, onBack, api, notify }) {
     if (!base && (g.versions || [])[0]) { const v = await api.flowGraph('get_version', { campaign_id: campaign.id, version: g.versions[0].version }); if (!v.error && v.graph) base = v.graph; }
     const c = toCanvas(base || emptyGraph());
     setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setEditId(null);
-    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [] });
+    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [] });
     setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null });
     setCopilot(null);
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos
@@ -692,6 +743,22 @@ function Editor({ campaign, onBack, api, notify }) {
     setEditId(null); touch();
   };
   const closeModal = useCallback(() => setEditId(null), []);
+  // e-mails: recarrega a lista depois de criar/editar/copiar
+  const reloadEmails = async () => { const list = await (api.listEmails ? api.listEmails() : Promise.resolve([])).catch(() => null); if (list) setLookups((l) => ({ ...l, emails: list })); };
+  const openEmail = (id, onCreated) => {
+    const found = (lookups.emails || []).find((e) => e.id === id);
+    setEmailModal({ email: found || { titulo: `E-mail · ${campaign.nome || 'fluxo'}`, assunto: '', remetente: '', corpoHtml: '' }, onCreated });
+  };
+  const copyEmail = async (fromId) => {
+    const src = (lookups.emails || []).find((e) => e.id === fromId);
+    if (!src || !api.createEmail) return null;
+    const r = await api.createEmail({ titulo: `${src.titulo || 'E-mail'} (cópia)`, assunto: src.assunto, remetente: src.remetente, corpoHtml: src.corpoHtml });
+    if (r.error) { notify('danger', r.error); return null; }
+    await reloadEmails(); touch();
+    notify('success', 'E-mail copiado para este bloco.');
+    return r.id;
+  };
+  const brand = (lookups.brands || []).find((b) => b.id === (campaign.brandId || campaign.brand_id)) || (lookups.brands || [])[0] || null;
 
   // chamada ao servidor que SEMPRE destrava os botões, mesmo se a rede/servidor falhar
   const call = async (action, extra) => {
@@ -775,7 +842,7 @@ function Editor({ campaign, onBack, api, notify }) {
   );
 
   return (
-    <LookupsCtx.Provider value={{ ...lookups, metrics, uploadMedia: api.uploadMedia }}>
+    <LookupsCtx.Provider value={{ ...lookups, metrics, uploadMedia: api.uploadMedia, openEmail, copyEmail }}>
       <style>{FLOW_CSS}</style>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 520, gap: 10 }}>
         {/* barra superior */}
@@ -873,6 +940,20 @@ function Editor({ campaign, onBack, api, notify }) {
         </div>
       </div>
       {editing && <BlockModal node={editing} onChange={(data) => updateNode(editing.id, data)} onDelete={() => deleteNode(editing.id)} onClose={closeModal} />}
+      {emailModal && (
+        <div style={{ position: 'relative', zIndex: 1100 }}>
+          <KoblyEmailEditor email={emailModal.email} brand={brand} brandContext="campanha" draftScope={`grafo:${campaign.id}`} onClose={() => setEmailModal(null)}
+            onSave={async (p) => {
+              if (!p) return { error: 'Dados inválidos' };
+              if (p.id) { const { error } = await api.updateEmail(p.id, p); if (error) return { error }; await reloadEmails(); return { error: null }; }
+              const { error, id } = await api.createEmail({ titulo: p.titulo, assunto: p.assunto, remetente: p.remetente, corpoHtml: p.corpoHtml });
+              if (error) return { error };
+              if (id && emailModal.onCreated) emailModal.onCreated(id);
+              await reloadEmails();
+              return { error: null, id };
+            }} />
+        </div>
+      )}
     </LookupsCtx.Provider>
   );
 }

@@ -1,4 +1,5 @@
 import { createMailer } from './mailer.js';
+import { createFlowEmail } from './email/flowEmail.js';
 import { createInvites } from './invite.js';
 import { createStorage } from './storage.js';
 import { createUnsubscribe } from './unsubscribe.js';
@@ -97,7 +98,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     // sem a API oficial, o WhatsApp comum não tem janela de 24 h
     freeTextAllowed: async (orgId) => !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
   };
-  flows = createFlowRuntime({ pool, whatsapp: waRouted, llm, payments, pixel, notifier });
+  const flowEmail = createFlowEmail({ pool, apiKey: config.resendApiKey, platformFrom: config.mailFrom, sendingDomain: config.resendSendingDomain, unsubSecret: config.unsubscribeSecret, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
+  flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier });
   whatsapp.setInboundHandler(flows.onInbound);
   const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }) });
   const mcp = createMcp({ pool, flowAdmin });
