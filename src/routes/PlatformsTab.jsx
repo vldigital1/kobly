@@ -12,7 +12,7 @@ import { fmtDateTime } from '@/lib/workspace.jsx';
 
 export function PlatformLogo({ p, size = 40 }) {
   const [broken, setBroken] = useState(false);
-  if (p.logo && !broken) return <img src={p.logo} alt="" width={size} height={size} onError={() => setBroken(true)} style={{ borderRadius: 10, objectFit: 'contain', background: '#fff', flex: 'none' }} />;
+  if (p.logo && !broken) return <img src={p.logo} alt="" width={size} height={size} onError={() => setBroken(true)} style={{ borderRadius: 10, objectFit: 'contain', background: p.logoBg || '#fff', padding: p.logoBg ? size * 0.15 : 0, boxSizing: 'border-box', flex: 'none' }} />;
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: 10, background: p.color, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       fontWeight: 'var(--fw-bold)', fontSize: size * (p.mono.length > 1 ? 0.34 : 0.45), letterSpacing: '-0.02em', flex: 'none' }}>{p.mono}</span>
