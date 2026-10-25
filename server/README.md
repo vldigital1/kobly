@@ -119,6 +119,17 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - Sem documentação pública utilizável (não implementados): NexusPag (páginas bloqueiam leitura automática; faltam campos da resposta e a consulta), SigiloPay, Beehive, Kairos, SkalePayments, Wiven, Magn.cash; postbacks de Kiwify, Kirvano, Braip, GGCheckout, MundPay, Payt e Zenith (formato do aviso de venda não publicado).
 - Testes: `test/more_gateways.unit.test.js`, `test/more_gateways.integration.test.js`.
 
+### Plataformas com página própria e Zenith (migração `0079`)
+- Integrações → **Plataformas** (aba inicial): um cartão por plataforma de venda e por gateway (`src/lib/platforms.js`, `src/routes/PlatformsTab.jsx`), cada um com a sua página (o que faz, passo a passo, conexões, último aviso). Sem o arquivo de logo oficial, o cartão mostra as iniciais na cor da marca (`logo` no catálogo aponta para `/assets/platforms/<id>.svg` quando houver).
+- Rota `platforms` (list | connect_manual | connect_api | update_secret | disconnect). Cada conexão é um `postback_token` com `platform` e `platform_secret`; a URL é a do `postback-receiver` de sempre (funciona no Supabase e no servidor novo).
+  - **Kiwify (API)**: `POST https://public-api.kiwify.com/v1/oauth/token` (client_id/client_secret) e `POST /v1/webhooks` com `x-kiwify-account-id`, `products: "all"`, gatilhos de venda e um token gerado pela Kobly. Cada aviso vem com `?signature=` = HMAC-SHA1(token, corpo cru); conferido com o vetor oficial da documentação.
+  - **Cakto (API)**: `POST https://api.cakto.com.br/public_api/token/`, `GET /products/` (o webhook exige a lista de produtos) e `POST /webhook/`; o `fields.secret` da resposta é conferido no campo `secret` de cada aviso.
+  - **Hotmart** (hottok), **PerfectPay** (`token` no corpo), **Payt** (`integration_key` no corpo) e **Kirvano** (sem prova documentada): pela URL, com passo a passo. Com a chave salva, aviso sem a prova certa é recusado (401).
+  - Desconectar desativa a URL e, nas conexões por API, remove o webhook da conta do cliente.
+- Postback reconhece **Kiwify** (`order_id`, `order_status`, `webhook_event_type`; cliente/produto/valor lidos em `Customer`/`customer`, `Commissions.charge_amount` em centavos) e **Kirvano** (`event` PIX_GENERATED, SALE_APPROVED, ABANDONED_CART…, `total_price` em texto "R$ 1.169,80"). Payt ganhou `expired` e `peding_refund` (grafia da doc). O formato que o código chamava de NexoPayt é o da Payt.
+- **Zenith** no bloco Cobrança (`src/payments/zenith.js`): `POST /integrations/checkouts` (X-API-Key/X-API-Secret, Idempotency-Key, valor em centavos), SPEI em MXN (CLABE no `nextAction.bank_transfer`), consulta `GET /integrations/checkouts/:id`; ao conectar, registra o webhook da Kobly em `/integrations/webhooks/endpoints` e confere a chave em `/integrations/payment-methods`. Opção de sandbox.
+- Testes: `test/platforms.unit.test.js`, `test/platforms.integration.test.js`.
+
 ## E-mails, convite e sessão
 - `src/mailer.js`: e-mails da Kobly (confirmar cadastro, recuperar senha, convite) com a marca; Resend via `RESEND_API_KEY`/`MAIL_FROM`; links no `SITE_URL`. Ver `docs/ONBOARDING.md`.
 - `POST /functions/v1/invite-client` (Administrador/Gestor da conta): cria o acesso do cliente (perfil Cliente, sem senha) e envia o link para definir a senha (7 dias, uso único). Não puxa para a conta quem já pertence a outra.

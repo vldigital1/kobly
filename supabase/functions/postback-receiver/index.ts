@@ -95,6 +95,8 @@ const NEXOPAYT_PAYMENT_STATUS_MAP: Record<string, string> = {
   chargeback: "Chargeback",
   chargeback_presented: "Chargeback",
   canceled: "Compra cancelada",
+  expired: "Compra cancelada",
+  peding_refund: "Compra Reembolsada",
 };
 // status (pedido) → tipo_evento, para casos não cobertos pelo payment_status.
 const NEXOPAYT_ORDER_STATUS_MAP: Record<string, string> = {
@@ -196,6 +198,67 @@ function resolvePerfectPayTipoEvento(body: any): string | null {
   if (st === 0 && detail === "checkout_saved") return "Abandono de carrinho";
   return PERFECTPAY_STATUS_MAP[st] || null;
 }
+// Kiwify (docs.kiwify.com.br/api-reference/webhooks/receiving): { order_id, order_status, webhook_event_type, … }.
+// Os campos de cliente/produto/valor não estão no exemplo oficial: lidos nas duas grafias (Customer/customer).
+const KIWIFY_EVENT_MAP: Record<string, string> = {
+  billet_created: "Boleto Gerado",
+  pix_created: "Pix Gerado",
+  order_approved: "Compra Aprovada",
+  order_rejected: "Compra Recusada",
+  order_refunded: "Compra Reembolsada",
+  chargeback: "Chargeback",
+  subscription_canceled: "Cancelamento de Assinatura"
+};
+function isKiwifyShaped(body: any): boolean {
+  return !!(body && typeof body.event !== "string" && body.order_id && (typeof body.webhook_event_type === "string" || typeof body.order_status === "string"));
+}
+// Kirvano (help.kirvano.com): { event: "PIX_GENERATED", sale_id, checkout_id, total_price: "R$ 169,80", customer, products, payment }.
+const KIRVANO_EVENT_MAP: Record<string, string> = {
+  PIX_GENERATED: "Pix Gerado",
+  BANK_SLIP_GENERATED: "Boleto Gerado",
+  SALE_APPROVED: "Compra Aprovada",
+  SALE_REFUSED: "Compra Recusada",
+  SALE_REFUNDED: "Compra Reembolsada",
+  SALE_CHARGEBACK: "Chargeback",
+  ABANDONED_CART: "Abandono de carrinho",
+  PIX_EXPIRED: "Compra cancelada",
+  BANK_SLIP_EXPIRED: "Compra cancelada"
+};
+function isKirvanoShaped(body: any): boolean {
+  return !!(body && typeof body.event === "string" && KIRVANO_EVENT_MAP[body.event] && (body.sale_id || body.checkout_id));
+}
+// "R$ 1.169,80" / "169.80" / 169.8 → número
+function moneyBR(v: any): number | null {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return v;
+  const s = String(v).replace(/[^\d,.-]/g, "");
+  const n = s.includes(",") ? Number(s.replace(/\./g, "").replace(",", ".")) : Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Prova de origem por plataforma (0079): com a chave da plataforma cadastrada no token, o aviso
+// precisa provar que veio dela. Kirvano não documenta a prova; Hotmart usa o hottok (verifyPostbackAuth).
+async function verifyPlatformProof(platform: string, secret: string, rawBody: string, body: any, signature: string | null): Promise<boolean> {
+  const same = (a: unknown, b: string) => typeof a === "string" && a.length === b.length && timingSafe(a, b);
+  switch (platform) {
+    case "kiwify": {
+      if (!signature) return false;
+      const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+      const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody)));
+      const hex = Array.from(mac).map((x) => x.toString(16).padStart(2, "0")).join("");
+      return same(String(signature).toLowerCase(), hex);
+    }
+    case "cakto": return same(body && body.secret, secret);
+    case "payt": return same(body && body.integration_key, secret);
+    case "perfectpay": return same(body && body.token, secret);
+    default: return true;
+  }
+}
+function timingSafe(a: string, b: string): boolean {
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
 function normalizePayload(body: any): {
   tipoEvento: string; email: string | null; name: string | null; phone: string | null;
   product: string | null; value: number | null; paymentMethod: string | null;
@@ -267,6 +330,52 @@ function normalizePayload(body: any): {
       paymentMethod: PERFECTPAY_PAYMENT_LABEL[Number(body.payment_type_enum)] || null,
       externalId: `${body.code}:${tipoEvento2}`,
       sourceEvent: String(body.sale_status_detail || body.sale_status_enum),
+      isPix: tipoEvento2 === "Pix Gerado"
+    };
+  }
+  if (isKiwifyShaped(body)) {
+    const ev = String(body.webhook_event_type || "");
+    const st = String(body.order_status || "").toLowerCase();
+    const pm = String(body.payment_method || "").toLowerCase();
+    let tipoEvento2 = KIWIFY_EVENT_MAP[ev] || null;
+    if (!tipoEvento2) tipoEvento2 = st === "paid" ? "Compra Aprovada" : st === "refused" ? "Compra Recusada" : st === "refunded" ? "Compra Reembolsada" : st === "chargedback" ? "Chargeback"
+      : st === "waiting_payment" ? (pm === "pix" ? "Pix Gerado" : pm === "boleto" ? "Boleto Gerado" : null) : null;
+    if (!tipoEvento2) return null;
+    const c = body.Customer || body.customer || {};
+    if (!c.email) return null;
+    const prod = body.Product || body.product || {};
+    const com = body.Commissions || body.commissions || {};
+    const cents = com.charge_amount ?? body.charge_amount ?? null;
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.full_name || c.name || null,
+      phone: c.mobile || c.phone || null,
+      product: prod.product_name || prod.name || null,
+      value: cents != null && !Number.isNaN(Number(cents)) ? Number(cents) / 100 : null,
+      paymentMethod: NEXOPAYT_PAYMENT_LABEL[pm] || (pm || null),
+      externalId: `${body.order_id}:${tipoEvento2}`,
+      sourceEvent: ev || st,
+      isPix: tipoEvento2 === "Pix Gerado"
+    };
+  }
+  if (isKirvanoShaped(body)) {
+    const tipoEvento2 = KIRVANO_EVENT_MAP[body.event];
+    const c = body.customer || {};
+    if (!c.email) return null;
+    const prods = Array.isArray(body.products) ? body.products : [];
+    const pm = String(body.payment_method || body.payment?.method || "").toLowerCase();
+    const id = body.sale_id || body.checkout_id;
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.name || null,
+      phone: c.phone_number || c.phone || null,
+      product: prods.map((p: any) => p && (p.name || p.offer_name)).filter(Boolean).join(", ") || null,
+      value: moneyBR(body.total_price),
+      paymentMethod: NEXOPAYT_PAYMENT_LABEL[pm] || (pm || null),
+      externalId: `${id}:${tipoEvento2}`,
+      sourceEvent: body.event,
       isPix: tipoEvento2 === "Pix Gerado"
     };
   }
@@ -544,7 +653,7 @@ Deno.serve(async (req: Request) => {
     // só remetente autenticado (token válido) consegue gravar em webhook_dead_letter,
     // e a tabela não vira alvo de flood anônimo (?token=qualquercoisa + payload lixo).
     const { data: tokRow, error: tokErr } = await sb.from("postback_tokens")
-      .select("id, organization_id, signing_secret, hottok, require_signature, last_unsigned_at")
+      .select("id, organization_id, signing_secret, hottok, require_signature, last_unsigned_at, platform, platform_secret")
       .eq("token", token)
       .eq("ativo", true)
       .maybeSingle();
@@ -553,6 +662,12 @@ Deno.serve(async (req: Request) => {
     // ausente → só passa se o token não estiver em modo estrito (compatibilidade com a URL antiga).
     const auth = await verifyPostbackAuth(tokRow as PostbackToken, req.headers, rawBody);
     if (!auth.ok) return json({ error: auth.reason }, 401);
+    if (tokRow.platform && tokRow.platform_secret) {
+      let parsedForProof: any = null;
+      try { parsedForProof = JSON.parse(rawBody || "{}"); } catch { parsedForProof = null; }
+      const okProof = await verifyPlatformProof(tokRow.platform as string, tokRow.platform_secret as string, rawBody, parsedForProof, url.searchParams.get("signature"));
+      if (!okProof) return json({ error: "invalid_platform_proof", detail: "O aviso não traz a chave/assinatura da plataforma cadastrada." }, 401);
+    }
     if (auth.mode === "legado_url" && (!tokRow.last_unsigned_at || Date.now() - new Date(tokRow.last_unsigned_at as string).getTime() > 3600e3)) {
       await sb.from("postback_tokens").update({ last_unsigned_at: new Date().toISOString() }).eq("id", tokRow.id);
     }
@@ -672,6 +787,8 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, deduped: true, detail: ins.error.message });
     }
     const webhookEventId = ins.data.id;
+    // contador da página da plataforma (último aviso e total)
+    await sb.from("postback_tokens").update({ last_event_at: new Date().toISOString() }).eq("id", tokenId).then(() => {}, () => {});
 
     // ── 2) Lead por (org, email) ──
     let leadId: string | null = null;

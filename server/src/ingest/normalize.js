@@ -1,4 +1,4 @@
-// Normalização dos postbacks (contrato Kobly, Hotmart, Cakto, PerfectPay, NexoPayt, ENTITY). Portado 1:1 de supabase/functions/postback-receiver.
+// Normalização dos postbacks (contrato Kobly, Hotmart, Kiwify, Kirvano, Cakto, PerfectPay, Payt/NexoPayt, ENTITY). Portado 1:1 de supabase/functions/postback-receiver.
 const RATE_LIMIT_PER_MIN = 120;
 const DEAD_LETTER_MAX_BYTES = 16 * 1024;
 const DEAD_LETTER_HEAD_BYTES = 8 * 1024;
@@ -39,7 +39,9 @@ const NEXOPAYT_PAYMENT_STATUS_MAP = {
   pending_refund: "Compra Reembolsada",
   chargeback: "Chargeback",
   chargeback_presented: "Chargeback",
-  canceled: "Compra cancelada"
+  canceled: "Compra cancelada",
+  expired: "Compra cancelada",
+  peding_refund: "Compra Reembolsada"
 };
 const NEXOPAYT_ORDER_STATUS_MAP = {
   paid: "Compra Aprovada",
@@ -108,6 +110,43 @@ function resolvePerfectPayTipoEvento(body) {
   if (st === 0 && detail === "checkout_saved") return "Abandono de carrinho";
   return PERFECTPAY_STATUS_MAP[st] || null;
 }
+// Kiwify (docs.kiwify.com.br/api-reference/webhooks/receiving): { order_id, order_status, webhook_event_type, … }.
+// Os campos de cliente/produto/valor não estão no exemplo oficial: lidos nas duas grafias (Customer/customer).
+const KIWIFY_EVENT_MAP = {
+  billet_created: "Boleto Gerado",
+  pix_created: "Pix Gerado",
+  order_approved: "Compra Aprovada",
+  order_rejected: "Compra Recusada",
+  order_refunded: "Compra Reembolsada",
+  chargeback: "Chargeback",
+  subscription_canceled: "Cancelamento de Assinatura"
+};
+function isKiwifyShaped(body) {
+  return !!(body && typeof body.event !== "string" && body.order_id && (typeof body.webhook_event_type === "string" || typeof body.order_status === "string"));
+}
+// Kirvano (help.kirvano.com): { event: "PIX_GENERATED", sale_id, checkout_id, total_price: "R$ 169,80", customer, products, payment }.
+const KIRVANO_EVENT_MAP = {
+  PIX_GENERATED: "Pix Gerado",
+  BANK_SLIP_GENERATED: "Boleto Gerado",
+  SALE_APPROVED: "Compra Aprovada",
+  SALE_REFUSED: "Compra Recusada",
+  SALE_REFUNDED: "Compra Reembolsada",
+  SALE_CHARGEBACK: "Chargeback",
+  ABANDONED_CART: "Abandono de carrinho",
+  PIX_EXPIRED: "Compra cancelada",
+  BANK_SLIP_EXPIRED: "Compra cancelada"
+};
+function isKirvanoShaped(body) {
+  return !!(body && typeof body.event === "string" && KIRVANO_EVENT_MAP[body.event] && (body.sale_id || body.checkout_id));
+}
+// "R$ 1.169,80" / "169.80" / 169.8 → número
+function moneyBR(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return v;
+  const s = String(v).replace(/[^\d,.-]/g, "");
+  const n = s.includes(",") ? Number(s.replace(/\./g, "").replace(",", ".")) : Number(s);
+  return Number.isFinite(n) ? n : null;
+}
 function normalizePayload(body) {
   if (!body) return null;
   if (isHotmartShaped(body)) {
@@ -170,6 +209,52 @@ function normalizePayload(body) {
       paymentMethod: PERFECTPAY_PAYMENT_LABEL[Number(body.payment_type_enum)] || null,
       externalId: `${body.code}:${tipoEvento2}`,
       sourceEvent: String(body.sale_status_detail || body.sale_status_enum),
+      isPix: tipoEvento2 === "Pix Gerado"
+    };
+  }
+  if (isKiwifyShaped(body)) {
+    const ev = String(body.webhook_event_type || "");
+    const st = String(body.order_status || "").toLowerCase();
+    const pm = String(body.payment_method || "").toLowerCase();
+    let tipoEvento2 = KIWIFY_EVENT_MAP[ev] || null;
+    if (!tipoEvento2) tipoEvento2 = st === "paid" ? "Compra Aprovada" : st === "refused" ? "Compra Recusada" : st === "refunded" ? "Compra Reembolsada" : st === "chargedback" ? "Chargeback"
+      : st === "waiting_payment" ? (pm === "pix" ? "Pix Gerado" : pm === "boleto" ? "Boleto Gerado" : null) : null;
+    if (!tipoEvento2) return null;
+    const c = body.Customer || body.customer || {};
+    if (!c.email) return null;
+    const prod = body.Product || body.product || {};
+    const com = body.Commissions || body.commissions || {};
+    const cents = com.charge_amount ?? body.charge_amount ?? null;
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.full_name || c.name || null,
+      phone: c.mobile || c.phone || null,
+      product: prod.product_name || prod.name || null,
+      value: cents != null && !Number.isNaN(Number(cents)) ? Number(cents) / 100 : null,
+      paymentMethod: NEXOPAYT_PAYMENT_LABEL[pm] || (pm || null),
+      externalId: `${body.order_id}:${tipoEvento2}`,
+      sourceEvent: ev || st,
+      isPix: tipoEvento2 === "Pix Gerado"
+    };
+  }
+  if (isKirvanoShaped(body)) {
+    const tipoEvento2 = KIRVANO_EVENT_MAP[body.event];
+    const c = body.customer || {};
+    if (!c.email) return null;
+    const prods = Array.isArray(body.products) ? body.products : [];
+    const pm = String(body.payment_method || body.payment?.method || "").toLowerCase();
+    const id = body.sale_id || body.checkout_id;
+    return {
+      tipoEvento: tipoEvento2,
+      email: c.email,
+      name: c.name || null,
+      phone: c.phone_number || c.phone || null,
+      product: prods.map((p) => p && (p.name || p.offer_name)).filter(Boolean).join(", ") || null,
+      value: moneyBR(body.total_price),
+      paymentMethod: NEXOPAYT_PAYMENT_LABEL[pm] || (pm || null),
+      externalId: `${id}:${tipoEvento2}`,
+      sourceEvent: body.event,
       isPix: tipoEvento2 === "Pix Gerado"
     };
   }

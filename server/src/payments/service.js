@@ -11,7 +11,7 @@ const SAFE = 'id, organization_id, provider, label, client_id, sandbox, status, 
 export function createPayments({ pool, providers, secretKey, publicBaseUrl, now = () => new Date() }) {
   const needKey = () => { if (!secretKey) throw new AuthError(503, 'payments_unconfigured', 'Pagamentos não configurados neste ambiente (chave de segurança ausente).'); };
   const provider = (name) => { const p = providers[name]; if (!p) throw new AuthError(400, 'bad_provider', 'Gateway não suportado.'); return p; };
-  const credOf = (row) => { needKey(); return { clientId: row.client_id, clientSecret: decrypt(row.secret_enc, secretKey) }; };
+  const credOf = (row) => { needKey(); return { clientId: row.client_id, clientSecret: decrypt(row.secret_enc, secretKey), sandbox: !!row.sandbox }; };
   const webhookUrl = (row) => `${publicBaseUrl}/webhooks/payments/${row.provider}/${row.webhook_token}`;
   const fromPayment = (e) => (e instanceof PaymentError ? new AuthError(e.status >= 500 ? 502 : 400, e.code, `Gateway: ${e.message}`) : e);
 
@@ -36,11 +36,17 @@ export function createPayments({ pool, providers, secretKey, publicBaseUrl, now 
         const clientId = String(body.client_id || '').trim(), secret = String(body.client_secret || '').trim();
         if (p.needsClientId !== false && clientId.length < 4) throw new AuthError(422, 'validation_failed', 'Informe o Client ID e o Client Secret.');
         if (secret.length < 8) throw new AuthError(422, 'validation_failed', p.needsClientId !== false ? 'Informe o Client ID e o Client Secret.' : 'Cole a chave/token de API da conta.');
-        try { await p.checkCredentials({ clientId, clientSecret: secret }); } catch (e) { throw fromPayment(e); }
-        const sandbox = /sandbox|^TEST-/i.test(clientId || secret);
+        try { await p.checkCredentials({ clientId, clientSecret: secret, sandbox: body.sandbox === true }); } catch (e) { throw fromPayment(e); }
+        const sandbox = body.sandbox === true || /sandbox|^TEST-/i.test(clientId || secret);
         const { rows } = await pool.query(`insert into public.payment_integrations (organization_id, provider, label, client_id, secret_enc, sandbox, webhook_token)
           values ($1,$2,$3,$4,$5,$6,$7) returning ${SAFE}`,
           [orgId, prov, String(body.label || (sandbox ? 'Sandbox' : 'Principal')).slice(0, 60), clientId || '—', encrypt(secret, secretKey), sandbox, randomBytes(24).toString('base64url')]);
+        // gateways que cadastram o aviso por API (Zenith): já registra a URL desta conta
+        if (p.registerWebhook) {
+          const full = (await pool.query(`select * from public.payment_integrations where id = $1`, [rows[0].id])).rows[0];
+          try { await p.registerWebhook(credOf(full), { url: webhookUrl(full) }); }
+          catch (e) { await pool.query(`delete from public.payment_integrations where id = $1`, [full.id]).catch(() => {}); throw fromPayment(e); }
+        }
         return { integration: rows[0] };
       }
       case 'disconnect': {

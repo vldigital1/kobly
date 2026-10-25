@@ -79,6 +79,8 @@ grant select (id, organization_id, provider, label, key_hint, model, is_active, 
 -- Conta de anúncios do Facebook (0077): token não legível; escrita só pelo serviço.
 revoke all on public.meta_ads_accounts from kobly_authenticated, kobly_anon;
 grant select (id, organization_id, ad_account_id, name, currency, token_hint, status, last_error, last_sync_at, created_at, updated_at) on public.meta_ads_accounts to kobly_authenticated;
+-- Chaves de API das plataformas de venda (0079): só o serviço lê e escreve.
+revoke all on public.platform_api_credentials from kobly_authenticated, kobly_anon;
 `;
 writeFileSync(join(out, '900_grants.sql'), grants);
 manifest.push({ file: '900_grants.sql', sha256: createHash('sha256').update(grants).digest('hex') });

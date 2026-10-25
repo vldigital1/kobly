@@ -4,6 +4,24 @@
 import { normalizePayload, extractRecoveryLink, deadLetterPayload, RATE_LIMIT_PER_MIN } from './normalize.js';
 import { extractUtm } from './utm.js';
 import { verifyPostbackAuth } from './auth.js';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+// Prova de origem por plataforma (0079): com a chave da plataforma cadastrada no token, o aviso
+// precisa provar que veio dela. Kirvano não documenta a prova; Hotmart usa o hottok (verifyPostbackAuth).
+async function verifyPlatformProof(platform, secret, rawBody, body, signature) {
+  const same = (a, b) => typeof a === "string" && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  switch (platform) {
+    case "kiwify": {
+      if (!signature) return false;
+      const hex = createHmac("sha1", secret).update(rawBody).digest("hex");
+      return same(String(signature).toLowerCase(), hex);
+    }
+    case "cakto": return same(body && body.secret, secret);
+    case "payt": return same(body && body.integration_key, secret);
+    case "perfectpay": return same(body && body.token, secret);
+    default: return true;
+  }
+}
 
 export function createPostback({ pool, flows = null }) {
   const deadLetter = (org, tokenId, reason, detail, raw, parsed) =>
@@ -16,10 +34,14 @@ export function createPostback({ pool, flows = null }) {
     let body;
     try { body = JSON.parse(rawBody || '{}'); } catch { return { status: 400, body: { error: 'invalid_json' } }; }
     try {
-      const t = await pool.query(`select id, organization_id, signing_secret, hottok, require_signature, last_unsigned_at from public.postback_tokens where token = $1 and ativo = true`, [token]);
+      const t = await pool.query(`select id, organization_id, signing_secret, hottok, require_signature, last_unsigned_at, platform, platform_secret from public.postback_tokens where token = $1 and ativo = true`, [token]);
       if (!t.rows[0]) return { status: 401, body: { error: 'invalid_token', detail: 'Token inválido ou inativo' } };
       const auth = verifyPostbackAuth({ token: t.rows[0], headers, rawBody: rawBody || '' });
       if (!auth.ok) return { status: 401, body: { error: auth.reason } };
+      if (t.rows[0].platform && t.rows[0].platform_secret
+        && !(await verifyPlatformProof(t.rows[0].platform, t.rows[0].platform_secret, rawBody || '', body, headers['x-kiwify-signature'] || null))) {
+        return { status: 401, body: { error: 'invalid_platform_proof', detail: 'O aviso não traz a chave/assinatura da plataforma cadastrada.' } };
+      }
       // modo legado (só a URL): registra para a tela avisar; no máximo uma escrita por hora
       if (auth.mode === 'legado_url' && (!t.rows[0].last_unsigned_at || Date.now() - new Date(t.rows[0].last_unsigned_at) > 3600e3)) {
         await pool.query(`update public.postback_tokens set last_unsigned_at = now() where id = $1`, [t.rows[0].id]).catch(() => {});
@@ -52,6 +74,7 @@ export function createPostback({ pool, flows = null }) {
           values ($1,$2,'postback',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) returning id`,
           [org, tipo, idWebhook, norm.email, norm.name, norm.product, norm.value, norm.paymentMethod, isPix, link, JSON.stringify(body), utm ? JSON.stringify(utm) : null]);
         webhookEventId = ins.rows[0].id;
+        await pool.query(`update public.postback_tokens set last_event_at = now(), events_count = events_count + 1 where id = $1`, [tokenId]).catch(() => {});
       } catch (e) {
         if (e.code !== '23505') await deadLetter(org, tokenId, 'insert_failed', e.message, rawBody, body);
         return { status: 200, body: { ok: true, deduped: true, detail: e.message } };

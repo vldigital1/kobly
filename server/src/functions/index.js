@@ -72,6 +72,7 @@ export function createFunctions(ctx) {
     'tracking': () => orgUserRoute('tracking', 'tracking'),
     'ai-keys': () => orgUserRoute('aiKeys', 'ai-keys'),
     'meta-ads': () => orgUserRoute('metaAds', 'meta-ads'),
+    'platforms': () => orgUserRoute('platforms', 'platforms'),
   };
   return {
     names: () => Object.keys(handlers),

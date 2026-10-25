@@ -18,6 +18,8 @@ import { createMetaAds } from './ads/meta.js';
 import { createPayments } from './payments/service.js';
 import { createXpag } from './payments/xpag.js';
 import { createMercadoPago, createWoovi, createPushinPay, createSyncPay } from './payments/pix_br.js';
+import { createZenith } from './payments/zenith.js';
+import { createPlatforms } from './platforms/service.js';
 import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
 import { createCopilot } from './flows/copilot.js';
@@ -62,7 +64,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const aiKeys = createAiKeys({ pool, secretKey: secretKeyBuf, fetchImpl, allowPlatform: !!config.aiPlatformFallback,
     platform: { apiKey: config.aiApiKey, baseUrl: config.aiBaseUrl, model: config.aiModel } });
   const llm = aiKeys;
-  const paymentsCore = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }), mercadopago: createMercadoPago({ fetchImpl }), woovi: createWoovi({ fetchImpl }), pushinpay: createPushinPay({ fetchImpl }), syncpay: createSyncPay({ fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
+  const paymentsCore = createPayments({ pool, providers: { xpag: createXpag({ base: config.xpagBase, fetchImpl }), mercadopago: createMercadoPago({ fetchImpl }), woovi: createWoovi({ fetchImpl }), pushinpay: createPushinPay({ fetchImpl }), syncpay: createSyncPay({ fetchImpl }), zenith: createZenith({ fetchImpl }) }, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '' });
   const pixel = createPixel({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaGraphBase });
   const notifier = createNotifier({ pool, secretKey: secretKeyBuf, fetchImpl });
   // UTMify: cobrança do fluxo vira pedido "aguardando pagamento"; confirmada, vira "pago" (nunca derruba o fluxo)
@@ -86,8 +88,9 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const team = createTeam({ pool, auth, mailer });
   const tracking = createTracking({ pool, utmify });
   const products = createProducts({ pool });
+  const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -208,7 +211,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         res.statusCode = r.status; res.setHeader('Content-Type', r.type); res.setHeader('Cache-Control', 'no-store'); return res.end(r.body);
       }
       if (path === '/functions/v1/postback-receiver' && req.method === 'POST') {
-        const r = await postback.receive(tokenFrom(req.headers, url.searchParams), (await readBody(req, MAX_PROXY_BODY)).toString('utf8'), req.headers);
+        const sig = url.searchParams.get('signature');
+        const r = await postback.receive(tokenFrom(req.headers, url.searchParams), (await readBody(req, MAX_PROXY_BODY)).toString('utf8'), sig ? { ...req.headers, 'x-kiwify-signature': sig } : req.headers);
         return send(res, r.status, r.body);
       }
       const fm = /^\/functions\/v1\/([a-z0-9-]+)$/.exec(path);

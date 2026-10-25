@@ -45,6 +45,7 @@ export function createFlowAdmin({ pool, copilot = null }) {
     }
     // Mercado Pago, Woovi, PushinPay e SyncPay só cobram Pix em reais
     const PIX_BR = { mercadopago: 'Mercado Pago', woovi: 'Woovi', pushinpay: 'PushinPay', syncpay: 'SyncPay' };
+    const SO_SPEI = { zenith: 'Zenith' }; // Zenith: SPEI em pesos mexicanos
     const pays = (graph.nodes || []).filter((n) => n.type === 'payment' && n.data && n.data.integration_id);
     if (pays.length) {
       const { rows } = await pool.query(`select id::text, provider from public.payment_integrations where organization_id = $1 and id::text = any($2::text[])`, [orgId, pays.map((n) => String(n.data.integration_id))]);
@@ -52,6 +53,7 @@ export function createFlowAdmin({ pool, copilot = null }) {
       for (const n of pays) {
         const p = prov.get(String(n.data.integration_id));
         if (PIX_BR[p] && (n.data.currency !== 'BRL' || n.data.method !== 'PIX')) warns.push(`Bloco "${n.ref}": ${PIX_BR[p]} só cobra Pix em reais (BRL).`);
+        if (SO_SPEI[p] && (n.data.currency !== 'MXN' || n.data.method !== 'SPEI')) warns.push(`Bloco "${n.ref}": Zenith cobra SPEI em pesos mexicanos (MXN).`);
       }
     }
     if (tags.size) {

@@ -1086,6 +1086,7 @@ function BrandsList({ empresaId, onSaved }) {
 //   Sub    →  (só em Config) Identidade | Remetente | WhatsApp | SMS
 // Conteúdo de e-mail de campanha NÃO mora aqui — fica no FlowBuilder.
 const SECTIONS = [
+  { value: 'plataformas', label: 'Plataformas', icon: 'layout-grid', help: 'Plataformas de venda (Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt) e gateways de pagamento: cada uma com a sua página de conexão.' },
   { value: 'loja', label: 'Configuração da loja', icon: 'store', help: 'Identidade, remetente e canais' },
   { value: 'postback', label: 'Postback', icon: 'webhook', help: 'Webhooks de checkout' },
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
@@ -1095,6 +1096,7 @@ const SECTIONS = [
   { value: 'mcp', label: 'Acesso de IA', icon: 'bot', help: 'Tokens para assistentes de IA (MCP) criarem rascunhos de fluxo.' },
 ];
 const KoblyPaymentsTab = React.lazy(() => import('@/routes/PaymentsTab.jsx').then((m) => ({ default: m.KoblyPaymentsTab })));
+const KoblyPlatformsTab = React.lazy(() => import('@/routes/PlatformsTab.jsx').then((m) => ({ default: m.KoblyPlatformsTab })));
 const KoblyAiKeysTab = React.lazy(() => import('@/routes/AiKeysTab.jsx').then((m) => ({ default: m.KoblyAiKeysTab })));
 const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
@@ -1109,7 +1111,7 @@ function KoblyIntegrations() {
   const isGestor = store.role === 'Gestor';
   const a = useAsync(() => KoblyApi.getIntegrations(), [store.role]);
   const clients = useAsync(() => (isGestor ? KoblyApi.listClients() : Promise.resolve([])), [store.role]);
-  const [section, setSection] = useState('loja');
+  const [section, setSection] = useState('plataformas');
   const [lojaSub, setLojaSub] = useState('marca');
   const [contaId, setContaId] = useState(null);
   const empresaId = isGestor ? contaId : store.session.empresaId;
@@ -1201,6 +1203,11 @@ function KoblyIntegrations() {
           {section === 'pagamentos' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
               <KoblyPaymentsTab empresaId={empresaId} notify={store.notify} />
+            </React.Suspense>
+          )}
+          {section === 'plataformas' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <KoblyPlatformsTab empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
           )}
           {section === 'ia' && (

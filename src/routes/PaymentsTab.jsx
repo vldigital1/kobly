@@ -8,6 +8,7 @@ const GATEWAYS = {
   mercadopago: { label: 'Mercado Pago', desc: 'Pix (BRL).', secret: 'Access Token', where: 'Mercado Pago Developers → Suas integrações → Credenciais de produção (Access Token). Credencial de teste começa com TEST-.' },
   pushinpay: { label: 'PushinPay', desc: 'Pix (BRL), a partir de R$ 0,50.', secret: 'Token da API', where: 'Painel da PushinPay → Configurações → API: gere o token (a liberação da API pode precisar de pedido ao suporte).' },
   syncpay: { label: 'SyncPay', desc: 'Pix (BRL), a partir de R$ 1,00.', id: 'Client ID', secret: 'Client Secret', where: 'Painel da SyncPay → Credenciais de API: o Client Secret aparece uma vez só, na criação.' },
+  zenith: { label: 'Zenith', desc: 'SPEI (MXN) e outros métodos locais.', id: 'Chave pública (X-API-Key)', secret: 'Chave secreta (X-API-Secret)', where: 'Painel da Zenith → Integrações (para testar, conecte pela aba Plataformas marcando sandbox).' },
   woovi: { label: 'Woovi (OpenPix)', desc: 'Pix (BRL).', secret: 'AppID', where: 'Painel da Woovi → API/Plugins → Nova API: copie o AppID. Depois cadastre o webhook (Cobrança paga) com o endereço que aparece aqui.' },
 };
 
