@@ -18,6 +18,10 @@ const url = process.env.DATABASE_URL;
 const authPass = process.env.PGRST_AUTHENTICATOR_PASSWORD || '';
 if (!url) { console.error('[migrate] defina DATABASE_URL'); process.exit(2); }
 if (authPass.length < 16) { console.error('[migrate] defina PGRST_AUTHENTICATOR_PASSWORD (mín. 16 caracteres)'); process.exit(2); }
+// variável que ficou com o texto de exemplo do guia (<cole aqui ...>): para antes de montar qualquer coisa
+const placeholders = ['JWT_SECRET', 'KOBLY_SECRET_KEY', 'UNSUBSCRIBE_SECRET', 'PGRST_AUTHENTICATOR_PASSWORD', 'KOBLY_ADMIN_EMAIL', 'KOBLY_ADMIN_PASSWORD']
+  .filter((k) => /[<>]/.test(process.env[k] || ''));
+if (placeholders.length) { console.error(`[migrate] ERRO: estas variáveis ainda estão com o texto de exemplo (<...>): ${placeholders.join(', ')}`); process.exit(2); }
 
 const ident = (s) => `"${String(s).replace(/"/g, '""')}"`;
 const lit = (s) => `'${String(s).replace(/'/g, "''")}'`;
@@ -84,7 +88,14 @@ try {
 
 // primeiro Administrador da Kobly (painel de servidores WhatsApp, clientes, planos)
 const adminEmail = (process.env.KOBLY_ADMIN_EMAIL || '').trim().toLowerCase();
+{ // usuário criado por engano com o texto de exemplo do guia como e-mail: apaga (a senha dele também era o exemplo)
+  const d = new pg.Client({ connectionString: url }); await d.connect();
+  const r = await d.query(`delete from auth.users where email like '<%' or email not like '%@%' returning email`).catch(() => ({ rowCount: 0 }));
+  if (r.rowCount) log(`removido(s) ${r.rowCount} usuário(s) com e-mail de exemplo`);
+  await d.end();
+}
 if (adminEmail && process.env.KOBLY_ADMIN_PASSWORD) {
+  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(adminEmail)) { console.error('[migrate] ERRO: KOBLY_ADMIN_EMAIL não é um e-mail válido'); process.exit(2); }
   const d = new pg.Client({ connectionString: url }); await d.connect();
   const exists = (await d.query(`select 1 from auth.users where lower(email) = $1`, [adminEmail])).rowCount > 0;
   await d.end();
