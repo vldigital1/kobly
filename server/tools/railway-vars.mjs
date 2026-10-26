@@ -1,22 +1,20 @@
-// Monta, prontos para colar no "Raw Editor" do Railway, os textos das variáveis do api e do postgrest.
-//   node server/tools/railway-vars.mjs
-// Pergunta só o e-mail e a senha do Administrador; gera os segredos novos e já coloca o MESMO segredo
-// nos dois serviços (o JWT e a senha do banco precisam ser iguais nos dois). Nada é salvo em arquivo.
+// Monta as variáveis do Railway (api e postgrest) prontas para colar no "Raw Editor".
+//   node server/tools/railway-vars.mjs --email voce@exemplo.com --dir C:\pasta
+// Grava 3 arquivos na pasta: 1-api.txt, 2-postgrest.txt e senha-do-site.txt (a senha do Administrador,
+// gerada aqui). Copiar de arquivo evita o texto estragado que sai ao copiar da janela do terminal.
+// Os mesmos segredos vão para os dois serviços (JWT e senha do banco precisam ser iguais nos dois).
 import { randomBytes } from 'node:crypto';
-import { createInterface } from 'node:readline/promises';
-import { stdin as input, stdout as output } from 'node:process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const rl = createInterface({ input });
-const lines = rl[Symbol.asyncIterator]();
-const ask = async (q) => { output.write(q); const r = await lines.next(); if (r.done) { console.error('\nentrada encerrada'); process.exit(1); } return String(r.value).trim(); };
-let email = '';
-while (!/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(email)) email = await ask('Seu e-mail de administrador: ');
-let senha = '';
-while (senha.length < 12 || /[<>"\s]/.test(senha)) senha = await ask('Senha do administrador (12+ caracteres, sem espaço): ');
-rl.close();
+const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : ''; };
+const email = String(arg('--email') || '').trim().toLowerCase();
+const dir = arg('--dir');
+if (!/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(email) || !dir) { console.error('uso: railway-vars.mjs --email voce@exemplo.com --dir <pasta>'); process.exit(2); }
 
 const jwt = randomBytes(32).toString('hex');
 const pgPass = randomBytes(24).toString('hex');
+const senha = `Kobly-${randomBytes(9).toString('base64url')}`;
 const api = [
   'DATABASE_URL="${{Postgres.DATABASE_URL}}"',
   `JWT_SECRET="${jwt}"`,
@@ -43,9 +41,8 @@ const pgrst = [
   'PGRST_SERVER_PORT="3000"',
   'PGRST_DB_POOL="10"',
 ];
-const line = '='.repeat(70);
-console.log(`\n${line}\n1) COPIE ESTE BLOCO -> Railway, servico "api" -> Variables -> Raw Editor (apague tudo e cole)\n${line}`);
-console.log(api.join('\n'));
-console.log(`\n${line}\n2) COPIE ESTE BLOCO -> Railway, servico "postgrest" -> Variables -> Raw Editor (apague tudo e cole)\n${line}`);
-console.log(pgrst.join('\n'));
-console.log(`\n${line}\nNao mande estes textos para ninguem. Depois de colar os dois, clique em Deploy.\n${line}\n`);
+mkdirSync(dir, { recursive: true });
+writeFileSync(join(dir, '1-api.txt'), api.join('\r\n') + '\r\n');
+writeFileSync(join(dir, '2-postgrest.txt'), pgrst.join('\r\n') + '\r\n');
+writeFileSync(join(dir, 'senha-do-site.txt'), `Login do site da Kobly (Administrador)\r\nE-mail: ${email}\r\nSenha:  ${senha}\r\n`);
+console.log(`arquivos gravados em ${dir}`);
