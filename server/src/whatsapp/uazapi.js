@@ -7,6 +7,8 @@
 //   GET  /instance/status  (token)                 → disconnected | connecting | connected | hibernated (+ qrcode)
 //   POST /webhook          (token)       { enabled, url, events, excludeMessages }
 //   POST /send/text        (token)       { number, text }
+//   POST /profile/name     (token)       { name }   (até 25 caracteres)
+//   POST /profile/image    (token)       { image }  (JPEG 640x640: link, base64 ou "remove")
 // Aviso "messages": { EventType, token, message: { messageid, chatid, sender, senderName, fromMe, isGroup, messageType, text } }.
 // O aviso é aceito só se o "token" dele for o da instância daquela URL.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -15,7 +17,7 @@ import { encrypt, decrypt } from './crypto.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const STATUS = new Set(['disconnected', 'connecting', 'connected', 'hibernated']);
-const SAFE = 'id, label, status, phone, profile_name, profile_pic_url, is_business, last_seen_at, disconnect_reason, last_error, connected_at, created_at';
+const SAFE = 'id, label, status, phone, profile_name, profile_pic_url, is_business, last_seen_at, disconnect_reason, pause_flows_on_disconnect, last_error, connected_at, created_at';
 const digits = (v) => String(v || '').split('@')[0].replace(/\D/g, '');
 const ENV = 'env'; // id do servidor do ambiente na lista de servidores
 
@@ -87,7 +89,24 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
       last_seen_at = case when $2 = 'connected' then now() else last_seen_at end,
       connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end, last_error = null where id = $1`,
       [row.id, s.status, s.phone, s.profileName, s.profilePicUrl, s.isBusiness, s.disconnectReason]);
+    await statusChanged(row, s.status);
     return s;
+  }
+  // "Pausar fluxos ao desconectar": caiu e a empresa ficou sem WhatsApp conectado → pausa os fluxos ativos e guarda quais;
+  // voltou → reativa só esses (os que ninguém mexeu nesse meio-tempo).
+  async function statusChanged(row, status) {
+    if (!row.pause_flows_on_disconnect || row.status === status) return;
+    if (row.status === 'connected' && status !== 'connected') {
+      const other = (await pool.query(`select (select count(*) from public.whatsapp_uazapi_instances where organization_id = $1 and id <> $2 and status = 'connected')
+        + (select count(*) from public.whatsapp_accounts where organization_id = $1 and status = 'connected') as n`, [row.organization_id, row.id])).rows[0];
+      if (Number(other.n) > 0) return;
+      const r = await pool.query(`update public.campaigns c set status_campanha = 'Pausada' where c.organization_id = $1 and c.status_campanha = 'Ativa'
+        and exists (select 1 from public.campaign_flows f join public.flow_graph_versions v on v.flow_id = f.id and v.is_active where f.campaign_id = c.id) returning c.id`, [row.organization_id]);
+      if (r.rowCount) await pool.query(`update public.whatsapp_uazapi_instances set paused_campaigns = $2 where id = $1`, [row.id, r.rows.map((x) => x.id)]);
+    } else if (status === 'connected' && (row.paused_campaigns || []).length) {
+      await pool.query(`update public.campaigns set status_campanha = 'Ativa' where id = any($2::uuid[]) and organization_id = $1 and status_campanha = 'Pausada'`, [row.organization_id, row.paused_campaigns]);
+      await pool.query(`update public.whatsapp_uazapi_instances set paused_campaigns = '{}' where id = $1`, [row.id]);
+    }
   }
 
   async function handle(ctx, user, body) {
@@ -136,7 +155,34 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
         const row = await own(orgId, body.id);
         await call(await serverOf(row), '/instance/disconnect', { method: 'POST', token: tokenOf(row), body: {} }).catch(() => {});
         await pool.query(`update public.whatsapp_uazapi_instances set status = 'disconnected' where id = $1`, [row.id]);
+        await statusChanged(row, 'disconnected');
         return { ok: true };
+      }
+      case 'settings': { // opções da conexão na Kobly
+        editor();
+        const row = await own(orgId, body.id);
+        if (typeof body.pause_flows_on_disconnect === 'boolean') await pool.query(`update public.whatsapp_uazapi_instances set pause_flows_on_disconnect = $2 where id = $1`, [row.id, body.pause_flows_on_disconnect]);
+        return { ok: true };
+      }
+      case 'profile': { // nome e foto do perfil no WhatsApp (todos os contatos veem)
+        editor();
+        const row = await own(orgId, body.id);
+        if (row.status !== 'connected') fail('Conecte o número antes de mudar o perfil.');
+        const server = await serverOf(row), token = tokenOf(row);
+        if (body.name !== undefined) {
+          const name = String(body.name || '').trim();
+          if (!name || name.length > 25) fail('O nome do perfil precisa ter de 1 a 25 caracteres.');
+          await call(server, '/profile/name', { method: 'POST', token, body: { name } });
+        }
+        if (body.remove_image === true) await call(server, '/profile/image', { method: 'POST', token, body: { image: 'remove' } });
+        else if (body.image !== undefined) {
+          const img = String(body.image || '');
+          if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(img) || img.length > 1_500_000) fail('Envie a foto em JPEG (a Kobly ajusta para 640×640).');
+          await call(server, '/profile/image', { method: 'POST', token, body: { image: img } });
+        }
+        if (body.remove_image === true) await pool.query(`update public.whatsapp_uazapi_instances set profile_pic_url = null where id = $1`, [row.id]);
+        const s = await refresh({ ...row });
+        return { ok: true, profile_name: s.profileName, profile_pic_url: body.remove_image === true ? null : s.profilePicUrl };
       }
       case 'remove': {
         editor();
@@ -208,6 +254,7 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
       if (s.status) await pool.query(`update public.whatsapp_uazapi_instances set status = $2, phone = coalesce($3, phone),
         last_seen_at = case when $2 = 'connected' then now() else last_seen_at end, disconnect_reason = $4,
         connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end where id = $1`, [row.id, s.status, s.phone, s.disconnectReason]);
+      if (s.status) await statusChanged(row, s.status);
       return { status: 200 };
     }
     if (p.EventType !== 'messages' || !p.message) return { status: 200 };

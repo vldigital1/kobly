@@ -47,8 +47,8 @@ function readBody(req, limit) {
     req.on('error', reject);
   });
 }
-async function readJson(req) {
-  const buf = await readBody(req, MAX_BODY);
+async function readJson(req, limit = MAX_BODY) {
+  const buf = await readBody(req, limit);
   if (!buf.length) return {};
   try { return JSON.parse(buf.toString()); } catch { throw new AuthError(400, 'bad_json', 'JSON inválido'); }
 }
@@ -247,7 +247,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         return send(res, r.status, r.body);
       }
       const fm = /^\/functions\/v1\/([a-z0-9-]+)$/.exec(path);
-      if (fm) return await functions.handle(fm[1], req, res, { readJson, readBody, send, bearer, clientIp });
+      // foto do perfil do WhatsApp vai em base64 na rota uazapi: limite maior só ali
+      if (fm) return await functions.handle(fm[1], req, res, { readJson: (r) => readJson(r, fm[1] === 'uazapi' ? 2 * 1024 * 1024 : MAX_BODY), readBody, send, bearer, clientIp });
       const handler = routes[`${req.method} ${path}`];
       if (!handler) return send(res, 404, { code: 'not_found', message: 'Not found' });
       const body = req.method === 'POST' ? await readJson(req) : {};

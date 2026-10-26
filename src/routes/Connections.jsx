@@ -36,6 +36,25 @@ const ago = (iso) => {
   if (s < 86400) return `há ${Math.round(s / 3600)} h`;
   return fmtDateTime(iso);
 };
+// Foto do perfil: o WhatsApp pede JPEG 640×640 — recorta o centro e converte no navegador
+function toJpeg640(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) { reject(new Error('Escolha uma imagem (JPG, PNG ou WEBP).')); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const c = document.createElement('canvas'); c.width = 640; c.height = 640;
+      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 640, 640);
+      URL.revokeObjectURL(url);
+      let q = 0.9, out = c.toDataURL('image/jpeg', q);
+      while (out.length > 1_400_000 && q > 0.4) { q -= 0.1; out = c.toDataURL('image/jpeg', q); }
+      resolve(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não deu para ler essa imagem.')); };
+    img.src = url;
+  });
+}
 const initials = (s) => String(s || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 
 const KC_CSS = `
@@ -95,6 +114,17 @@ const KC_CSS = `
 @keyframes kc-scan { 50% { top: calc(100% - 16px); } }
 .kc-step { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-sm); color: var(--text-body); }
 .kc-step i { font-style: normal; flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #25D366, #128C7E); }
+.kc-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; cursor: pointer; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); font-size: var(--text-sm); color: var(--text-body); }
+.kc-switch { position: relative; width: 40px; height: 22px; flex: none; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.08); cursor: pointer; padding: 0; transition: all .2s; }
+.kc-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #cbd5e1; transition: all .2s cubic-bezier(.3,1.4,.5,1); }
+.kc-switch.on { border-color: transparent; background: linear-gradient(135deg, #25D366, #8b5cf6); box-shadow: 0 0 14px rgba(37,211,102,.4); }
+.kc-switch.on::after { left: 20px; background: #fff; }
+.kc-tabs { display: flex; padding: 4px; gap: 4px; border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.kc-tabs button { flex: 1; border: 0; padding: 9px 12px; border-radius: 10px; background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; display: inline-flex; gap: 7px; align-items: center; justify-content: center; }
+.kc-tabs button.on { color: #fff; background: linear-gradient(135deg, rgba(37,211,102,.28), rgba(139,92,246,.36)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.5); }
+.kc-photo { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: 16px; cursor: pointer; border: 1.5px dashed rgba(37,211,102,.4); background: radial-gradient(circle at 0% 50%, rgba(37,211,102,.1), transparent 60%), rgba(255,255,255,.02); transition: all .15s; }
+.kc-photo:hover, .kc-photo.over { border-color: #25D366; box-shadow: 0 0 22px rgba(37,211,102,.22); }
+.kc-photo img, .kc-photo .ph { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; flex: none; display: grid; place-items: center; background: #1b1f2c; color: #fff; font-weight: 800; font-size: 24px; box-shadow: 0 0 0 3px #0d1018, 0 0 0 5px #25D366; }
 .kc-done { position: relative; display: grid; place-items: center; width: 150px; height: 150px; margin: 6px auto 0; }
 .kc-done .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(37,211,102,.5); animation: kc-ring 2.2s ease-out infinite; }
 .kc-done .ring:nth-child(2) { animation-delay: .7s; } .kc-done .ring:nth-child(3) { animation-delay: 1.4s; }
@@ -177,7 +207,7 @@ function QrPanel({ id, empresaId, initialQr, onConnected, notify, flowsActive, o
   );
 }
 
-function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, navigate }) {
+function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, navigate }) {
   const k = KINDS.find((x) => x.id === c.kind);
   const [tone, label] = STATUS[c.status] || STATUS.disconnected;
   const ring = { ok: '#34d399', wait: '#fbbf24', off: '#fb7185', idle: '#64748b' }[tone];
@@ -218,6 +248,14 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, navigate })
         </button>
       )}
 
+      {c.kind === 'qr' && (
+        <div className="kc-toggle" style={{ position: 'relative', zIndex: 1 }} onClick={() => onPause(!c.pause)} title="Se este número cair e não houver outro WhatsApp conectado, os fluxos ativos pausam sozinhos; quando ele voltar, eles voltam a rodar.">
+          <Icon name="pause-circle" size={16} style={{ color: c.pause ? '#34d399' : 'var(--text-subtle)' }} />
+          <span style={{ flex: 1 }}>Pausar fluxos ao desconectar</span>
+          <button type="button" role="switch" aria-checked={!!c.pause} aria-label="Pausar fluxos ao desconectar" className={`kc-switch${c.pause ? ' on' : ''}`} onClick={(e) => { e.stopPropagation(); onPause(!c.pause); }} />
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
         {c.kind === 'qr' && c.status !== 'connected' && <button type="button" className="kc-btn primary" onClick={onQr}><Icon name="qr-code" size={15} />{c.status === 'connecting' ? 'Ler QR Code' : 'Reconectar'}</button>}
         {c.kind === 'qr' && c.status === 'connected' && <button type="button" className="kc-btn" onClick={() => onAct('uazapi', 'disconnect', { id: c.key }, 'Desconectado.', `Desconectar ${c.name}? Para voltar, será preciso ler o QR Code de novo.`)}><Icon name="unplug" size={15} />Desconectar</button>}
@@ -240,7 +278,9 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   const [flow, setFlow] = useState(null); // { kind, step, id, qrcode }
   const [form, setForm] = useState({});
   const [busy, setBusy] = useState(false);
-  const [rename, setRename] = useState(null); // { id, label }
+  const [edit, setEdit] = useState(null); // { id, tab, label, origLabel, connected, name, origName, pic, image, removeImage }
+  const [over, setOver] = useState(false);
+  const fileRef = useRef(null);
 
   const load = useCallback(async () => {
     const [u, o, t] = await Promise.all([KoblyApi.uazapi('list', {}, empresaId), KoblyApi.whatsappAccount('status', {}, empresaId), KoblyApi.notifyChannels('list', {}, empresaId)]);
@@ -267,12 +307,34 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
     if (r.error) { notify('danger', r.error); return; }
     notify('success', 'Bot conectado. Use "Testar" para receber uma mensagem.'); setFlow(null); load();
   }
-  async function saveRename() {
+  async function pickPhoto(file) {
+    try { const image = await toJpeg640(file); setEdit((e) => ({ ...e, image, removeImage: false })); }
+    catch (err) { notify('danger', err.message); }
+  }
+  async function saveEdit() {
     setBusy(true);
-    const r = await KoblyApi.uazapi('rename', { id: rename.id, label: rename.label }, empresaId);
-    setBusy(false);
-    if (r.error) { notify('danger', r.error); return; }
-    setRename(null); load();
+    try {
+      if (edit.label.trim() && edit.label.trim() !== edit.origLabel) {
+        const r = await KoblyApi.uazapi('rename', { id: edit.id, label: edit.label }, empresaId);
+        if (r.error) { notify('danger', r.error); return; }
+      }
+      const prof = {};
+      if (edit.name.trim() && edit.name.trim() !== (edit.origName || '')) prof.name = edit.name.trim();
+      if (edit.image) prof.image = edit.image;
+      if (edit.removeImage) prof.remove_image = true;
+      if (Object.keys(prof).length) {
+        const r = await KoblyApi.uazapi('profile', { id: edit.id, ...prof }, empresaId);
+        if (r.error) { notify('danger', r.error); return; }
+        notify('success', 'Perfil do WhatsApp atualizado. Pode levar alguns segundos para aparecer para os contatos.');
+      }
+      setEdit(null); load();
+    } finally { setBusy(false); }
+  }
+  async function setPause(c, on) {
+    setSt((s) => ({ ...s, uaz: s.uaz.map((i) => (i.id === c.key ? { ...i, pause_flows_on_disconnect: on } : i)) }));
+    const r = await KoblyApi.uazapi('settings', { id: c.key, pause_flows_on_disconnect: on }, empresaId);
+    if (r.error) { notify('danger', r.error); load(); return; }
+    notify('success', on ? 'Os fluxos pausam sozinhos se este número desconectar.' : 'Os fluxos seguem ativos mesmo se este número desconectar.');
   }
   async function act(fn, action, extra, msg, confirmText) {
     if (confirmText && !confirm(confirmText)) return;
@@ -282,7 +344,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
 
   // todas as conexões no mesmo formato de cartão
   const all = [
-    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
+    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
     ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at }] : []),
     ...st.tg.map((c) => ({ key: c.id, kind: 'telegram', name: c.label, sub: 'Bot de alertas da equipe', chat: c.default_chat_id, status: 'connected', when: c.created_at })),
   ];
@@ -333,7 +395,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {cards.map((c) => (
           <ConnCard key={c.key} c={c} flowsActive={st.flows} navigate={store.navigate} onAct={act}
-            onQr={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })} onRename={() => setRename({ id: c.key, label: c.name })} onManage={() => setFlow({ kind: 'oficial', step: 'manage' })} />
+            onQr={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })} onRename={() => setEdit({ id: c.key, tab: 'conexao', label: c.name, origLabel: c.name, connected: c.status === 'connected', name: c.profile || '', origName: c.profile || '', pic: c.pic, image: null, removeImage: false })} onPause={(on) => setPause(c, on)} onManage={() => setFlow({ kind: 'oficial', step: 'manage' })} />
         ))}
       </div>
 
@@ -369,9 +431,46 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
         {flow && flow.kind === 'qr' && flow.step === 'qr' && <QrPanel id={flow.id} empresaId={empresaId} initialQr={flow.qrcode} notify={notify} onConnected={load} flowsActive={st.flows} onClose={() => setFlow(null)} />}
       </Modal>
 
-      <Modal open={!!rename} onClose={() => setRename(null)} title="Editar conexão" width={440}
-        footer={<><Button variant="ghost" onClick={() => setRename(null)}>Cancelar</Button><Button variant="primary" iconLeft="check" disabled={busy || !(rename && rename.label.trim())} onClick={saveRename}>Salvar</Button></>}>
-        {rename && <Input label="Nome da conexão" value={rename.label} onChange={(e) => setRename({ ...rename, label: e.target.value })} hint="Só na Kobly: o nome e a foto do perfil no WhatsApp não mudam." autoFocus />}
+      <Modal open={!!edit} onClose={() => setEdit(null)} title="Editar conexão" subtitle="Nome na Kobly e perfil que seus contatos veem no WhatsApp." width={500}
+        footer={<><Button variant="ghost" onClick={() => setEdit(null)}>Cancelar</Button><Button variant="primary" iconLeft="check" disabled={busy || !(edit && edit.label.trim())} onClick={saveEdit}>{busy ? 'Salvando…' : 'Salvar'}</Button></>}>
+        {edit && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            onPaste={(e) => { const f = [...(e.clipboardData && e.clipboardData.files ? e.clipboardData.files : [])][0]; if (f && edit.tab === 'perfil' && edit.connected) { e.preventDefault(); pickPhoto(f); } }}>
+            <div className="kc-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={edit.tab === 'conexao'} className={edit.tab === 'conexao' ? 'on' : ''} onClick={() => setEdit({ ...edit, tab: 'conexao' })}><Icon name="plug" size={14} />Conexão</button>
+              <button type="button" role="tab" aria-selected={edit.tab === 'perfil'} className={edit.tab === 'perfil' ? 'on' : ''} onClick={() => setEdit({ ...edit, tab: 'perfil' })}><ChannelLogo kind="qr" size={16} />Perfil do WhatsApp</button>
+            </div>
+            {edit.tab === 'conexao' ? (
+              <Input label="Nome da conexão" value={edit.label} onChange={(e) => setEdit({ ...edit, label: e.target.value })} hint="Só na Kobly, para você identificar o número. Ex.: Vendas, Suporte, Número da Ana." autoFocus />
+            ) : !edit.connected ? (
+              <Banner tone="warning" title="Número desconectado">Conecte o número (leia o QR Code) para mudar o nome e a foto do perfil.</Banner>
+            ) : (<>
+              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { pickPhoto(e.target.files && e.target.files[0]); e.target.value = ''; }} />
+              <div className={`kc-photo${over ? ' over' : ''}`} role="button" tabIndex={0} onClick={() => fileRef.current && fileRef.current.click()}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current && fileRef.current.click(); } }}
+                onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); pickPhoto(e.dataTransfer.files && e.dataTransfer.files[0]); }}>
+                {edit.image ? <img src={edit.image} alt="" /> : edit.pic && !edit.removeImage ? <img src={edit.pic} alt="" /> : <div className="ph">{initials(edit.name || edit.label)}</div>}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{edit.image ? 'Nova foto pronta' : 'Trocar foto do perfil'}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.5 }}>Arraste, cole (Ctrl+V) ou clique. A Kobly recorta em 640×640, como o WhatsApp pede.</div>
+                </div>
+                <Icon name="upload" size={18} style={{ color: '#25D366' }} />
+              </div>
+              {(edit.pic || edit.image) && (
+                <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer' }}>
+                  <button type="button" role="switch" aria-checked={edit.removeImage} className={`kc-switch${edit.removeImage ? ' on' : ''}`} onClick={() => setEdit({ ...edit, removeImage: !edit.removeImage, image: null })} />
+                  Remover a foto atual
+                </label>
+              )}
+              <div>
+                <Input label="Nome do perfil" value={edit.name} maxLength={25} onChange={(e) => setEdit({ ...edit, name: e.target.value.slice(0, 25) })} placeholder={edit.origName || 'Nome que aparece no WhatsApp'} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 6 }}>
+                  <span>Todos os seus contatos veem. O WhatsApp limita quantas vezes dá para trocar.</span><span>{edit.name.length}/25</span>
+                </div>
+              </div>
+            </>)}
+          </div>
+        )}
       </Modal>
 
       <Modal open={!!flow && flow.kind === 'telegram'} onClose={() => setFlow(null)} title="Telegram (bot de alertas)" width={480}
