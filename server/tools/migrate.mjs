@@ -28,6 +28,7 @@ function buildSchema() {
   return { out, files: JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8')).filter((m) => !m.skipped).map((m) => m.file) };
 }
 
+process.on('unhandledRejection', (e) => { console.error('[migrate] ERRO:', e && e.message ? e.message : e); process.exit(1); });
 const c = new pg.Client({ connectionString: url });
 await c.connect();
 try {
@@ -36,32 +37,49 @@ try {
   await c.query(`do $$ begin if not exists (select 1 from pg_roles where rolname = 'kobly_authenticator') then create role kobly_authenticator noinherit login; end if; end $$`);
   await c.query(`alter role kobly_authenticator with login noinherit password ${lit(authPass)}`);
 
-  const fresh = !(await c.query(`select to_regclass('auth.users') as t`)).rows[0].t;
   const { out, files } = buildSchema();
-  await c.query(`create schema if not exists kobly_meta; create table if not exists kobly_meta.applied (file text primary key, at timestamptz not null default now())`);
-  const mark = async (list) => { for (const f of list) await c.query(`insert into kobly_meta.applied (file) values ($1) on conflict do nothing`, [f]); };
+  // aplica um arquivo dizendo qual falhou (a mensagem do Postgres sozinha não diz)
+  const apply = async (name, sql) => {
+    try { await c.query(sql); }
+    catch (e) { throw new Error(`falhou em ${name}: ${e.message}${e.position ? ` (posição ${e.position})` : ''}`); }
+  };
+  const tracked = (await c.query(`select to_regclass('kobly_meta.applied') as t`)).rows[0].t
+    && (await c.query(`select count(*)::int as n from kobly_meta.applied`)).rows[0].n > 0;
+  const hasAuth = !!(await c.query(`select to_regclass('auth.users') as t`)).rows[0].t;
 
-  if (fresh) {
-    log(`banco vazio: montando tudo (${files.length} arquivos)…`);
-    const boot = readFileSync(join(SERVER, 'sql/000_bootstrap.sql'), 'utf8').replace(/^\\set .*$/gm, '')
-      .replace(/:"writer"/g, ident(writer)).replace(/:"authenticator"/g, '"kobly_authenticator"').replace(/:"dbname"/g, ident(dbname));
-    await c.query(boot);
-    await c.query(`set search_path to "$user", public, extensions`);
-    for (const f of files) { log(`aplicando ${f}`); await c.query(readFileSync(join(out, f), 'utf8')); }
-    await c.query(readFileSync(join(SERVER, 'sql/001_session_grace.sql'), 'utf8'));
-    await mark(files);
-  } else {
-    await c.query(`set search_path to "$user", public, extensions`);
-    const done = new Set((await c.query(`select file from kobly_meta.applied`)).rows.map((r) => r.file));
-    if (!done.size) { // banco montado antes deste controle: considera tudo aplicado
-      log('banco já montado sem controle de versões: registrando as migrações atuais como aplicadas');
-      await mark(files); done.clear(); files.forEach((f) => done.add(f));
-    }
-    const pending = files.filter((f) => !done.has(f) && f !== '900_grants.sql');
-    for (const f of pending) { log(`aplicando ${f}`); await c.query(readFileSync(join(out, f), 'utf8')); }
-    if (pending.length) { await c.query(readFileSync(join(out, '900_grants.sql'), 'utf8')); await mark(pending); }
-    log(pending.length ? `${pending.length} migração(ões) nova(s) aplicada(s)` : 'banco em dia');
+  if (!tracked && hasAuth) {
+    // montagem anterior que parou no meio (sem nenhum usuário = sem dado real): limpa e começa de novo
+    const users = (await c.query(`select count(*)::int as n from auth.users`)).rows[0].n;
+    if (users > 0) throw new Error('o banco já tem usuários mas não tem o controle de migrações: confira à mão antes de continuar');
+    log('montagem anterior incompleta: limpando o banco (não há usuários) para recomeçar');
+    await c.query(`drop schema if exists public, auth, vault, cron, net, extensions, kobly_meta cascade; create schema public; grant all on schema public to ${ident(writer)}, public`);
   }
+
+  // tudo numa transação: se um arquivo falhar, nada fica pela metade
+  await c.query('begin');
+  try {
+    await c.query(`create schema if not exists kobly_meta; create table if not exists kobly_meta.applied (file text primary key, at timestamptz not null default now())`);
+    const mark = async (list) => { for (const x of list) await c.query(`insert into kobly_meta.applied (file) values ($1) on conflict do nothing`, [x]); };
+    if (!tracked) {
+      log(`banco vazio: montando tudo (${files.length} arquivos)…`);
+      const boot = readFileSync(join(SERVER, 'sql/000_bootstrap.sql'), 'utf8').replace(/^\\set .*$/gm, '')
+        .replace(/:"writer"/g, ident(writer)).replace(/:"authenticator"/g, '"kobly_authenticator"').replace(/:"dbname"/g, ident(dbname));
+      await apply('000_bootstrap.sql', boot);
+      await c.query(`set local search_path to "$user", public, extensions`);
+      for (const x of files) await apply(x, readFileSync(join(out, x), 'utf8'));
+      await apply('001_session_grace.sql', readFileSync(join(SERVER, 'sql/001_session_grace.sql'), 'utf8'));
+      await mark(files);
+      log(`${files.length} arquivos aplicados`);
+    } else {
+      await c.query(`set local search_path to "$user", public, extensions`);
+      const done = new Set((await c.query(`select file from kobly_meta.applied`)).rows.map((r) => r.file));
+      const pending = files.filter((x) => !done.has(x) && x !== '900_grants.sql');
+      for (const x of pending) { log(`aplicando ${x}`); await apply(x, readFileSync(join(out, x), 'utf8')); }
+      if (pending.length) { await apply('900_grants.sql', readFileSync(join(out, '900_grants.sql'), 'utf8')); await mark(pending); }
+      log(pending.length ? `${pending.length} migração(ões) nova(s) aplicada(s)` : 'banco em dia');
+    }
+    await c.query('commit');
+  } catch (e) { await c.query('rollback').catch(() => {}); throw e; }
 } finally { await c.end(); }
 
 // primeiro Administrador da Kobly (painel de servidores WhatsApp, clientes, planos)
