@@ -7,7 +7,10 @@ import { buildTikTokBody, buildGa4Body, ga4ClientId, TIKTOK_EVENTS, GA4_EVENTS }
 const sha = (v) => createHash('sha256').update(v).digest('hex');
 
 test('Uazapi: status da instância em qualquer formato de resposta', () => {
-  assert.deepEqual(parseUazapiStatus({ instance: { status: 'connecting', qrcode: 'data:image/png;base64,AAA' } }), { status: 'connecting', qrcode: 'data:image/png;base64,AAA', paircode: null, phone: null, profileName: null });
+  assert.deepEqual(parseUazapiStatus({ instance: { status: 'connecting', qrcode: 'data:image/png;base64,AAA' } }), { status: 'connecting', qrcode: 'data:image/png;base64,AAA', paircode: null, phone: null, profileName: null, profilePicUrl: null, isBusiness: null, disconnectReason: null });
+  const p = parseUazapiStatus({ instance: { status: 'connected', profilePicUrl: 'https://pps.whatsapp.net/v/x.jpg', isBusiness: true, lastDisconnectReason: 'antigo' } });
+  assert.equal(p.profilePicUrl, 'https://pps.whatsapp.net/v/x.jpg'); assert.equal(p.isBusiness, true); assert.equal(p.disconnectReason, null, 'conectado não mostra motivo velho');
+  assert.equal(parseUazapiStatus({ instance: { status: 'disconnected', profilePicUrl: 'javascript:x', lastDisconnectReason: 'QR Code timeout' } }).profilePicUrl, null, 'só https');
   const c = parseUazapiStatus({ instance: { status: 'connected', owner: '5511999999999', profileName: 'Loja', qrcode: 'velho' }, status: { connected: true, jid: '5511999999999@s.whatsapp.net' } });
   assert.deepEqual([c.status, c.qrcode, c.phone, c.profileName], ['connected', null, '5511999999999', 'Loja'], 'conectado não mostra QR antigo');
   assert.equal(parseUazapiStatus({ status: { connected: true, jid: '5521988887777@s.whatsapp.net' } }).phone, '5521988887777');

@@ -150,7 +150,7 @@ Migração `0069`. Campanha com versão de grafo **ativa** sai do motor antigo (
 - No editor, cada mídia é um bloco próprio (Imagem, Vídeo, Áudio, Arquivo) com aba Arquivo (upload) ou URL. O bloco salvo continua `send_media` + `kind`.
 - Mídia pelo WhatsApp por QR Code não depende da janela de 24 h (como o texto). Envio: `POST /send/media { number, type, file, text, docName }` na Uazapi (`audio` vai como `ptt`).
 - Texto e mídia aceitam `delete_on_tag` (id de etiqueta). Enviado pela Uazapi, o id da mensagem vai para `flow_message_deletions` (`waiting`); o gatilho em `lead_tags` marca `due` quando a etiqueta entra (pelo fluxo ou à mão) e o `tick()` apaga com `POST /message/delete { id }` (até 3 tentativas, 5 min entre elas). Pela API oficial da Meta a opção não tem efeito (a Meta não apaga mensagem enviada).
-- **Conferir com um servidor Uazapi real:** os corpos de `/send/media` e `/message/delete` seguem a documentação pública, mas não foram testados contra um servidor.
+- Conferido contra um servidor Uazapi real (2026-10-26): texto, imagem, PDF por `/send/media` e `/message/delete` funcionaram.
 - Testes: `test/flow_media.unit.test.js`, `test/delete_on_tag.integration.test.js`.
 
 ### Bloco "Enviar e-mail" e campanhas dentro de Fluxos

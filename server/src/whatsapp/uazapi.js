@@ -15,11 +15,11 @@ import { encrypt, decrypt } from './crypto.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const STATUS = new Set(['disconnected', 'connecting', 'connected', 'hibernated']);
-const SAFE = 'id, label, status, phone, profile_name, last_error, connected_at, created_at';
+const SAFE = 'id, label, status, phone, profile_name, profile_pic_url, is_business, last_seen_at, disconnect_reason, last_error, connected_at, created_at';
 const digits = (v) => String(v || '').split('@')[0].replace(/\D/g, '');
 const ENV = 'env'; // id do servidor do ambiente na lista de servidores
 
-// resposta do /instance/status (ou do /instance/connect) → { status, qrcode, paircode, phone, profileName }
+// resposta do /instance/status (ou do /instance/connect) → { status, qrcode, paircode, phone, profileName, profilePicUrl, isBusiness, disconnectReason }
 export function parseUazapiStatus(r) {
   const inst = (r && r.instance) || {};
   const flag = r && r.status && typeof r.status === 'object' ? r.status : {};
@@ -28,7 +28,10 @@ export function parseUazapiStatus(r) {
   if (!STATUS.has(status)) status = inst.qrcode || r.qrcode ? 'connecting' : 'disconnected';
   const qrcode = status === 'connected' ? null : (inst.qrcode || r.qrcode || null);
   return { status, qrcode, paircode: status === 'connected' ? null : (inst.paircode || r.paircode || null),
-    phone: digits(inst.owner || flag.jid || r.owner) || null, profileName: inst.profileName || null };
+    phone: digits(inst.owner || flag.jid || r.owner) || null, profileName: inst.profileName || null,
+    profilePicUrl: /^https:\/\//.test(String(inst.profilePicUrl || '')) ? String(inst.profilePicUrl).slice(0, 1000) : null,
+    isBusiness: typeof inst.isBusiness === 'boolean' ? inst.isBusiness : null,
+    disconnectReason: status === 'connected' ? null : (String(inst.lastDisconnectReason || '').slice(0, 200) || null) };
 }
 
 // Servidor para um número novo: ativo, com vaga, o de menor ocupação proporcional (empate: o mais antigo).
@@ -80,7 +83,10 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
   async function refresh(row) {
     const s = parseUazapiStatus(await call(await serverOf(row), '/instance/status', { token: tokenOf(row) }));
     await pool.query(`update public.whatsapp_uazapi_instances set status = $2, phone = coalesce($3, phone), profile_name = coalesce($4, profile_name),
-      connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end, last_error = null where id = $1`, [row.id, s.status, s.phone, s.profileName]);
+      profile_pic_url = coalesce($5, profile_pic_url), is_business = coalesce($6, is_business), disconnect_reason = $7,
+      last_seen_at = case when $2 = 'connected' then now() else last_seen_at end,
+      connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end, last_error = null where id = $1`,
+      [row.id, s.status, s.phone, s.profileName, s.profilePicUrl, s.isBusiness, s.disconnectReason]);
     return s;
   }
 
@@ -89,7 +95,11 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     const editor = () => { if (ctx.role === 'Suporte') throw new AuthError(403, 'forbidden', 'Seu perfil não pode alterar conexões.'); };
     const need = async () => { if (!(await configured())) throw new AuthError(503, 'uazapi_unconfigured', 'WhatsApp por QR Code ainda não está ativo neste servidor (falta configurar a Uazapi).'); };
     switch (body.action) {
-      case 'list': return { configured: await configured(), instances: (await pool.query(`select ${SAFE} from public.whatsapp_uazapi_instances where organization_id = $1 order by created_at`, [orgId])).rows };
+      case 'list': { // + quantos fluxos publicados estão ligados (todos os números da empresa atendem os fluxos)
+        const flows = (await pool.query(`select count(distinct c.id)::int as n from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
+          join public.flow_graph_versions v on v.flow_id = f.id and v.is_active where c.organization_id = $1 and c.status_campanha = 'Ativa'`, [orgId])).rows[0].n;
+        return { configured: await configured(), flows_active: flows, instances: (await pool.query(`select ${SAFE} from public.whatsapp_uazapi_instances where organization_id = $1 order by created_at`, [orgId])).rows };
+      }
       case 'create': { // escolhe o servidor com vaga, cria a instância, aponta o webhook para a Kobly e já pede o QR Code
         editor(); await need();
         const server = pickServer(await servers());
@@ -112,7 +122,15 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
         await pool.query(`update public.whatsapp_uazapi_instances set status = $2 where id = $1`, [row.id, s.status]);
         return { status: s.status, qrcode: s.qrcode, paircode: s.paircode };
       }
-      case 'status': { const s = await refresh(await own(orgId, body.id)); return { status: s.status, qrcode: s.qrcode, phone: s.phone, profile_name: s.profileName }; }
+      case 'status': { const s = await refresh(await own(orgId, body.id)); return { status: s.status, qrcode: s.qrcode, phone: s.phone, profile_name: s.profileName, profile_pic_url: s.profilePicUrl, is_business: s.isBusiness }; }
+      case 'rename': { // nome da conexão na Kobly (não muda o perfil do WhatsApp)
+        editor();
+        const row = await own(orgId, body.id);
+        const label = String(body.label || '').trim().slice(0, 60);
+        if (!label) fail('Dê um nome para a conexão.');
+        await pool.query(`update public.whatsapp_uazapi_instances set label = $2 where id = $1`, [row.id, label]);
+        return { ok: true };
+      }
       case 'disconnect': { // sai do WhatsApp (precisa ler o QR de novo para voltar)
         editor();
         const row = await own(orgId, body.id);
@@ -188,7 +206,8 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     if (p.EventType === 'connection') {
       const s = parseUazapiStatus(p);
       if (s.status) await pool.query(`update public.whatsapp_uazapi_instances set status = $2, phone = coalesce($3, phone),
-        connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end where id = $1`, [row.id, s.status, s.phone]);
+        last_seen_at = case when $2 = 'connected' then now() else last_seen_at end, disconnect_reason = $4,
+        connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end where id = $1`, [row.id, s.status, s.phone, s.disconnectReason]);
       return { status: 200 };
     }
     if (p.EventType !== 'messages' || !p.message) return { status: 200 };

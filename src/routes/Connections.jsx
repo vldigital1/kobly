@@ -1,42 +1,125 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
-import { Badge, Banner, Button, Icon, IconButton, Input } from '@/ds';
+import { Banner, Button, Icon, IconButton, Input } from '@/ds';
+import { ChannelLogo } from '@/lib/brandLogos.jsx';
 import { Drawer, Modal } from '@/lib/ui.jsx';
 import { fmtDateTime } from '@/lib/workspace.jsx';
 import { WhatsappMetaTab } from '@/routes/WhatsappMeta.jsx';
+import { useKobly } from '@/store/store.jsx';
 
 // Kobly — Integrações → Conexões. Todos os canais da conta num lugar: WhatsApp comum (QR Code, pela Uazapi),
-// API oficial da Meta e bots do Telegram (alertas da equipe). "Nova conexão" escolhe o tipo; o QR Code
-// atualiza sozinho até o número conectar. KoblyConnections
+// API oficial da Meta e bots do Telegram (alertas da equipe); Instagram e Messenger chegam depois.
+// "Nova conexão" escolhe o tipo; o QR Code atualiza sozinho até o número conectar. KoblyConnections
 
 const KINDS = [
-  { id: 'qr', label: 'WhatsApp comum', icon: 'qr-code', color: '#25D366', desc: 'Conecte lendo um QR Code. Funciona com qualquer número.' },
-  { id: 'oficial', label: 'API Oficial da Meta', icon: 'badge-check', color: '#128C7E', desc: 'Número verificado, modelos aprovados e sem risco de bloqueio. Alguns recursos dependem da janela de 24 h.' },
-  { id: 'telegram', label: 'Telegram', icon: 'send', color: '#229ED9', desc: 'Bot que avisa sua equipe: venda aprovada, erro de pagamento, lead pedindo humano.' },
-  { id: 'instagram', label: 'Instagram', icon: 'instagram', color: '#E1306C', desc: 'Atendimento pelo Direct.', soon: true },
-  { id: 'messenger', label: 'Messenger', icon: 'message-circle', color: '#0084FF', desc: 'Atendimento nas páginas do Facebook.', soon: true },
+  { id: 'qr', label: 'WhatsApp', color: '#25D366', desc: 'Conecte lendo um QR Code. Funciona com qualquer número, comum ou Business.' },
+  { id: 'oficial', label: 'WhatsApp API Oficial', color: '#1D9BF0', desc: 'Número verificado pela Meta, modelos aprovados e sem risco de bloqueio.' },
+  { id: 'telegram', label: 'Telegram', color: '#2AABEE', desc: 'Bot que avisa sua equipe: venda aprovada, erro de pagamento, lead pedindo humano.' },
+  { id: 'instagram', label: 'Instagram', color: '#E1306C', desc: 'Atendimento e automações no Direct.', soon: true },
+  { id: 'messenger', label: 'Messenger', color: '#A033FF', desc: 'Atendimento nas páginas do Facebook.', soon: true },
 ];
-const FILTERS = [['todos', 'Todos os canais'], ['qr', 'WhatsApp'], ['oficial', 'WhatsApp Oficial'], ['telegram', 'Telegram']];
-const STATUS = { connected: ['success', 'Conectado'], connecting: ['warning', 'Aguardando QR Code'], disconnected: ['danger', 'Desconectado'], hibernated: ['neutral', 'Em espera'] };
+const FILTERS = [['todos', 'Todos os canais'], ['qr', 'WhatsApp'], ['oficial', 'WhatsApp Oficial'], ['instagram', 'Instagram'], ['messenger', 'Messenger'], ['telegram', 'Telegram']];
+const STATUS = { connected: ['ok', 'Conectado'], connecting: ['wait', 'Aguardando QR Code'], disconnected: ['off', 'Desconectado'], hibernated: ['idle', 'Em espera'] };
 const qrSrc = (q) => (!q ? null : /^data:image\//.test(q) ? q : /^https?:\/\//.test(q) ? q : `data:image/png;base64,${q}`);
-const fmtPhone = (p) => (p ? `+${p}` : '');
-
-function KindIcon({ k, size = 36 }) {
-  return <span style={{ width: size, height: size, borderRadius: 10, background: k.color, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name={k.icon} size={size * 0.5} /></span>;
+// 5547997883654 → +55 (47) 99788-3654 · 554797886227 → +55 (47) 9788-6227
+export function fmtPhone(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) { const r = d.slice(4); return `+55 (${d.slice(2, 4)}) ${r.slice(0, r.length - 4)}-${r.slice(-4)}`; }
+  return `+${d}`;
 }
+const ago = (iso) => {
+  if (!iso) return null;
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 90) return 'agora';
+  if (s < 3600) return `há ${Math.round(s / 60)} min`;
+  if (s < 86400) return `há ${Math.round(s / 3600)} h`;
+  return fmtDateTime(iso);
+};
+const initials = (s) => String(s || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
+const KC_CSS = `
+.kc-hero { position: relative; overflow: hidden; border-radius: 20px; padding: 20px 22px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+  background: radial-gradient(700px 260px at 0% 0%, rgba(37,211,102,.16), transparent 60%), radial-gradient(600px 260px at 100% 100%, rgba(139,92,246,.18), transparent 60%), rgba(14,16,24,.92);
+  border: 1px solid rgba(255,255,255,.08); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+.kc-hero::after { content: ''; position: absolute; left: -30%; top: 0; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); animation: kc-sweep 5s linear infinite; pointer-events: none; }
+@keyframes kc-sweep { to { left: 130%; } }
+.kc-stat { min-width: 110px; padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); }
+.kc-stat b { display: block; font-size: 22px; color: var(--text-strong); line-height: 1.1; }
+.kc-stat span { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; }
+.kc-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 7px; border-radius: 999px; cursor: pointer; font-size: var(--text-sm); font-family: var(--font-sans);
+  color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); transition: all .15s; }
+.kc-chip:hover { color: var(--text-strong); border-color: rgba(255,255,255,.18); }
+.kc-chip.on { color: #fff; background: linear-gradient(135deg, rgba(37,211,102,.22), rgba(139,92,246,.3)); border-color: transparent; box-shadow: inset 0 0 0 1px rgba(167,139,250,.55), 0 0 18px rgba(139,92,246,.25); }
+.kc-chip .all { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(135deg, #22d3ee, #8b5cf6); color: #fff; }
+.kc-card { position: relative; border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 14px; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.94); border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 14px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05); transition: border-color .2s, box-shadow .2s, transform .2s; }
+.kc-card::before { content: ''; position: absolute; left: 18px; right: 18px; top: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--brand), transparent); }
+.kc-card::after { content: ''; position: absolute; right: -60px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--brand) 22%, transparent), transparent 70%); pointer-events: none; }
+.kc-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 40%, rgba(255,255,255,.1)); box-shadow: 0 18px 46px rgba(0,0,0,.5), 0 0 30px color-mix(in srgb, var(--brand) 16%, transparent); }
+.kc-avatar { position: relative; width: 58px; height: 58px; flex: none; }
+.kc-avatar .pic { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; font-weight: 700; font-size: 18px; color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 55%, #111), #1b1f2c); box-shadow: 0 0 0 2px #0d1018, 0 0 0 4px var(--ring), 0 0 22px color-mix(in srgb, var(--ring) 45%, transparent); }
+.kc-avatar .badge { position: absolute; right: -5px; bottom: -4px; border-radius: 9px; box-shadow: 0 0 0 3px #0d1018; overflow: hidden; }
+.kc-pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; }
+.kc-pill .d { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.kc-pill.ok { color: #34d399; border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+.kc-pill.ok .d { animation: kc-pulse 1.8s infinite; }
+.kc-pill.wait { color: #fbbf24; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+.kc-pill.wait .d { animation: kc-blink 1s infinite; }
+.kc-pill.off { color: #fb7185; border-color: rgba(251,113,133,.35); background: rgba(251,113,133,.08); }
+.kc-pill.idle { color: #94a3b8; border-color: rgba(148,163,184,.3); background: rgba(148,163,184,.06); }
+@keyframes kc-pulse { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.6); } 70% { box-shadow: 0 0 0 8px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
+@keyframes kc-blink { 50% { opacity: .3; } }
+.kc-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kc-meta div { padding: 9px 11px; border-radius: 12px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); }
+.kc-meta span { display: block; font-size: 10.5px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .07em; }
+.kc-meta b { display: block; font-size: 13px; color: var(--text-strong); margin-top: 2px; font-weight: 600; }
+.kc-link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); color: var(--text-body); text-align: left;
+  background: linear-gradient(135deg, rgba(34,211,238,.07), rgba(139,92,246,.09)); border: 1px solid rgba(167,139,250,.22); transition: border-color .15s, box-shadow .15s; }
+.kc-link:hover { border-color: rgba(167,139,250,.55); box-shadow: 0 0 18px rgba(139,92,246,.2); }
+.kc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border-radius: 11px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600;
+  color: var(--text-strong); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); transition: all .15s; }
+.kc-btn:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); }
+.kc-btn.primary { color: #fff; border-color: transparent; background: linear-gradient(135deg, #25D366, #128C7E); box-shadow: 0 0 18px rgba(37,211,102,.3); }
+.kc-btn.danger { color: #fda4af; border-color: rgba(251,113,133,.3); background: rgba(251,113,133,.06); }
+.kc-btn.danger:hover { background: rgba(251,113,133,.14); }
+.kc-tile { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 18px; text-align: left; font-family: var(--font-sans); cursor: pointer; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.96); border: 1px solid rgba(255,255,255,.08); transition: all .18s; }
+.kc-tile:not(.soon):hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 55%, transparent); box-shadow: 0 0 28px color-mix(in srgb, var(--brand) 25%, transparent); }
+.kc-tile.soon { cursor: default; opacity: .55; }
+.kc-qr { position: relative; width: 272px; height: 272px; padding: 14px; border-radius: 22px; background: #fff; box-shadow: 0 0 0 1px rgba(37,211,102,.4), 0 0 40px rgba(37,211,102,.25); }
+.kc-qr .corner { position: absolute; width: 34px; height: 34px; border: 3px solid #25D366; }
+.kc-qr .scan { position: absolute; left: 14px; right: 14px; height: 2px; top: 14px; background: linear-gradient(90deg, transparent, #25D366, transparent); box-shadow: 0 0 12px #25D366; animation: kc-scan 2.4s ease-in-out infinite; }
+@keyframes kc-scan { 50% { top: calc(100% - 16px); } }
+.kc-step { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-sm); color: var(--text-body); }
+.kc-step i { font-style: normal; flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #25D366, #128C7E); }
+.kc-done { position: relative; display: grid; place-items: center; width: 150px; height: 150px; margin: 6px auto 0; }
+.kc-done .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(37,211,102,.5); animation: kc-ring 2.2s ease-out infinite; }
+.kc-done .ring:nth-child(2) { animation-delay: .7s; } .kc-done .ring:nth-child(3) { animation-delay: 1.4s; }
+@keyframes kc-ring { from { transform: scale(.55); opacity: 1; } to { transform: scale(1.15); opacity: 0; } }
+.kc-done .core { position: relative; width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+  background: linear-gradient(135deg, #25D366, #128C7E); box-shadow: 0 0 0 4px #0d1018, 0 0 0 6px #25D366, 0 0 40px rgba(37,211,102,.55); animation: kc-pop .5s cubic-bezier(.2,1.4,.4,1); }
+.kc-done .tick { position: absolute; right: 22px; bottom: 22px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #34d399; color: #04130b; box-shadow: 0 0 0 3px #0d1018; animation: kc-pop .6s .25s both cubic-bezier(.2,1.4,.4,1); }
+@keyframes kc-pop { from { transform: scale(.3); opacity: 0; } }
+`;
 
 // QR Code da Uazapi: consulta o status a cada 3 s (o QR muda sozinho) até conectar
-function QrPanel({ id, empresaId, initialQr, onConnected, notify }) {
+function QrPanel({ id, empresaId, initialQr, onConnected, notify, flowsActive, onClose }) {
+  const store = useKobly();
   const [st, setSt] = useState({ status: 'connecting', qrcode: initialQr || null });
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
+    let done = false;
     const tick = async () => {
+      if (done) return;
       const r = await KoblyApi.uazapi('status', { id }, empresaId);
       if (!alive.current) return;
       if (r.error) { setSt((s) => ({ ...s, error: r.error })); return; }
-      setSt({ status: r.status, qrcode: r.qrcode || null, phone: r.phone });
-      if (r.status === 'connected') { notify('success', 'WhatsApp conectado.'); onConnected(); }
+      setSt({ status: r.status, qrcode: r.qrcode || null, phone: r.phone, name: r.profile_name, pic: r.profile_pic_url, business: r.is_business });
+      if (r.status === 'connected') { done = true; notify('success', 'WhatsApp conectado.'); onConnected(); }
     };
     const t = setInterval(tick, 3000);
     tick();
@@ -46,43 +129,128 @@ function QrPanel({ id, empresaId, initialQr, onConnected, notify }) {
     const r = await KoblyApi.uazapi('qrcode', { id }, empresaId);
     if (r.error) notify('danger', r.error); else setSt((s) => ({ ...s, qrcode: r.qrcode || s.qrcode }));
   }
+  const go = (route) => { onClose(); store.navigate(route); };
+  if (st.status === 'connected') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
+        <div className="kc-done">
+          <span className="ring" /><span className="ring" /><span className="ring" />
+          <div className="core">{st.pic ? <img src={st.pic} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ color: '#fff', fontSize: 30, fontWeight: 800 }}>{initials(st.name)}</span>}</div>
+          <span className="tick"><Icon name="check" size={17} /></span>
+        </div>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-strong)' }}>Conectado!</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 4 }}>
+            {st.name ? <><b style={{ color: 'var(--text-strong)' }}>{st.name}</b>{st.business ? ' · WhatsApp Business' : ''} · </> : null}{fmtPhone(st.phone)}
+          </div>
+        </div>
+        <div style={{ width: '100%', padding: '12px 14px', borderRadius: 14, background: 'rgba(52,211,153,.07)', border: '1px solid rgba(52,211,153,.25)', color: 'var(--text-body)', fontSize: 'var(--text-sm)', textAlign: 'left' }}>
+          Este número já está pronto para os <b>fluxos</b> e os <b>Chats ao vivo</b>.{flowsActive ? ` ${flowsActive} fluxo${flowsActive > 1 ? 's' : ''} rodando já ${flowsActive > 1 ? 'podem' : 'pode'} usar ele.` : ' Crie um fluxo para começar a recuperar vendas.'}
+        </div>
+        <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+          <button type="button" className="kc-btn" style={{ flex: 1 }} onClick={() => go('chats')}><Icon name="message-circle" size={15} />Abrir Chats ao vivo</button>
+          <button type="button" className="kc-btn primary" style={{ flex: 1 }} onClick={() => go('fluxos')}><Icon name="git-branch" size={15} />{flowsActive ? 'Ver fluxos' : 'Criar fluxo'}</button>
+        </div>
+      </div>
+    );
+  }
   const src = qrSrc(st.qrcode);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-      {st.status === 'connected' ? <Banner tone="success" title="Conectado!">Número {fmtPhone(st.phone)} pronto para os fluxos e os Chats ao vivo.</Banner> : (<>
-        <div style={{ width: 264, height: 264, background: '#fff', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
-          {src ? <img src={src} alt="QR Code para conectar o WhatsApp" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span style={{ color: '#555', fontSize: 13 }}>Gerando QR Code…</span>}
-        </div>
-        <ol style={{ margin: 0, paddingInlineStart: 18, fontSize: 'var(--text-sm)', color: 'var(--text-body)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <li>No celular, abra o WhatsApp → Mais opções (⋮) ou Configurações → <strong>Aparelhos conectados</strong>.</li>
-          <li>Toque em <strong>Conectar um aparelho</strong> e aponte para este QR Code.</li>
-          <li>Esta tela confirma sozinha quando conectar.</li>
-        </ol>
-        <Button size="sm" variant="ghost" iconLeft="refresh-cw" onClick={novoQr}>Gerar outro QR Code</Button>
-      </>)}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+      <div className="kc-qr">
+        <span className="corner" style={{ left: -6, top: -6, borderRight: 0, borderBottom: 0, borderTopLeftRadius: 14 }} />
+        <span className="corner" style={{ right: -6, top: -6, borderLeft: 0, borderBottom: 0, borderTopRightRadius: 14 }} />
+        <span className="corner" style={{ left: -6, bottom: -6, borderRight: 0, borderTop: 0, borderBottomLeftRadius: 14 }} />
+        <span className="corner" style={{ right: -6, bottom: -6, borderLeft: 0, borderTop: 0, borderBottomRightRadius: 14 }} />
+        {src ? <img src={src} alt="QR Code para conectar o WhatsApp" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#555', fontSize: 13 }}>Gerando QR Code…</div>}
+        {src && <span className="scan" />}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#fbbf24', fontSize: 'var(--text-xs)' }}><span className="kc-pill wait" style={{ padding: '2px 8px' }}><span className="d" />aguardando leitura</span> esta tela confirma sozinha</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
+        <div className="kc-step"><i>1</i><span>No celular, abra o WhatsApp → <b>Configurações</b> (ou ⋮) → <b>Aparelhos conectados</b>.</span></div>
+        <div className="kc-step"><i>2</i><span>Toque em <b>Conectar um aparelho</b>.</span></div>
+        <div className="kc-step"><i>3</i><span>Aponte a câmera para este QR Code.</span></div>
+      </div>
+      <button type="button" className="kc-btn" onClick={novoQr}><Icon name="refresh-cw" size={14} />Gerar outro QR Code</button>
       {st.error && <Banner tone="danger">{st.error}</Banner>}
     </div>
   );
 }
 
+function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, navigate }) {
+  const k = KINDS.find((x) => x.id === c.kind);
+  const [tone, label] = STATUS[c.status] || STATUS.disconnected;
+  const ring = { ok: '#34d399', wait: '#fbbf24', off: '#fb7185', idle: '#64748b' }[tone];
+  return (
+    <div className="kc-card" style={{ '--brand': k.color }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', position: 'relative', zIndex: 1 }}>
+        <div className="kc-avatar" style={{ '--ring': ring }}>
+          {c.pic ? <img className="pic" src={c.pic} alt="" /> : <div className="pic">{c.kind === 'telegram' ? <Icon name="bell" size={22} /> : initials(c.profile || c.name)}</div>}
+          <span className="badge"><ChannelLogo kind={c.kind} size={24} /></span>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 }}>
+            <span>{c.profile || c.sub}</span>
+            {c.business && <span style={{ padding: '0 6px', borderRadius: 6, background: 'rgba(37,211,102,.12)', color: '#4ade80', fontWeight: 600 }}>Business</span>}
+          </div>
+        </div>
+        <span className={`kc-pill ${tone}`}><span className="d" />{label}</span>
+      </div>
+
+      {(c.phone || c.chat) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 600, color: 'var(--text-strong)', position: 'relative', zIndex: 1 }}>
+          <Icon name={c.chat ? 'hash' : 'phone'} size={15} style={{ color: k.color }} />{c.phone ? fmtPhone(c.phone) : `chat ${c.chat}`}
+        </div>
+      )}
+
+      <div className="kc-meta" style={{ position: 'relative', zIndex: 1 }}>
+        <div><span>{c.status === 'connected' ? 'Último sinal' : 'Situação'}</span><b>{c.status === 'connected' ? (ago(c.seen) || 'agora') : label}</b></div>
+        <div><span>{c.kind === 'telegram' ? 'Criado' : 'Conectado desde'}</span><b>{c.when ? fmtDateTime(c.when) : '—'}</b></div>
+      </div>
+      {c.reason && c.status !== 'connected' && <div style={{ fontSize: 'var(--text-xs)', color: '#fda4af', position: 'relative', zIndex: 1 }}>Última desconexão: {c.reason}</div>}
+
+      {(c.kind === 'qr' || c.kind === 'oficial') && (
+        <button type="button" className="kc-link" style={{ position: 'relative', zIndex: 1 }} onClick={() => navigate('fluxos')}>
+          <Icon name="zap" size={16} style={{ color: '#a78bfa' }} />
+          <span style={{ flex: 1 }}><b style={{ color: 'var(--text-strong)' }}>{flowsActive}</b> fluxo{flowsActive === 1 ? '' : 's'} rodando com {c.status === 'connected' ? 'este número' : 'os números conectados'}</span>
+          <Icon name="chevron-right" size={16} style={{ color: 'var(--text-subtle)' }} />
+        </button>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
+        {c.kind === 'qr' && c.status !== 'connected' && <button type="button" className="kc-btn primary" onClick={onQr}><Icon name="qr-code" size={15} />{c.status === 'connecting' ? 'Ler QR Code' : 'Reconectar'}</button>}
+        {c.kind === 'qr' && c.status === 'connected' && <button type="button" className="kc-btn" onClick={() => onAct('uazapi', 'disconnect', { id: c.key }, 'Desconectado.', `Desconectar ${c.name}? Para voltar, será preciso ler o QR Code de novo.`)}><Icon name="unplug" size={15} />Desconectar</button>}
+        {c.kind === 'qr' && <button type="button" className="kc-btn" onClick={onRename}><Icon name="pencil" size={15} />Editar</button>}
+        {c.kind === 'qr' && <button type="button" className="kc-btn danger" onClick={() => onAct('uazapi', 'remove', { id: c.key }, 'Conexão excluída.', `Excluir ${c.name}? O número sai da Kobly.`)}><Icon name="trash-2" size={15} />Excluir</button>}
+        {c.kind === 'oficial' && <button type="button" className="kc-btn" onClick={onManage}><Icon name="settings-2" size={15} />Gerenciar</button>}
+        {c.kind === 'telegram' && <button type="button" className="kc-btn" onClick={() => onAct('notifyChannels', 'test', { id: c.key }, 'Mensagem de teste enviada no Telegram.')}><Icon name="send" size={15} />Testar</button>}
+        {c.kind === 'telegram' && <button type="button" className="kc-btn danger" onClick={() => onAct('notifyChannels', 'delete', { id: c.key }, 'Bot removido.', `Remover o bot "${c.name}"?`)}><Icon name="trash-2" size={15} />Remover</button>}
+      </div>
+    </div>
+  );
+}
+
 function KoblyConnections({ empresaId, notify = () => {} }) {
-  const [st, setSt] = useState({ loading: true, uaz: [], uazOn: false, oficial: null, tg: [], error: null });
+  const store = useKobly();
+  const [st, setSt] = useState({ loading: true, uaz: [], uazOn: false, flows: 0, oficial: null, tg: [], error: null });
   const [filter, setFilter] = useState('todos');
   const [q, setQ] = useState('');
   const [picker, setPicker] = useState(false);
   const [flow, setFlow] = useState(null); // { kind, step, id, qrcode }
   const [form, setForm] = useState({});
   const [busy, setBusy] = useState(false);
+  const [rename, setRename] = useState(null); // { id, label }
 
   const load = useCallback(async () => {
     const [u, o, t] = await Promise.all([KoblyApi.uazapi('list', {}, empresaId), KoblyApi.whatsappAccount('status', {}, empresaId), KoblyApi.notifyChannels('list', {}, empresaId)]);
-    setSt({ loading: false, uaz: u.instances || [], uazOn: !!u.configured, oficial: (o && o.account) || null, tg: t.channels || [], error: u.error || t.error || null });
+    setSt({ loading: false, uaz: u.instances || [], uazOn: !!u.configured, flows: u.flows_active || 0, oficial: (o && o.account) || null, tg: t.channels || [], error: u.error || t.error || null });
   }, [empresaId]);
   useEffect(() => { load(); }, [load]);
 
   function start(kind) {
-    setPicker(false);
     if (kind.soon) { notify('info', `${kind.label} chega em breve.`); return; }
+    setPicker(false);
     setForm({}); setFlow({ kind: kind.id, step: 'form' });
   }
   async function createQr() {
@@ -99,6 +267,13 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
     if (r.error) { notify('danger', r.error); return; }
     notify('success', 'Bot conectado. Use "Testar" para receber uma mensagem.'); setFlow(null); load();
   }
+  async function saveRename() {
+    setBusy(true);
+    const r = await KoblyApi.uazapi('rename', { id: rename.id, label: rename.label }, empresaId);
+    setBusy(false);
+    if (r.error) { notify('danger', r.error); return; }
+    setRename(null); load();
+  }
   async function act(fn, action, extra, msg, confirmText) {
     if (confirmText && !confirm(confirmText)) return;
     const r = await KoblyApi[fn](action, extra, empresaId);
@@ -106,105 +281,110 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   }
 
   // todas as conexões no mesmo formato de cartão
-  const cards = [
-    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, sub: i.profile_name || 'WhatsApp comum', phone: i.phone, status: i.status, when: i.connected_at, raw: i })),
-    ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at, raw: st.oficial }] : []),
-    ...st.tg.map((c) => ({ key: c.id, kind: 'telegram', name: c.label, sub: 'Bot de alertas', phone: null, chat: c.default_chat_id, status: 'connected', when: c.created_at, raw: c })),
-  ].filter((c) => (filter === 'todos' || c.kind === filter) && (!q || `${c.name} ${c.phone || ''}`.toLowerCase().includes(q.toLowerCase())));
-  const kindOf = (id) => KINDS.find((k) => k.id === id);
+  const all = [
+    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
+    ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at }] : []),
+    ...st.tg.map((c) => ({ key: c.id, kind: 'telegram', name: c.label, sub: 'Bot de alertas da equipe', chat: c.default_chat_id, status: 'connected', when: c.created_at })),
+  ];
+  const cards = all.filter((c) => (filter === 'todos' || c.kind === filter) && (!q || `${c.name} ${c.profile || ''} ${c.phone || ''}`.toLowerCase().includes(q.toLowerCase())));
+  const on = all.filter((c) => c.status === 'connected' && c.kind !== 'telegram').length;
+  const waiting = all.filter((c) => c.status === 'connecting').length;
+  const soonFilter = KINDS.find((k) => k.id === filter && k.soon);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--text-lg)' }}>Suas conexões</div>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>WhatsApp, API Oficial e Telegram. Os fluxos e os Chats ao vivo usam estes canais.</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <style>{KC_CSS}</style>
+      <div className="kc-hero">
+        <div style={{ display: 'flex', marginRight: 4 }}>
+          {['qr', 'instagram', 'messenger', 'telegram'].map((k, i) => <span key={k} style={{ marginLeft: i ? -10 : 0, borderRadius: 12, boxShadow: '0 0 0 3px #0e1018', zIndex: 4 - i }}><ChannelLogo kind={k} size={40} /></span>)}
         </div>
-        <IconButton icon="refresh-cw" aria-label="Atualizar" onClick={load} />
-        <Button variant="primary" iconLeft="plus" onClick={() => setPicker(true)}>Nova conexão</Button>
+        <div style={{ flex: 1, minWidth: 220, position: 'relative', zIndex: 1 }}>
+          <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 20 }}>Central de conexões</div>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>Todos os seus canais num lugar. Os fluxos e os Chats ao vivo usam os números conectados aqui.</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
+          <div className="kc-stat"><b style={{ color: '#34d399' }}>{on}</b><span>conectados</span></div>
+          <div className="kc-stat"><b style={{ color: waiting ? '#fbbf24' : undefined }}>{waiting}</b><span>aguardando</span></div>
+          <div className="kc-stat"><b style={{ color: '#a78bfa' }}>{st.flows}</b><span>fluxos rodando</span></div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
+          <IconButton icon="refresh-cw" aria-label="Atualizar" onClick={load} />
+          <Button variant="primary" iconLeft="plus" onClick={() => setPicker(true)}>Nova conexão</Button>
+        </div>
       </div>
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Input icon="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome ou número…" style={{ flex: 1, minWidth: 220, maxWidth: 360 }} />
-        {FILTERS.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setFilter(id)} style={{ padding: '7px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
-            border: `1px solid ${filter === id ? 'var(--accent)' : 'var(--border-subtle)'}`, background: filter === id ? 'var(--accent-soft)' : 'transparent', color: filter === id ? 'var(--accent)' : 'var(--text-body)' }}>{label}</button>
+        {FILTERS.map(([id, lbl]) => (
+          <button key={id} type="button" className={`kc-chip${filter === id ? ' on' : ''}`} onClick={() => setFilter(id)}>
+            {id === 'todos' ? <span className="all"><Icon name="layers" size={13} /></span> : <ChannelLogo kind={id} size={22} />}{lbl}
+          </button>
         ))}
+        <Input icon="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome ou número…" style={{ flex: 1, minWidth: 200, maxWidth: 320, marginLeft: 'auto' }} />
       </div>
       {st.error && <Banner tone="danger">{st.error}</Banner>}
       {!st.loading && cards.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: 'var(--text-muted)', border: '1px dashed var(--border-default)', borderRadius: 'var(--radius-md)' }}>
-          Nenhuma conexão{filter !== 'todos' ? ' deste canal' : ''} ainda. Clique em <strong>Nova conexão</strong> para começar pelo WhatsApp.
+        <div className="kc-card" style={{ '--brand': '#8b5cf6', alignItems: 'center', textAlign: 'center', padding: 34 }}>
+          {soonFilter ? <ChannelLogo kind={soonFilter.id} size={52} /> : <div style={{ display: 'flex', gap: 6 }}><ChannelLogo kind="qr" size={44} /><ChannelLogo kind="telegram" size={44} /></div>}
+          <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 16 }}>{soonFilter ? `${soonFilter.label} chega em breve` : `Nenhuma conexão${filter !== 'todos' ? ' deste canal' : ''} ainda`}</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', maxWidth: 420 }}>{soonFilter ? soonFilter.desc : 'Comece conectando seu WhatsApp: leva menos de um minuto, é só ler o QR Code.'}</div>
+          {!soonFilter && <button type="button" className="kc-btn primary" onClick={() => setPicker(true)}><Icon name="plus" size={15} />Nova conexão</button>}
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-        {cards.map((c) => {
-          const k = kindOf(c.kind); const [tone, label] = STATUS[c.status] || STATUS.disconnected;
-          return (
-            <div key={c.key} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', background: 'var(--surface-card)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <KindIcon k={k} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{c.sub}</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Badge size="sm" tone={tone} dot>{label}</Badge>
-                {c.phone && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{fmtPhone(c.phone)}</span>}
-                {c.chat && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>chat {c.chat}</span>}
-              </div>
-              {c.when && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{c.kind === 'telegram' ? 'Criado' : 'Conectado'} em {fmtDateTime(c.when)}</div>}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {c.kind === 'qr' && c.status !== 'connected' && <Button size="sm" variant="primary" iconLeft="qr-code" onClick={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })}>Ler QR Code</Button>}
-                {c.kind === 'qr' && c.status === 'connected' && <Button size="sm" variant="secondary" iconLeft="unplug" onClick={() => act('uazapi', 'disconnect', { id: c.key }, 'Desconectado.', `Desconectar ${c.name}? Para voltar, será preciso ler o QR Code de novo.`)}>Desconectar</Button>}
-                {c.kind === 'qr' && <Button size="sm" variant="ghost" iconLeft="trash-2" onClick={() => act('uazapi', 'remove', { id: c.key }, 'Conexão excluída.', `Excluir ${c.name}? O número sai da Kobly.`)}>Excluir</Button>}
-                {c.kind === 'oficial' && <Button size="sm" variant="secondary" iconLeft="settings-2" onClick={() => setFlow({ kind: 'oficial', step: 'manage' })}>Gerenciar</Button>}
-                {c.kind === 'telegram' && <Button size="sm" variant="secondary" onClick={() => act('notifyChannels', 'test', { id: c.key }, 'Mensagem de teste enviada no Telegram.')}>Testar</Button>}
-                {c.kind === 'telegram' && <Button size="sm" variant="ghost" iconLeft="trash-2" onClick={() => act('notifyChannels', 'delete', { id: c.key }, 'Bot removido.', `Remover o bot "${c.name}"?`)}>Remover</Button>}
-              </div>
-            </div>
-          );
-        })}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+        {cards.map((c) => (
+          <ConnCard key={c.key} c={c} flowsActive={st.flows} navigate={store.navigate} onAct={act}
+            onQr={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })} onRename={() => setRename({ id: c.key, label: c.name })} onManage={() => setFlow({ kind: 'oficial', step: 'manage' })} />
+        ))}
       </div>
 
-      <Modal open={picker} onClose={() => setPicker(false)} title="Nova conexão" subtitle="Escolha o tipo de conexão." width={560}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Modal open={picker} onClose={() => setPicker(false)} title="Nova conexão" subtitle="Escolha o canal que você quer conectar." width={640}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
           {KINDS.map((k) => (
-            <button key={k.id} type="button" onClick={() => start(k)} style={{ display: 'flex', gap: 12, alignItems: 'center', textAlign: 'start', padding: 14, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
-              background: 'var(--surface-card)', cursor: k.soon ? 'default' : 'pointer', opacity: k.soon ? 0.6 : 1, fontFamily: 'var(--font-sans)' }}>
-              <KindIcon k={k} />
-              <span style={{ flex: 1 }}>
-                <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><strong style={{ color: 'var(--text-strong)' }}>{k.label}</strong>{k.soon && <Badge size="sm" tone="neutral">Em breve</Badge>}</span>
-                <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{k.desc}</span>
-              </span>
-              <Icon name="chevron-right" size={16} style={{ color: 'var(--text-subtle)' }} />
+            <button key={k.id} type="button" className={`kc-tile${k.soon ? ' soon' : ''}`} style={{ '--brand': k.color }} onClick={() => start(k)}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <ChannelLogo kind={k.id} size={46} />
+                {k.soon ? <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'rgba(255,255,255,.08)', color: 'var(--text-muted)' }}>Em breve</span> : <Icon name="arrow-up-right" size={16} style={{ color: 'var(--text-subtle)' }} />}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{k.label}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>{k.desc}</div>
+              </div>
             </button>
           ))}
         </div>
       </Modal>
 
-      <Modal open={!!flow && flow.kind === 'qr'} onClose={() => setFlow(null)} title="WhatsApp comum (QR Code)" width={480}
+      <Modal open={!!flow && flow.kind === 'qr'} onClose={() => setFlow(null)} title={flow && flow.step === 'form' ? 'Conectar WhatsApp' : 'Leia o QR Code'} width={500}
         footer={flow && flow.step === 'form' ? <><Button variant="ghost" onClick={() => setFlow(null)}>Cancelar</Button><Button variant="primary" iconLeft="qr-code" disabled={busy || !st.uazOn} onClick={createQr}>{busy ? 'Criando…' : 'Gerar QR Code'}</Button></> : null}>
         {flow && flow.kind === 'qr' && flow.step === 'form' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {!st.uazOn && <Banner tone="warning" title="Ainda não ativo neste servidor.">O administrador da Kobly precisa configurar a Uazapi (UAZAPI_BASE_URL e UAZAPI_ADMIN_TOKEN).</Banner>}
-            <Input label="Nome da conexão" value={form.label || ''} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Ex.: Vendas, Suporte, Número da Ana" />
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Funciona com qualquer número de WhatsApp ou WhatsApp Business. Não é a API oficial: siga as boas práticas de envio para evitar bloqueio.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <ChannelLogo kind="qr" size={48} />
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Funciona com qualquer número de WhatsApp ou WhatsApp Business. Não é a API oficial: siga as boas práticas de envio para evitar bloqueio.</div>
+            </div>
+            {!st.uazOn && <Banner tone="warning" title="Ainda não ativo neste servidor.">O administrador da Kobly precisa cadastrar um servidor em Servidores WhatsApp.</Banner>}
+            <Input label="Nome da conexão" value={form.label || ''} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Ex.: Vendas, Suporte, Número da Ana" autoFocus />
           </div>
         )}
-        {flow && flow.kind === 'qr' && flow.step === 'qr' && <QrPanel id={flow.id} empresaId={empresaId} initialQr={flow.qrcode} notify={notify} onConnected={load} />}
+        {flow && flow.kind === 'qr' && flow.step === 'qr' && <QrPanel id={flow.id} empresaId={empresaId} initialQr={flow.qrcode} notify={notify} onConnected={load} flowsActive={st.flows} onClose={() => setFlow(null)} />}
+      </Modal>
+
+      <Modal open={!!rename} onClose={() => setRename(null)} title="Editar conexão" width={440}
+        footer={<><Button variant="ghost" onClick={() => setRename(null)}>Cancelar</Button><Button variant="primary" iconLeft="check" disabled={busy || !(rename && rename.label.trim())} onClick={saveRename}>Salvar</Button></>}>
+        {rename && <Input label="Nome da conexão" value={rename.label} onChange={(e) => setRename({ ...rename, label: e.target.value })} hint="Só na Kobly: o nome e a foto do perfil no WhatsApp não mudam." autoFocus />}
       </Modal>
 
       <Modal open={!!flow && flow.kind === 'telegram'} onClose={() => setFlow(null)} title="Telegram (bot de alertas)" width={480}
         footer={<><Button variant="ghost" onClick={() => setFlow(null)}>Cancelar</Button><Button variant="primary" disabled={busy || !form.bot_token || !form.chat_id} onClick={saveTg}>Conectar bot</Button></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><ChannelLogo kind="telegram" size={44} /><span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Crie o bot com o @BotFather, adicione-o ao grupo da equipe e cole os dados aqui.</span></div>
           <Input label="Nome (opcional)" value={form.label || ''} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Equipe de vendas" />
           <Input label="Token do bot" type="password" autoComplete="new-password" value={form.bot_token || ''} onChange={(e) => setForm({ ...form, bot_token: e.target.value })} />
-          <Input label="ID do chat ou grupo" value={form.chat_id || ''} onChange={(e) => setForm({ ...form, chat_id: e.target.value })} placeholder="-1001234567890" hint="Crie o bot com o @BotFather, adicione-o ao grupo e use o ID do grupo (começa com -100)." />
+          <Input label="ID do chat ou grupo" value={form.chat_id || ''} onChange={(e) => setForm({ ...form, chat_id: e.target.value })} placeholder="-1001234567890" hint="O ID do grupo começa com -100." />
         </div>
       </Modal>
 
-      <Drawer open={!!flow && flow.kind === 'oficial'} onClose={() => { setFlow(null); load(); }} width={720} title="API Oficial da Meta" subtitle="WhatsApp Cloud API: número verificado e modelos aprovados.">
+      <Drawer open={!!flow && flow.kind === 'oficial'} onClose={() => { setFlow(null); load(); }} width={720} title="WhatsApp API Oficial" subtitle="WhatsApp Cloud API: número verificado e modelos aprovados.">
         {flow && flow.kind === 'oficial' && <WhatsappMetaTab empresaId={empresaId} />}
       </Drawer>
     </div>

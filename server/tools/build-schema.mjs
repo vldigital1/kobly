@@ -83,7 +83,8 @@ grant select (id, organization_id, ad_account_id, name, currency, token_hint, st
 revoke all on public.platform_api_credentials from kobly_authenticated, kobly_anon;
 -- Instâncias Uazapi (0080): token da instância não legível; escrita só pelo serviço.
 revoke all on public.whatsapp_uazapi_instances from kobly_authenticated, kobly_anon;
-grant select (id, organization_id, label, status, phone, profile_name, last_error, connected_at, created_at, updated_at) on public.whatsapp_uazapi_instances to kobly_authenticated;
+grant select (id, organization_id, label, status, phone, profile_name, last_error, connected_at, created_at, updated_at,
+              profile_pic_url, is_business, last_seen_at, disconnect_reason) on public.whatsapp_uazapi_instances to kobly_authenticated;
 -- Servidores Uazapi da Kobly (0081): só o serviço.
 revoke all on public.uazapi_servers from kobly_authenticated, kobly_anon;
 -- Mensagens a apagar quando a etiqueta entra (0082): o cliente só lê.
