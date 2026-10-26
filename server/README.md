@@ -3,6 +3,8 @@
 Substitui o Supabase do Kobly por: Postgres no dize-db + PostgREST (mesma API de tabelas que o front já usa)
 + este serviço (login/sessões; depois, as rotas que eram Edge Functions).
 
+Publicar (Railway + Vercel): veja [`DEPLOY.md`](../DEPLOY.md). Banco num Postgres de servidor: `node tools/migrate.mjs` (monta na 1ª vez, depois só aplica migrações novas).
+
 ## Peças
 - `sql/000_bootstrap.sql` (em `server/sql/`): papéis `kobly_anon|authenticated|service_role`, schemas `auth`, `vault`, `cron`, `net`, `extensions`, e `auth.uid()/jwt()/role()` lendo `request.jwt.claims` (o PostgREST preenche).
 - `tools/build-schema.mjs`: gera o esquema a partir de `supabase/migrations/` (troca os nomes dos papéis; **exclui a 0013**, que criava usuários demo com senha publicada) + `900_grants.sql`.
