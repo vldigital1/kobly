@@ -22,23 +22,26 @@ test('grafo válido: gatilho → texto → aguardar → condição → fim', () 
   assert.equal(v.ok, true, v.errors.join('; '));
   assert.deepEqual(v.warnings, []);
 });
-test('grafo inválido: sem gatilho, saída inexistente, alvo inexistente, saída obrigatória solta', () => {
+test('grafo inválido: sem gatilho, alvo inexistente, repetido; saída sem ligação é permitida (encerra ali)', () => {
   assert.match(validateGraph(g([fim], 'fim')).errors.join(), /começar por um Gatilho/);
-  assert.match(validateGraph(g([trig(), { ...fim, next: { yes: 'ini' } }])).errors.join(), /saída "yes" não existe/);
-  assert.match(validateGraph(g([trig('nada')])).errors.join(), /aponta para "nada", que não existe/);
-  assert.match(validateGraph(g([trig('m'), { ref: 'm', type: 'send_text', data: { text: 'x' }, next: {} }])).errors.join(), /ligue a saída "sent"/);
-  assert.match(validateGraph(g([trig(), fim, { ...fim }])).errors.join(), /repetido/);
-  assert.match(validateGraph(g([trig('fim', ['Evento X']), fim])).errors.join(), /evento desconhecido/);
+  assert.match(validateGraph(g([trig('nada')])).errors.join(), /bloco que não existe mais/);
+  const semFim = validateGraph(g([trig('m'), { ref: 'm', type: 'send_text', data: { text: 'x' }, next: {} }]));
+  assert.equal(semFim.ok, true, 'sem bloco Fim: o fluxo termina no último bloco');
+  assert.match(validateGraph(g([trig(), fim, { ...fim }])).errors.join(), /mesmo identificador/);
+  assert.match(validateGraph(g([trig('fim', ['Evento X']), fim])).errors.join(), /Gatilho: evento desconhecido/);
+  const v = validateGraph(g([trig('m'), { ref: 'm', type: 'send_text', data: { text: '' }, next: {} }]));
+  assert.deepEqual(v.issues.map((i) => i.ref), ['m'], 'o editor sabe qual bloco mostrar');
+  assert.match(v.errors[0], /^Texto:/, 'mensagem com o nome do bloco, sem identificador técnico');
 });
 test('laço sem espera é erro; laço passando por Esperar é permitido', () => {
   const semEspera = validateGraph(g([trig('a'), { ref: 'a', type: 'set_var', data: { name: 'n', value: '1' }, next: { default: 'b' } }, { ref: 'b', type: 'set_var', data: { name: 'n', value: '2' }, next: { default: 'a' } }]));
-  assert.match(semEspera.errors.join(), /Laço sem espera/);
+  assert.match(semEspera.errors.join(), /sem nenhuma espera/);
   const comEspera = validateGraph(g([trig('a'), { ref: 'a', type: 'delay', data: { minutes: 5 }, next: { default: 'b' } }, { ref: 'b', type: 'set_var', data: { name: 'n', value: '2' }, next: { default: 'a' } }]));
   assert.equal(comEspera.ok, true, comEspera.errors.join());
 });
-test('bloco solto vira aviso; regras de condição são conferidas', () => {
-  const v = validateGraph(g([trig(), fim, { ref: 'solto', type: 'end', data: {}, next: {} }]));
-  assert.equal(v.ok, true); assert.match(v.warnings.join(), /"solto" não é alcançado/);
+test('bloco solto é ignorado (nem erro nem aviso); regras de condição são conferidas', () => {
+  const v = validateGraph(g([trig(), fim, { ref: 'solto', type: 'send_media', data: { kind: 'image', url: '' }, next: {} }]));
+  assert.equal(v.ok, true, v.errors.join()); assert.deepEqual(v.warnings, []);
   const c = (rules) => validateGraph(g([trig('c'), { ref: 'c', type: 'condition', data: { rules }, next: { yes: 'fim' } }, fim])).errors.join();
   assert.match(c([{ kind: 'var', name: 'X!', op: 'eq', value: '1' }]), /nome de variável inválido/);
   assert.match(c([{ kind: 'time_between', from: '9h', to: '18:00' }]), /HH:MM/);
@@ -239,8 +242,7 @@ test('validação fase 2: saídas dinâmicas de botões e IA, mídia https, espe
   assert.equal(ok.ok, true, ok.errors.join('; '));
   const e = (n) => validateGraph(g([trig('x'), { ref: 'x', next: {}, ...n }, fim])).errors.join();
   assert.match(e({ type: 'send_buttons', data: { text: 'Q', options: [{ id: 'a', title: 'Um texto grande demais pro botão' }] } }), /até 20 caracteres/);
-  assert.match(e({ type: 'send_buttons', data: { text: 'Q', options: [{ id: 'a', title: 'A' }] }, next: { opt_b: 'fim' } }), /saída "opt_b" não existe/);
-  assert.match(e({ type: 'send_media', data: { kind: 'image', url: 'http://inseguro.test/a.png' } }), /https/);
+    assert.match(e({ type: 'send_media', data: { kind: 'image', url: 'http://inseguro.test/a.png' } }), /envie um arquivo ou cole um link/);
   assert.match(e({ type: 'send_media', data: { kind: 'audio', url: 'https://cdn.test/a.ogg', caption: 'x' } }), /legenda em áudio/);
   assert.match(e({ type: 'ai_classify', data: { outputs: [{ key: 'so_uma', description: 'x' }] } }), /de 2 a 8 saídas/);
   assert.match(e({ type: 'delay', data: { min_seconds: 9, max_seconds: 3 } }), /mínimo não pode passar/);

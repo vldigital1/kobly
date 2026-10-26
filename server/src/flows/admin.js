@@ -117,6 +117,8 @@ export function createFlowAdmin({ pool, copilot = null }) {
           if (!draft) await client.query(`update public.flow_graph_versions set is_active = false where flow_id = $1 and is_active`, [f.flow_id]);
           await client.query(`insert into public.flow_graph_versions (organization_id, flow_id, version, graph, is_active, is_draft, source, note, created_by) values ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9)`,
             [orgId, f.flow_id, n, JSON.stringify(body.graph), !draft, draft, source, body.note ? String(body.note).slice(0, 500) : null, (user && user.id) || null]);
+          // publicar pelo editor já coloca o fluxo no ar (antes era preciso ativar na lista)
+          if (!draft && source === 'editor') await client.query(`update public.campaigns set status_campanha = 'Ativa' where id = $1 and organization_id = $2 and status_campanha <> 'Ativa'`, [body.campaign_id, orgId]);
           await client.query('commit');
           return { ok: true, version: n, draft, warnings };
         } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }

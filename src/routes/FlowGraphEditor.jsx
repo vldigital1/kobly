@@ -23,6 +23,7 @@ const defaultApi = {
   listBrands: () => KoblyApi.listBrands(),
   createEmail: (e) => KoblyApi.createEmail(e),
   updateEmail: (id, p) => KoblyApi.updateEmail(id, p),
+  renameFlow: (id, nome) => KoblyApi.renameCampaign(id, nome),
 };
 
 const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], agents: [], metrics: null, uploadMedia: null, emails: [], openEmail: null, copyEmail: null });
@@ -95,6 +96,9 @@ const FLOW_CSS = `
 .kf-drop:hover, .kf-drop.over { border-color: #a78bfa; background: radial-gradient(circle at 50% 0%, rgba(139,92,246,.2), transparent 70%), rgba(255,255,255,.03); box-shadow: 0 0 26px rgba(139,92,246,.22); }
 .kf-ta { background: rgba(255,255,255,.03); color: var(--text-strong); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 11px 12px; font: inherit; resize: vertical; outline: none; transition: border-color .15s, box-shadow .15s; }
 .kf-ta:focus { border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(139,92,246,.22); }
+.kf-name { font: inherit; font-weight: 700; font-size: 18px; color: var(--text-strong); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 4px 8px; outline: none; width: 100%; max-width: 520px; transition: border-color .15s, background .15s; }
+.kf-name:hover { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
+.kf-name:focus { border-color: #a78bfa; background: rgba(255,255,255,.04); box-shadow: 0 0 0 3px rgba(139,92,246,.2); }
 .kf-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5; pointer-events: none; padding: 7px 14px; border-radius: 999px; font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
 `;
 
@@ -655,6 +659,8 @@ function Editor({ campaign, onBack, api, notify }) {
   const [metrics, setMetrics] = useState(null); // ref → { leads, here } (contador por bloco)
   const [copilot, setCopilot] = useState(null); // { leads, suggestions, summary }
   const [emailModal, setEmailModal] = useState(null); // { email, onCreated } — editor de e-mail das campanhas
+  const [name, setName] = useState(campaign.nome || 'Fluxo sem nome');
+  const [leaving, setLeaving] = useState(false); // pergunta (na própria tela) ao sair com mudanças não publicadas
   async function runCopilot() {
     if (copilot) { setCopilot(null); return; }
     const r = await call('copilot', { campaign_id: campaign.id });
@@ -770,60 +776,33 @@ function Editor({ campaign, onBack, api, notify }) {
   async function validate() {
     const r = await call('validate', { graph: graph() });
     if (r.error) { notify('danger', r.error); return; }
-    setReport({ ok: r.ok, errors: r.errors || [], warnings: r.warnings || [] });
-    if (r.ok) notify('success', r.warnings && r.warnings.length ? 'Fluxo válido, com avisos.' : 'Fluxo válido.');
+    setReport(r.ok && !(r.warnings || []).length ? null : { ok: r.ok, errors: r.errors || [], warnings: r.warnings || [], issues: r.issues || [] });
+    if (r.ok) notify('success', 'Tudo certo: o fluxo pode ser publicado.');
   }
   async function save() {
     const r = await call('save', { campaign_id: campaign.id, graph: graph() });
-    if (r.error) { setReport(r.details ? { ok: false, errors: r.details.errors || [r.error], warnings: r.details.warnings || [] } : { ok: false, errors: [r.error], warnings: [] }); notify('danger', 'Corrija os erros antes de publicar.'); return; }
-    setReport({ ok: true, errors: [], warnings: r.warnings || [] });
+    if (r.error) {
+      const d = r.details || {};
+      setReport({ ok: false, errors: d.errors || [r.error], warnings: d.warnings || [], issues: d.issues || [] });
+      notify('danger', 'Falta ajustar o fluxo antes de publicar.');
+      return false;
+    }
+    setReport(r.warnings && r.warnings.length ? { ok: true, errors: [], warnings: r.warnings, issues: [] } : null);
     setDirty(false);
-    notify('success', `Versão ${r.version} publicada. Os próximos leads já usam este fluxo.`);
-    const g = await api.flowGraph('get', { campaign_id: campaign.id });
-    if (!g.error) setState((s) => ({ ...s, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null }));
+    notify('success', 'Fluxo publicado. Os próximos leads já usam ele.');
+    setState((st) => ({ ...st, version: r.version || st.version || 1 }));
+    return true;
   }
-  // Publicar uma versão existente (rascunho da IA ou versão antiga). O servidor revalida antes.
-  async function activate(version) {
-    if (dirty && !confirm('Há alterações não salvas no canvas. Publicar a versão escolhida descarta essas alterações. Continuar?')) return;
-    const r = await call('activate', { campaign_id: campaign.id, version: Number(version) });
-    if (r.error) { if (r.details) setReport({ ok: false, errors: r.details.errors || [r.error], warnings: r.details.warnings || [] }); notify('danger', r.error); return; }
-    notify('success', `Versão ${version} publicada. Os próximos leads já usam este fluxo.`);
-    load();
+  async function saveName(v) {
+    const nome = String(v || '').trim().slice(0, 80);
+    if (!nome || nome === campaign.nome) { setName(campaign.nome || 'Fluxo sem nome'); return; }
+    const r = await (api.renameFlow ? api.renameFlow(campaign.id, nome) : Promise.resolve({ error: 'indisponível' })).catch((e) => ({ error: e.message }));
+    if (r && r.error) { notify('danger', 'Não deu para renomear o fluxo.'); setName(campaign.nome || ''); return; }
+    campaign.nome = nome;
+    notify('success', 'Nome do fluxo atualizado.');
   }
-  // Abrir uma versão no canvas para revisar (não publica nada).
-  async function openVersion(version) {
-    if (dirty && !confirm('Há alterações não salvas no canvas. Abrir outra versão descarta essas alterações. Continuar?')) return;
-    if (Number(version) === state.version && !state.viewing) return;
-    if (Number(version) === state.version) { load(); return; }
-    const r = await call('get_version', { campaign_id: campaign.id, version: Number(version) });
-    if (r.error) { notify('danger', r.error); return; }
-    const c = toCanvas(r.graph);
-    setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setCopilot(null); setEditId(null);
-    setState((s) => ({ ...s, viewing: { version: r.version, is_draft: r.is_draft, source: r.source, note: r.note } }));
-    setCanvasKey((k) => k + 1);
-  }
-  async function saveDraft() {
-    const note = prompt('Nota do rascunho (opcional): o que mudou?') ?? null;
-    if (note === null) return;
-    const r = await call('save_draft', { campaign_id: campaign.id, graph: graph(), note: note || undefined });
-    if (r.error) { setReport(r.details ? { ok: false, errors: r.details.errors || [r.error], warnings: r.details.warnings || [] } : { ok: false, errors: [r.error], warnings: [] }); notify('danger', 'Corrija os erros antes de salvar.'); return; }
-    setDirty(false);
-    notify('success', `Rascunho salvo como versão ${r.version}. Nada mudou para os leads até publicar.`);
-    const g = await api.flowGraph('get', { campaign_id: campaign.id });
-    if (!g.error) setState((s) => ({ ...s, versions: g.versions || [], viewing: { version: r.version, is_draft: true, source: 'editor', note } }));
-  }
-  const versionLabel = (v) => `Versão ${v.version}${v.is_active ? ' (publicada)' : v.is_draft ? (v.source === 'mcp' ? ' (rascunho da IA)' : ' (rascunho)') : ''}`;
-  async function deactivate() {
-    if (!confirm('Desligar o fluxo em grafo? A campanha volta a usar a lista de etapas antiga. As versões ficam guardadas.')) return;
-    const r = await api.flowGraph('deactivate', { campaign_id: campaign.id });
-    if (r.error) { notify('danger', r.error); return; }
-    notify('info', 'Fluxo em grafo desligado para esta campanha.');
-    load();
-  }
-  const back = () => { if (!dirty || confirm('Sair sem publicar as alterações?')) onBack(); };
-  const focusRef = (msg, open = true) => {
-    const m = /bloco "([^"]+)"|"([^"]+)" não é alcançado|^([a-z0-9-]+):/.exec(msg);
-    const ref = m && (m[1] || m[2] || m[3]);
+  const back = () => { if (dirty) setLeaving(true); else onBack(); };
+  const focusRef = (ref, open = true) => {
     const n = ref && rf.getNode(ref);
     if (n) {
       setNodes((ns) => ns.map((x) => ({ ...x, selected: x.id === ref })));
@@ -832,7 +811,7 @@ function Editor({ campaign, onBack, api, notify }) {
     }
   };
   const palette = useMemo(() => PALETTE_GROUPS.map((g) => [g, paletteItems(g)]), []);
-  const showPanel = (report && (report.errors.length > 0 || report.warnings.length > 0 || report.ok)) || copilot;
+  const showPanel = (report && (report.errors.length > 0 || report.warnings.length > 0)) || copilot;
 
   if (state.error) return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -846,35 +825,20 @@ function Editor({ campaign, onBack, api, notify }) {
       <style>{FLOW_CSS}</style>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 520, gap: 10 }}>
         {/* barra superior */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <IconButton icon="arrow-left" aria-label="Voltar" onClick={back} />
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ fontWeight: 600, color: 'var(--text-strong)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              {campaign.nome || 'Campanha'}{state.version && !state.viewing && <span className="kf-live" title="Fluxo publicado e rodando" />}
-            </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: state.viewing ? 'var(--amber-600)' : 'var(--text-muted)' }}>
-              {state.viewing
-                ? `Revisando versão ${state.viewing.version}${state.viewing.is_draft ? (state.viewing.source === 'mcp' ? ' · rascunho criado pela IA' : ' · rascunho') : ' · versão antiga'}${state.viewing.note ? ` · "${state.viewing.note}"` : ''} — os leads seguem na versão ${state.version || 'publicada'}`
-                : `Fluxo em grafo · ${state.version ? `versão ${state.version} publicada` : 'ainda não publicado'}`}
-              {dirty ? ' · alterações não salvas' : ''}
+          <div style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <input className="kf-name" value={name} maxLength={80} aria-label="Nome do fluxo" title="Clique para renomear"
+              onChange={(e) => setName(e.target.value)} onBlur={(e) => saveName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setName(campaign.nome || ''); e.currentTarget.blur(); } }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', paddingLeft: 8 }}>
+              {state.version ? <><span className="kf-live" />No ar</> : <><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#64748b' }} />Ainda não publicado</>}
             </div>
           </div>
-          {state.versions.length > 0 && (
-            <Select value={String((state.viewing && state.viewing.version) || state.version || '')} onChange={(e) => e.target.value && openVersion(e.target.value)} style={{ minWidth: 190 }}
-              options={[...(state.version || state.viewing ? [] : [{ value: '', label: 'Versões…' }]), ...state.versions.map((v) => ({ value: String(v.version), label: versionLabel(v) }))]} />
-          )}
-          {state.viewing ? (<>
-            <Button variant="ghost" size="sm" onClick={() => openVersion(state.version || state.viewing.version)} disabled={!state.version}>Voltar à publicada</Button>
-            <Button onClick={() => activate(state.viewing.version)} loading={busy} iconLeft="send" disabled={dirty}>Publicar esta versão</Button>
-          </>) : (<>
-            {state.version && <Button variant={copilot ? 'primary' : 'secondary'} size="sm" iconLeft="sparkles" onClick={runCopilot}>Copiloto</Button>}
-            {state.version && <Button variant={metrics ? 'primary' : 'secondary'} size="sm" iconLeft="chart-column" onClick={toggleMetrics}>Métricas</Button>}
-            {state.version && <Button variant="ghost" size="sm" onClick={deactivate}>Desligar</Button>}
-          </>)}
-          <Button variant="secondary" onClick={validate} loading={busy} iconLeft="check">Validar</Button>
-          <Button variant="secondary" onClick={saveDraft} loading={busy} iconLeft="file-text" disabled={state.loading}>Salvar rascunho</Button>
-          {!state.viewing && <Button onClick={save} loading={busy} iconLeft="send" disabled={state.loading}>Publicar</Button>}
-          {state.viewing && dirty && <Button onClick={save} loading={busy} iconLeft="send">Publicar alterações</Button>}
+          {state.version && <Button variant={copilot ? 'primary' : 'secondary'} size="sm" iconLeft="sparkles" onClick={runCopilot}>Copiloto</Button>}
+          {state.version && <Button variant={metrics ? 'primary' : 'secondary'} size="sm" iconLeft="chart-column" onClick={toggleMetrics}>Métricas</Button>}
+          <Button variant="secondary" onClick={validate} loading={busy} iconLeft="check">Conferir</Button>
+          <Button onClick={save} loading={busy} iconLeft="send" disabled={state.loading}>Publicar</Button>
         </div>
 
         <div style={{ display: 'flex', gap: 10, flex: 1, minHeight: 0 }}>
@@ -913,11 +877,11 @@ function Editor({ campaign, onBack, api, notify }) {
               <div className="kf-glass" style={{ position: 'absolute', top: 12, right: 12, zIndex: 6, width: 340, maxHeight: 'calc(100% - 24px)', overflowY: 'auto', borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span className="kf-ico" style={{ '--tone': copilot ? TONES.purple : report && report.errors.length ? '#f43f5e' : '#34d399', width: 26, height: 26, borderRadius: 8 }}><Icon name={copilot ? 'sparkles' : report && report.errors.length ? 'circle-alert' : 'circle-check'} size={14} /></span>
-                  <strong style={{ flex: 1, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{copilot ? 'Copiloto' : report && report.errors.length ? `${report.errors.length} ajuste(s) antes de publicar` : 'Fluxo válido'}</strong>
+                  <strong style={{ flex: 1, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{copilot ? 'Copiloto' : report && report.errors.length ? (report.errors.length === 1 ? 'Falta 1 ajuste' : `Faltam ${report.errors.length} ajustes`) : 'Avisos'}</strong>
                   <IconButton icon="x" size="sm" aria-label="Fechar painel" onClick={() => { setReport(null); setCopilot(null); }} />
                 </div>
-                {report && report.errors.map((m, i) => <button key={'e' + i} type="button" onClick={() => focusRef(m)} style={{ textAlign: 'left', background: 'rgba(244,63,94,.1)', color: '#fda4af', border: '1px solid rgba(244,63,94,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{m}</button>)}
-                {report && report.warnings.map((m, i) => <button key={'w' + i} type="button" onClick={() => focusRef(m)} style={{ textAlign: 'left', background: 'rgba(245,158,11,.1)', color: '#fcd34d', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{m}</button>)}
+                {report && (report.issues && report.issues.length ? report.issues : report.errors.map((m) => ({ message: m }))).map((it, i) => <button key={'e' + i} type="button" onClick={() => focusRef(it.ref)} style={{ textAlign: 'left', background: 'rgba(244,63,94,.1)', color: '#fda4af', border: '1px solid rgba(244,63,94,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{it.message}</button>)}
+                {report && report.warnings.map((m, i) => <button key={'w' + i} type="button" style={{ textAlign: 'left', background: 'rgba(245,158,11,.1)', color: '#fcd34d', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{m}</button>)}
                 {report && report.ok && !report.errors.length && !report.warnings.length && !copilot && <Badge tone="success">Pronto para publicar</Badge>}
                 {copilot && (<>
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{copilot.leads} leads analisados</span>
@@ -925,7 +889,7 @@ function Editor({ campaign, onBack, api, notify }) {
                   {copilot.suggestions.map((s, i) => {
                     const c = s.severity === 'alta' ? '#f43f5e' : s.severity === 'media' ? '#f59e0b' : '#22d3ee';
                     return (
-                      <button key={i} type="button" onClick={() => s.ref && focusRef(`bloco "${s.ref}"`, false)} style={{ textAlign: 'left', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)', borderLeft: `3px solid ${c}`, borderRadius: 10, padding: '8px 10px', cursor: s.ref ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <button key={i} type="button" onClick={() => s.ref && focusRef(s.ref, false)} style={{ textAlign: 'left', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)', borderLeft: `3px solid ${c}`, borderRadius: 10, padding: '8px 10px', cursor: s.ref ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{s.title}{s.ref ? <span style={{ color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', fontWeight: 400, fontSize: 10 }}> · {s.ref}</span> : null}</span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{s.detail}</span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>→ {s.action}</span>
@@ -939,6 +903,18 @@ function Editor({ campaign, onBack, api, notify }) {
           </div>
         </div>
       </div>
+      {leaving && (
+        <div className="kf-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setLeaving(false); }}>
+          <div className="kf-modal kf-glass" role="dialog" aria-modal="true" style={{ '--tone': '#f59e0b', width: 'min(440px, 100%)', padding: 22, gap: 14 }}>
+            <strong style={{ color: 'var(--text-strong)', fontSize: 16 }}>Publicar antes de sair?</strong>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', lineHeight: 1.5 }}>Você mexeu no fluxo e ainda não publicou. Se sair agora, essas mudanças se perdem.</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <Button variant="ghost" onClick={() => { setLeaving(false); onBack(); }}>Sair sem publicar</Button>
+              <Button iconLeft="send" loading={busy} onClick={async () => { if (await save()) { setLeaving(false); onBack(); } else setLeaving(false); }}>Publicar e sair</Button>
+            </div>
+          </div>
+        </div>
+      )}
       {editing && <BlockModal node={editing} onChange={(data) => updateNode(editing.id, data)} onDelete={() => deleteNode(editing.id)} onClose={closeModal} />}
       {emailModal && (
         <div style={{ position: 'relative', zIndex: 1100 }}>

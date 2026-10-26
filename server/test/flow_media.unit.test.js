@@ -58,5 +58,5 @@ test('bloco de mídia e texto: etiqueta de exclusão precisa ser válida', () =>
   assert.deepEqual(errs(g({ text: 'Oi', delete_on_tag: TAG }, 'send_text')), []);
   assert.match(errs(g({ text: 'Oi', delete_on_tag: 'qualquer' }, 'send_text')).join(' '), /etiqueta que dispara/);
   assert.deepEqual(errs(g({ kind: 'document', url: 'http://localhost:4120/storage/v1/object/public/flow-media/x/a.pdf' })), [], 'arquivo do ambiente local');
-  assert.match(errs(g({ kind: 'document', url: 'http://site.com/a.pdf' })).join(' '), /https/);
+  assert.match(errs(g({ kind: 'document', url: 'http://site.com/a.pdf' })).join(' '), /envie um arquivo ou cole um link/);
 });

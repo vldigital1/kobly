@@ -57,7 +57,7 @@ export const BLOCKS = {
     exits: [['default', 'Próximo']], make: () => ({ add: [], remove: [] }) },
   set_var: { label: 'Definir variável', group: 'Ações', icon: 'pencil', tone: 'neutral', hint: 'Grava texto ou faz conta numa variável.',
     exits: [['default', 'Próximo']], make: () => ({ name: 'etapa', op: 'set', value: '1' }) },
-  end: { label: 'Fim', group: 'Ações', icon: 'flag', tone: 'neutral', hint: 'Encerra o fluxo para o lead.', exits: [], make: () => ({}) },
+  end: { label: 'Fim', group: null, icon: 'flag', tone: 'neutral', hint: 'Encerra o fluxo para o lead.', exits: [], make: () => ({}) },
 };
 export const PALETTE_GROUPS = ['Mensagens', 'Controle', 'IA', 'Dinheiro', 'Ações'];
 
@@ -116,12 +116,9 @@ export function emptyGraph() {
   return { version: 1, start: 'ini', nodes: [{ ref: 'ini', type: 'trigger', data: BLOCKS.trigger.make(), next: {}, position: { x: 0, y: 0 } }] };
 }
 
-// fluxo novo criado pela tela Fluxos: gatilho → fim (já válido, salvo como 1º rascunho)
+// fluxo novo criado pela tela Fluxos: só o Gatilho (onde a última ligação acaba, o fluxo termina)
 export function starterGraph() {
-  const g = emptyGraph();
-  g.nodes[0].next = { default: 'fim' };
-  g.nodes.push({ ref: 'fim', type: 'end', data: {}, next: {}, position: { x: 0, y: 220 } });
-  return g;
+  return emptyGraph();
 }
 
 // grafo salvo → nós/arestas do canvas

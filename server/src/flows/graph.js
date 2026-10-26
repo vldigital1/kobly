@@ -78,9 +78,16 @@ export function delaySecondsRange(d) {
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const str = (v, max = 4096) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
 
+const MEDIA_LABEL = { image: 'Imagem', video: 'Vídeo', audio: 'Áudio', document: 'Arquivo' };
+export function labelOf(node) {
+  const d = isObj(node && node.data) ? node.data : {};
+  if (node && node.type === 'send_media' && MEDIA_LABEL[d.kind]) return MEDIA_LABEL[d.kind];
+  if (node && node.type === 'send_text') return 'Texto';
+  return (NODE_TYPES[node && node.type] || {}).label || 'Bloco';
+}
 function checkData(node, err) {
   const d = isObj(node.data) ? node.data : {};
-  const at = `bloco "${node.ref}"`;
+  const at = `${labelOf(node)}`;
   switch (node.type) {
     case 'trigger':
       if (!Array.isArray(d.events) || !d.events.length) err(`${at}: escolha ao menos um evento de checkout.`);
@@ -111,7 +118,7 @@ function checkData(node, err) {
     case 'send_media':
       if (!MEDIA_KINDS.includes(d.kind)) err(`${at}: escolha o tipo de mídia (imagem, áudio, vídeo ou documento).`);
       // link https fixo ou uma variável (ex.: {{pagamento_qr}} gerado pelo bloco de cobrança)
-      if (!(typeof d.url === 'string' && d.url.length <= 2048 && (/^https:\/\/[^\s]+$/i.test(d.url.trim()) || LOCAL_URL.test(d.url.trim()) || /^\{\{\s*[a-z_][a-z0-9_.]*\s*\}\}$/i.test(d.url.trim())))) err(`${at}: a mídia precisa de um link público https (ou uma variável como {{pagamento_qr}}).`);
+      if (!(typeof d.url === 'string' && d.url.length <= 2048 && (/^https:\/\/[^\s]+$/i.test(d.url.trim()) || LOCAL_URL.test(d.url.trim()) || /^\{\{\s*[a-z_][a-z0-9_.]*\s*\}\}$/i.test(d.url.trim())))) err(`${at}: envie um arquivo ou cole um link.`);
       if (d.caption !== undefined && d.caption !== null && (typeof d.caption !== 'string' || d.caption.length > 1024)) err(`${at}: legenda até 1024 caracteres.`);
       if (d.kind === 'audio' && d.caption) err(`${at}: o WhatsApp não aceita legenda em áudio.`);
       deleteOnTag(d, at, err);
@@ -240,58 +247,66 @@ function checkData(node, err) {
   }
 }
 
-// Valida um grafo. Erros impedem salvar; avisos só informam (ex.: bloco que ninguém alcança).
+// Valida um grafo. Só o que o Gatilho alcança é conferido: bloco solto no canvas não atrapalha
+// (nunca roda). Nenhuma saída é obrigatória: saída sem ligação encerra o fluxo do lead ali.
+// issues: [{ ref, message }] para o editor levar o usuário até o bloco com problema.
 export function validateGraph(graph) {
-  const errors = [], warnings = [];
-  const err = (m) => errors.push(m), warn = (m) => warnings.push(m);
-  if (!isObj(graph)) return { ok: false, errors: ['Fluxo inválido.'], warnings };
+  const errors = [], warnings = [], issues = [];
+  const err = (m, ref = null) => { errors.push(m); issues.push({ ref, message: m }); };
+  if (!isObj(graph)) return { ok: false, errors: ['Fluxo inválido.'], warnings, issues };
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : null;
-  if (!nodes || !nodes.length) return { ok: false, errors: ['O fluxo não tem blocos.'], warnings };
+  if (!nodes || !nodes.length) return { ok: false, errors: ['O fluxo não tem blocos.'], warnings, issues };
   if (nodes.length > MAX_NODES) err(`O fluxo passou de ${MAX_NODES} blocos.`);
 
   const byRef = new Map();
   for (const n of nodes) {
-    if (!isObj(n) || !/^[A-Za-z0-9_-]{1,64}$/.test(String(n.ref || ''))) { err('Bloco sem identificador válido (letras, números, _ e -).'); continue; }
-    if (byRef.has(n.ref)) err(`Identificador repetido: "${n.ref}".`);
+    if (!isObj(n) || !/^[A-Za-z0-9_-]{1,64}$/.test(String(n.ref || ''))) { err('Bloco sem identificador válido.'); continue; }
+    if (byRef.has(n.ref)) err(`Dois blocos com o mesmo identificador ("${n.ref}").`, n.ref);
     byRef.set(n.ref, n);
-    if (!(n.type in NODE_TYPES)) { err(`bloco "${n.ref}": tipo desconhecido "${n.type}".`); continue; }
-    checkData(n, err);
-    const spec = NODE_TYPES[n.type];
+  }
+  const start = byRef.get(graph.start);
+  if (!start) err('O fluxo precisa de um Gatilho.');
+  else if (start.type !== 'trigger') err('O fluxo precisa começar por um Gatilho.', start.ref);
+  if (nodes.filter((n) => n && n.type === 'trigger').length > 1) err('Use só um Gatilho por fluxo.');
+
+  // o que o Gatilho alcança
+  const seen = new Set();
+  if (start) {
+    const stack = [start.ref];
+    while (stack.length) { const r = stack.pop(); if (seen.has(r)) continue; seen.add(r); const n = byRef.get(r); if (n && isObj(n.next)) for (const t of Object.values(n.next)) if (t && byRef.has(t)) stack.push(t); }
+  }
+  for (const n of nodes) {
+    if (!isObj(n) || !seen.has(n.ref)) continue;
+    if (!(n.type in NODE_TYPES)) { err(`Bloco de tipo desconhecido ("${n.type}").`, n.ref); continue; }
+    checkData(n, (m) => err(m, n.ref));
     const next = isObj(n.next) ? n.next : {};
     const exits = exitsOf(n);
     for (const [exit, target] of Object.entries(next)) {
-      if (!exits.includes(exit)) err(`bloco "${n.ref}": saída "${exit}" não existe em ${spec.label}.`);
-      else if (target !== null && target !== undefined && !byRef.has(target) && !nodes.some((m) => m && m.ref === target)) err(`bloco "${n.ref}": a saída "${exit}" aponta para "${target}", que não existe.`);
-      if (target === n.ref) err(`bloco "${n.ref}": a saída "${exit}" aponta para ele mesmo.`);
+      if (!target) continue;
+      if (!exits.includes(exit)) continue; // saída que o bloco não tem mais: ignorada ao rodar
+      if (!byRef.has(target)) err(`${labelOf(n)}: uma ligação aponta para um bloco que não existe mais.`, n.ref);
+      if (target === n.ref) err(`${labelOf(n)}: uma saída está ligada no próprio bloco.`, n.ref);
     }
-    for (const r of spec.required) if (!next[r]) err(`bloco "${n.ref}": ligue a saída "${r}".`);
   }
 
-  const start = byRef.get(graph.start);
-  if (!start) err('Defina o bloco inicial do fluxo.');
-  else if (start.type !== 'trigger') err('O fluxo precisa começar por um Gatilho.');
-  if (nodes.filter((n) => n && n.type === 'trigger').length > 1) err('Use só um Gatilho por fluxo.');
-
-  // Alcance a partir do início + ciclos sem espera (loop infinito instantâneo).
+  // ciclos sem espera (loop infinito instantâneo)
   if (start) {
-    const seen = new Set(); const stack = [start.ref];
-    while (stack.length) { const r = stack.pop(); if (seen.has(r)) continue; seen.add(r); const n = byRef.get(r); if (n && isObj(n.next)) for (const t of Object.values(n.next)) if (t) stack.push(t); }
-    for (const n of nodes) if (n && n.ref && !seen.has(n.ref)) warn(`O bloco "${n.ref}" não é alcançado a partir do início.`);
     const PAUSA = new Set(['delay', 'wait_reply', 'send_buttons', 'ai_agent', 'wait_until']);
     const color = new Map();
     const dfs = (r) => {
       color.set(r, 1);
       const n = byRef.get(r);
       if (n && !PAUSA.has(n.type) && isObj(n.next)) for (const t of Object.values(n.next)) {
-        if (!t || !byRef.has(t)) continue;
-        if (color.get(t) === 1) { err(`Laço sem espera passando por "${t}": coloque um Esperar ou Aguardar resposta no caminho.`); continue; }
+        if (!t || !byRef.has(t) || t === r) continue;
+        if (color.get(t) === 1) { err(`O caminho volta para "${labelOf(byRef.get(t))}" sem nenhuma espera: coloque um Esperar ou Aguardar resposta no meio.`, t); continue; }
         if (!color.get(t)) dfs(t);
       }
       color.set(r, 2);
     };
     for (const r of seen) if (!color.get(r)) dfs(r);
   }
-  return { ok: errors.length === 0, errors: [...new Set(errors)], warnings };
+  const uniq = [...new Set(errors)];
+  return { ok: uniq.length === 0, errors: uniq, warnings, issues: issues.filter((x, i) => issues.findIndex((y) => y.message === x.message) === i) };
 }
 
 export const nodeOf = (graph, ref) => (graph && Array.isArray(graph.nodes) ? graph.nodes.find((n) => n.ref === ref) : null) || null;
