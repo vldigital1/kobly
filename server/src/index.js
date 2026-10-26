@@ -12,7 +12,7 @@ try {
   console.error('[kobly-api] o usuário do banco não pode assumir kobly_authenticated:', e.message);
   process.exit(1);
 }
-const { server, engine, flows } = createApp({ pool, config });
+const { server, engine, flows, bulk } = createApp({ pool, config });
 server.listen(config.port, config.host, () => console.log(`[kobly-api] ouvindo em ${config.host}:${config.port}`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => server.close(() => pool.end().then(() => process.exit(0))));
 
@@ -32,5 +32,7 @@ if (process.env.ENGINE_ENABLED !== 'false') {
   setInterval(async () => {
     try { const st = await flows.tick(); if (st.claimed) console.log('[flows]', JSON.stringify(st)); }
     catch (e) { console.error('[flows] tick falhou:', e.message); }
+    try { const b = await bulk.tick(); if (b.sent) console.log('[disparo]', JSON.stringify(b)); }
+    catch (e) { console.error('[disparo] tick falhou:', e.message); }
   }, flowEvery).unref();
 }

@@ -1121,6 +1121,8 @@ export const KoblyApi = {
     if (error) { const body = await error.context?.json?.().catch(() => null); return { error: (body && (body.detail || body.error)) || error.message }; }
     return data || {};
   },
+  // Disparo em massa no servidor novo: list | estimate | create | status | cancel
+  async bulk(action, extra = {}, empresaId = null) { return this.serviceCall('bulk-send', action, extra, empresaId); },
   async listBulkSends(empresaId) {
     let q = supabase.from('bulk_sends').select('*').order('created_at', { ascending: false }).limit(20);
     if (empresaId) q = q.eq('organization_id', empresaId);

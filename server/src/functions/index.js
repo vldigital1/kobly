@@ -82,6 +82,7 @@ export function createFunctions(ctx) {
     'meta-ads': () => orgUserRoute('metaAds', 'meta-ads'),
     'platforms': () => orgUserRoute('platforms', 'platforms'),
     'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
+    'bulk-send': () => orgUserRoute('bulk', 'bulk-send'),
     'uazapi-servers': () => platformAdminRoute((body) => ctx.uazapi.handleServers(body)),
   };
   return {

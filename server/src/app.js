@@ -1,5 +1,6 @@
 import { createMailer } from './mailer.js';
 import { createFlowEmail } from './email/flowEmail.js';
+import { createBulk } from './bulk/service.js';
 import { createInvites } from './invite.js';
 import { createStorage } from './storage.js';
 import { createUnsubscribe } from './unsubscribe.js';
@@ -101,6 +102,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const flowEmail = createFlowEmail({ pool, apiKey: config.resendApiKey, platformFrom: config.mailFrom, sendingDomain: config.resendSendingDomain, unsubSecret: config.unsubscribeSecret, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier });
   whatsapp.setInboundHandler(flows.onInbound);
+  const bulk = createBulk({ pool, whatsapp: waRouted, email: flowEmail, flows });
   const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }) });
   const mcp = createMcp({ pool, flowAdmin });
   const postback = createPostback({ pool, flows });
@@ -114,7 +116,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const products = createProducts({ pool });
   const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms, uazapi });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms, uazapi, bulk });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -248,7 +250,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       }
       const fm = /^\/functions\/v1\/([a-z0-9-]+)$/.exec(path);
       // foto do perfil do WhatsApp vai em base64 na rota uazapi: limite maior só ali
-      if (fm) return await functions.handle(fm[1], req, res, { readJson: (r) => readJson(r, fm[1] === 'uazapi' ? 2 * 1024 * 1024 : MAX_BODY), readBody, send, bearer, clientIp });
+      if (fm) return await functions.handle(fm[1], req, res, { readJson: (r) => readJson(r, fm[1] === 'uazapi' || fm[1] === 'bulk-send' ? 2 * 1024 * 1024 : MAX_BODY), readBody, send, bearer, clientIp });
       const handler = routes[`${req.method} ${path}`];
       if (!handler) return send(res, 404, { code: 'not_found', message: 'Not found' });
       const body = req.method === 'POST' ? await readJson(req) : {};
@@ -260,5 +262,5 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     }
   });
   const engine = createEngine({ pool, whatsapp });
-  return { server, auth, engine, flows };
+  return { server, auth, engine, flows, bulk };
 }

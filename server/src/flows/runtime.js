@@ -123,6 +123,22 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     return { started, stopped };
   }
 
+  // Disparo em massa: coloca UM lead no início de um fluxo publicado (sem depender do evento do gatilho).
+  async function startForLead({ orgId, campaignId, leadId, tipo = 'Disparo em massa' }) {
+    const lead = (await pool.query(`select automation_paused from public.leads where id = $1 and organization_id = $2`, [leadId, orgId])).rows[0];
+    if (!lead) return { started: false, reason: 'lead não encontrado' };
+    if (lead.automation_paused) return { started: false, reason: 'automação pausada para este lead' };
+    const r = (await pool.query(`select f.id as flow_id, v.id as version_id, v.graph from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
+      join public.flow_graph_versions v on v.flow_id = f.id and v.is_active where c.id = $1 and c.organization_id = $2`, [campaignId, orgId])).rows[0];
+    if (!r) return { started: false, reason: 'fluxo sem versão publicada' };
+    const ins = await pool.query(`insert into public.flow_executions (organization_id, campaign_id, flow_id, graph_version_id, lead_id, current_ref, stop_on_purchase, variables)
+      values ($1,$2,$3,$4,$5,$6,true,$7::jsonb) on conflict (campaign_id, lead_id) where status in ('running','waiting') do nothing returning id`,
+      [orgId, campaignId, r.flow_id, r.version_id, leadId, r.graph.start, JSON.stringify({ evento_tipo: tipo })]);
+    if (!ins.rows[0]) return { started: false, reason: 'o lead já está nesse fluxo' };
+    kick();
+    return { started: true };
+  }
+
   // ---- Entrada: mensagem do lead -------------------------------------------
   async function onInbound({ orgId, accountId, instanceId = null, message, contacts }) {
     const from = digitsOf(message.from);
@@ -629,5 +645,5 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
   // Retomada rápida (resposta do lead / evento novo) sem esperar o próximo ciclo.
   function kick() { if (autoKick) setImmediate(() => { tick().catch((e) => console.error('[flows] tick:', e.message)); }); }
 
-  return { startForEvent, onInbound, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
+  return { startForEvent, startForLead, onInbound, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
 }
