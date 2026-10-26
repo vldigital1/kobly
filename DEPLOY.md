@@ -30,7 +30,8 @@ Ele mostra 4 linhas (`JWT_SECRET`, `KOBLY_SECRET_KEY`, `UNSUBSCRIBE_SECRET`, `PG
 1. Entre em **railway.com** com sua conta do GitHub → **New Project** → **Deploy from GitHub repo** → escolha o repositório da Kobly.
 2. No serviço que ele criou, abra **Settings**:
    - **Service name**: `api`
-   - **Source → Root Directory**: `/server`
+   - **Source → Root Directory**: deixe **vazio** (raiz do repositório)
+   - **Config-as-code → Railway Config File**: `/server/railway.json` (monta pelo `server/Dockerfile`, que leva junto as migrações do banco)
    - **Source → Branch**: a branch com o código novo (`feat/fase1-motor-fluxo`, ou `main` se você juntou).
 3. No projeto, clique **+ Create → Database → PostgreSQL**. (O nome do serviço fica `Postgres`.)
 
