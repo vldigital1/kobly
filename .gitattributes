@@ -1,3 +1,0 @@
-# Force edge function sources as text (avoids false binary detection on UTF-8)
-supabase/functions/**/*.ts text eol=lf
-*.md text eol=lf
