@@ -31,7 +31,7 @@ Ele mostra 4 linhas (`JWT_SECRET`, `KOBLY_SECRET_KEY`, `UNSUBSCRIBE_SECRET`, `PG
 2. No serviço que ele criou, abra **Settings**:
    - **Service name**: `api`
    - **Source → Root Directory**: deixe **vazio** (raiz do repositório)
-   - **Config-as-code → Railway Config File**: `/server/railway.json` (monta pelo `server/Dockerfile`, que leva junto as migrações do banco)
+   - **Config-as-code → Railway Config File**: `/server/railway.json` (monta pelo `Dockerfile` da raiz, que leva junto as migrações do banco)
    - **Source → Branch**: a branch com o código novo (`feat/fase1-motor-fluxo`, ou `main` se você juntou).
 3. No projeto, clique **+ Create → Database → PostgreSQL**. (O nome do serviço fica `Postgres`.)
 
