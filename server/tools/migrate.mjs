@@ -99,10 +99,9 @@ if (adminEmail && process.env.KOBLY_ADMIN_PASSWORD) {
   const d = new pg.Client({ connectionString: url }); await d.connect();
   const exists = (await d.query(`select 1 from auth.users where lower(email) = $1`, [adminEmail])).rowCount > 0;
   await d.end();
-  if (!exists) {
-    execFileSync(process.execPath, [join(SERVER, 'tools/create-user.mjs'), adminEmail, 'Administrador', 'Administrador Kobly'],
-      { env: { ...process.env, KOBLY_NEW_PASSWORD: process.env.KOBLY_ADMIN_PASSWORD }, stdio: 'inherit' });
-    log(`Administrador criado: ${adminEmail}`);
-  }
+  // cria, ou (se já existe) acerta a senha e o papel: a senha de KOBLY_ADMIN_PASSWORD é sempre a que vale
+  execFileSync(process.execPath, [join(SERVER, 'tools/create-user.mjs'), adminEmail, 'Administrador', 'Administrador Kobly'],
+    { env: { ...process.env, KOBLY_NEW_PASSWORD: process.env.KOBLY_ADMIN_PASSWORD }, stdio: 'inherit' });
+  log(exists ? `Administrador ${adminEmail}: senha atualizada` : `Administrador criado: ${adminEmail}`);
 }
 log('pronto');
