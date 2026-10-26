@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, DataTable, Icon, IconButton, Input, Select } from '@/ds';
+import { GoogleAdsLogo, MetaLogo, TikTokLogo, UtmifyLogo } from '@/lib/brandLogos.jsx';
 import { EmptyState, ErrorState, SkeletonTable } from '@/lib/ui.jsx';
 import { fmtDateTime } from '@/lib/workspace.jsx';
 
@@ -34,7 +35,7 @@ function UtmifyCard({ orgId, canEdit, notify }) {
   }
   const n = (s) => (st.sent.find((x) => x.status === s) || {}).n || 0;
   return (
-    <Card title="UTMify" subtitle="Vendas recuperadas pelo WhatsApp aparecem na UTMify com a origem certa do lead.">
+    <Card title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><UtmifyLogo size={28} />UTMify</span>} subtitle="Vendas recuperadas pelo WhatsApp aparecem na UTMify com a origem certa do lead.">
       {st.loading ? null : st.integ ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -70,8 +71,8 @@ const PIXELS = [
     desc: 'API de Conversões: Lead e Purchase direto do servidor, com e-mail e telefone em hash. Melhora a otimização no Facebook e Instagram.' },
   { id: 'tiktok', name: 'Pixel do TikTok', mono: 'T', color: '#111111', idLabel: 'Código do Pixel', idHint: 'Ex.: C4ABCDEF12345678 (Gerenciador de Eventos do TikTok).', tokenLabel: 'Access Token da Events API', test: 'Código de teste (opcional)',
     desc: 'Events API: SubmitForm e CompletePayment pelo servidor, com e-mail e telefone em hash.' },
-  { id: 'google', name: 'Google (GA4)', mono: 'G', color: '#EA4335', idLabel: 'ID de métricas', idHint: 'Começa com G- (Administrador → Fluxos de dados).', tokenLabel: 'API secret do Measurement Protocol', test: null,
-    desc: 'GA4 Measurement Protocol: generate_lead e purchase com o ID da transação. Importe as conversões no Google Ads pelo GA4.' },
+  { id: 'google', name: 'Google Ads', mono: 'G', color: '#EA4335', idLabel: 'ID de métricas do Google Analytics', idHint: 'Começa com G- (Google Analytics → Administrador → Fluxos de dados).', tokenLabel: 'API secret do Measurement Protocol', test: null,
+    desc: 'Leads e vendas viram conversão no Google Ads, pelo Google Analytics ligado à sua conta de anúncios (Administrador → Vinculações → Google Ads).' },
 ];
 
 function PixelsCard({ orgId, canEdit, notify }) {
@@ -107,7 +108,7 @@ function PixelsCard({ orgId, canEdit, notify }) {
           return (
             <div key={p.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: 9, background: p.color, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flex: 'none' }}>{p.mono}</span>
+                {p.id === 'meta' ? <MetaLogo size={34} /> : p.id === 'tiktok' ? <TikTokLogo size={34} /> : <GoogleAdsLogo size={34} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{p.name} {mine.length > 0 && <Badge size="sm" tone="success" dot>{mine.length > 1 ? `${mine.length} pixels` : 'Conectado'}</Badge>}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{p.desc}</div>

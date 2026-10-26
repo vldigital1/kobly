@@ -81,3 +81,34 @@ export function ChannelLogo({ kind, size = 40 }) {
   if (kind === 'messenger') return <MessengerLogo size={size} />;
   return null;
 }
+
+// Plataformas de anúncio (tela Trackeamento)
+export function MetaLogo({ size = 40 }) {
+  return (
+    <Tile size={size} label="Meta" bg={<rect width="48" height="48" rx="13" fill="#0866FF" />}>
+      <path d="M11 28.5c0-5.6 2.9-11 6.6-11 2.6 0 4.6 2.6 6.4 5.7 1.8-3.1 3.8-5.7 6.4-5.7 3.7 0 6.6 5.4 6.6 11 0 3.3-1.4 5.2-3.8 5.2-2.6 0-4.3-2.4-6.9-6.9l-2.3-4-2.3 4c-2.6 4.5-4.3 6.9-6.9 6.9-2.4 0-3.8-1.9-3.8-5.2z" fill="none" stroke="#fff" strokeWidth="3" strokeLinejoin="round" />
+    </Tile>
+  );
+}
+export function TikTokLogo({ size = 40 }) {
+  const note = 'M27.5 10h4.2c.4 3.3 2.6 5.6 5.8 5.9v4.3c-2.2 0-4.2-.7-5.8-1.9v9.6c0 4.8-3.8 8.6-8.6 8.6s-8.6-3.8-8.6-8.6 3.8-8.6 8.6-8.6c.4 0 .9 0 1.3.1v4.4c-.4-.1-.8-.2-1.3-.2-2.4 0-4.3 1.9-4.3 4.3s1.9 4.3 4.3 4.3 4.4-1.9 4.4-4.3V10z';
+  return (
+    <Tile size={size} label="TikTok" bg={<rect width="48" height="48" rx="13" fill="#000" />}>
+      <path d={note} fill="#25F4EE" transform="translate(-1.2 -1)" />
+      <path d={note} fill="#FE2C55" transform="translate(1.2 1)" />
+      <path d={note} fill="#fff" />
+    </Tile>
+  );
+}
+export function GoogleAdsLogo({ size = 40 }) {
+  return (
+    <Tile size={size} label="Google Ads" bg={<rect width="48" height="48" rx="13" fill="#fff" />}>
+      <rect x="21.5" y="8.5" width="8.5" height="30" rx="4.25" fill="#4285F4" transform="rotate(-30 25.75 23.5)" />
+      <rect x="18" y="8.5" width="8.5" height="30" rx="4.25" fill="#FBBC04" transform="rotate(30 22.25 23.5)" />
+      <circle cx="13.6" cy="34.2" r="4.4" fill="#34A853" />
+    </Tile>
+  );
+}
+export function UtmifyLogo({ size = 40 }) {
+  return <img src="/assets/platforms/utmify.png" alt="UTMify" width={size} height={size} style={{ borderRadius: size * 0.27, flex: 'none', display: 'block' }} />;
+}

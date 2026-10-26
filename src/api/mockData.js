@@ -369,14 +369,14 @@ const roles = {
   Cliente: {
     label: 'Cliente',
     descricao: 'Dono da conta — dashboard, pipeline, fluxos, leads, integrações.',
-    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'agentes', 'disparos', 'integracoes', 'produtos', 'anuncios', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: false, createPlan: false, manageUsers: false, answerTickets: false },
   },
   Gestor: {
     label: 'Gestor',
     descricao: 'Agência — visão consolidada de várias contas.',
-    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'agentes', 'disparos', 'integracoes', 'produtos', 'anuncios', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: true, createPlan: false, manageUsers: false, answerTickets: false },
   },

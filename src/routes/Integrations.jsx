@@ -1093,7 +1093,8 @@ const SECTIONS = [
   { value: 'trackeamento', label: 'Trackeamento', icon: 'chart-line', help: 'Pixels (Meta, TikTok e Google), UTMify e de onde vêm os leads.' },
   { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },
   { value: 'postback', label: 'Postback', icon: 'webhook', help: 'URLs de postback para checkouts e integrações próprias.' },
-  { value: 'loja', label: 'Configuração da loja', icon: 'store', help: 'Identidade visual e remetente dos e-mails.' },
+  { value: 'produtos', label: 'Produtos', icon: 'package', help: 'Seus produtos, os nomes que cada checkout usa e os números de venda de cada um.' },
+  { value: 'loja', label: 'Configuração de e-mail', icon: 'mail', help: 'Remetente e identidade visual dos e-mails.' },
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
   { value: 'mcp', label: 'Acesso de IA', icon: 'bot', help: 'Tokens para assistentes de IA (MCP) criarem rascunhos de fluxo.' },
@@ -1104,10 +1105,11 @@ const KoblyConnections = React.lazy(() => import('@/routes/Connections.jsx').the
 const TrackingPanel = React.lazy(() => import('@/routes/Tracking.jsx').then((m) => ({ default: m.TrackingPanel })));
 const KoblyPlatformsTab = React.lazy(() => import('@/routes/PlatformsTab.jsx').then((m) => ({ default: m.KoblyPlatformsTab })));
 const KoblyAiKeysTab = React.lazy(() => import('@/routes/AiKeysTab.jsx').then((m) => ({ default: m.KoblyAiKeysTab })));
+const KoblyProductsLazy = React.lazy(() => import('@/routes/Products.jsx').then((m) => ({ default: m.KoblyProducts })));
 const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
+  { value: 'dominio', label: 'Remetente', icon: 'send' },
   { value: 'marca', label: 'Identidade', icon: 'palette' },
-  { value: 'dominio', label: 'Remetente', icon: 'globe' },
   ...(SMS_ENABLED ? [{ value: 'sms', label: 'SMS', icon: 'smartphone' }] : []),
 ];
 
@@ -1121,7 +1123,7 @@ function KoblyIntegrations() {
     try { const s = sessionStorage.getItem(INTEGRATIONS_SECTION_KEY); if (s) { sessionStorage.removeItem(INTEGRATIONS_SECTION_KEY); if (SECTIONS.some((x) => x.value === s)) return s; } } catch { /* sem armazenamento */ }
     return 'conexoes';
   });
-  const [lojaSub, setLojaSub] = useState('marca');
+  const [lojaSub, setLojaSub] = useState('dominio');
   const [contaId, setContaId] = useState(null);
   const empresaId = isGestor ? contaId : store.session.empresaId;
 
@@ -1168,6 +1170,7 @@ function KoblyIntegrations() {
         <div style={{ color: 'var(--text-muted)', padding: 28 }}>Selecione uma conta de cliente para ver as integrações.</div>
       ) : (
         <>
+          {section === 'produtos' && <React.Suspense fallback={null}><KoblyProductsLazy /></React.Suspense>}
           {section === 'loja' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Mapa mental das 3 camadas — sempre visível no setup da loja */}
@@ -1175,8 +1178,8 @@ function KoblyIntegrations() {
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10,
               }}>
                 {[
-                  { n: '1', title: 'Identidade', desc: 'Logo, cor, tema', sub: 'marca', icon: 'palette' },
-                  { n: '2', title: 'Remetente', desc: 'De onde o e-mail sai', sub: 'dominio', icon: 'globe' },
+                  { n: '1', title: 'Remetente', desc: 'De onde o e-mail sai', sub: 'dominio', icon: 'send' },
+                  { n: '2', title: 'Identidade', desc: 'Logo, cor, tema', sub: 'marca', icon: 'palette' },
                   { n: '3', title: 'Conteúdo', desc: 'Assunto e HTML', sub: null, icon: 'mail', cta: true },
                 ].map((item) => (
                   <button
@@ -1204,7 +1207,7 @@ function KoblyIntegrations() {
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{item.title}</span>
                       <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-                        {item.desc}{item.cta ? ' → campanhas' : ''}
+                        {item.desc}{item.cta ? ' → no bloco E-mail dos fluxos' : ''}
                       </span>
                     </span>
                   </button>

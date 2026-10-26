@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, BaseEdge, ConnectionLineType, Controls, EdgeLabelRenderer, MiniMap, Handle, Position, addEdge, getBezierPath, useEdgesState, useNodesState, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { KoblyApi } from '@/api/mockApi.js';
+import { useKobly } from '@/store/store.jsx';
 import { KoblyEmailEditor } from '@/routes/EmailEditor.jsx';
 import { Badge, Button, Icon, IconButton, Input, Select } from '@/ds';
 import { BLOCKS, MEDIA, PALETTE_GROUPS, TONES, TIPOS_EVENTO, PAYMENT_METHODS, CURRENCY_LABEL, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf, paletteItems, metaOf, edgeTone } from '@/lib/flowGraph.js';
@@ -24,6 +25,7 @@ const defaultApi = {
   createEmail: (e) => KoblyApi.createEmail(e),
   updateEmail: (id, p) => KoblyApi.updateEmail(id, p),
   renameFlow: (id, nome) => KoblyApi.renameCampaign(id, nome),
+  listAiKeys: () => KoblyApi.aiKeys('list').then((r) => ({ keys: r.keys || [], platform: !!r.platform_fallback })),
 };
 
 const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], agents: [], metrics: null, uploadMedia: null, emails: [], openEmail: null, copyEmail: null });
@@ -395,6 +397,23 @@ function EmailFields({ d, set }) {
   );
 }
 
+// Blocos de IA usam a chave de IA da própria empresa (Integrações → IA). Sem chave, explica o caminho.
+function AiKeyNotice() {
+  const { ai } = React.useContext(LookupsCtx);
+  let store = null; try { store = useKobly(); } catch { /* fora da Kobly (pré-visualização) */ }
+  if (!ai || ai.platform || (ai.keys || []).some((k) => k.is_active !== false && k.status !== 'error')) return null;
+  return (
+    <div className="kf-row" style={{ alignItems: 'flex-start', borderColor: 'rgba(245,158,11,.35)', background: 'rgba(245,158,11,.07)' }}>
+      <Icon name="key-round" size={16} style={{ color: '#fbbf24', marginTop: 2 }} />
+      <div style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.55 }}>
+        <b style={{ color: 'var(--text-strong)' }}>Conecte sua IA para este bloco funcionar.</b>
+        <div style={{ marginTop: 4 }}>1. Crie uma chave de API no site da IA que você usa (OpenAI, Google Gemini, Claude, DeepSeek ou OpenRouter).<br />2. Vá em <b>Integrações → IA (sua chave)</b>, cole a chave e salve.<br />3. Volte aqui: o bloco já usa a sua IA.</div>
+        {store && <button type="button" className="kf-chip" style={{ marginTop: 8, padding: '5px 12px' }} onClick={() => { try { sessionStorage.setItem('kobly:int-section', 'ia'); } catch { /* ok */ } store.navigate('integracoes'); }}>Abrir Integrações → IA</button>}
+      </div>
+    </div>
+  );
+}
+
 // ---- Campos de cada bloco ---------------------------------------------------------
 const RULE_KINDS = [
   { value: 'var', label: 'Variável' }, { value: 'tag', label: 'Etiqueta' }, { value: 'purchased', label: 'Comprou' },
@@ -490,6 +509,7 @@ function BlockFields({ node, onChange }) {
         </>)} />
     </>);
     case 'ai_classify': return (<>
+      <AiKeyNotice />
       <Input label="Texto analisado" value={d.input || '{{resposta}}'} onChange={(e) => set({ input: e.target.value })} />
       <TextArea label="Contexto para a IA (opcional)" value={d.instructions} onChange={(v) => set({ instructions: v })} rows={3} hint="Ex.: estamos oferecendo o guia por $45 MXN." />
       <ListEditor items={d.outputs || []} max={8} addLabel="Adicionar saída" onChange={(outputs) => set({ outputs })}
@@ -501,6 +521,7 @@ function BlockFields({ node, onChange }) {
       <Input label="Salvar a escolha em" value={d.save_as || 'classificacao'} onChange={(e) => set({ save_as: e.target.value.trim() })} />
     </>);
     case 'ai_extract': return (<>
+      <AiKeyNotice />
       <Input label="Texto analisado" value={d.input || '{{resposta}}'} onChange={(e) => set({ input: e.target.value })} />
       <TextArea label="Contexto para a IA (opcional)" value={d.instructions} onChange={(v) => set({ instructions: v })} rows={3} />
       <ListEditor items={d.fields || []} max={8} addLabel="Adicionar campo" onChange={(fields) => set({ fields })}
@@ -535,13 +556,13 @@ function BlockFields({ node, onChange }) {
       </>);
     }
     case 'ai_agent': return (<>
-      <Select label="Agente salvo" value={d.agent_id || ''} onChange={(e) => set(e.target.value ? { agent_id: e.target.value, objective: '', knowledge: '', max_turns: undefined, timeout_minutes: undefined } : { agent_id: undefined })}
-        options={[{ value: '', label: 'Configurar só neste bloco' }, ...((lookups.agents || []).map((a) => ({ value: a.id, label: a.name })))]}
-      />
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: -6 }}>{d.agent_id ? 'Usa o agente salvo em Agentes de IA. O que você preencher abaixo vale só neste bloco.' : 'Crie agentes reaproveitáveis no menu Agentes de IA.'}</div>
-      <TextArea label="Objetivo do agente" value={d.objective} onChange={(v) => set({ objective: v })} rows={3} hint="O que conta como sucesso. Ex.: tirar dúvidas e levar o lead a pagar o guia de $45 MXN." />
-      <TextArea label="Base de conhecimento" value={d.knowledge} onChange={(v) => set({ knowledge: v })} rows={6} hint="Preço, entrega, garantia, perguntas frequentes. O agente não promete nada fora daqui." />
-      <Input label="Tom de voz" value={d.tone || ''} onChange={(e) => set({ tone: e.target.value || undefined })} placeholder="amigável e direto" />
+      <AiKeyNotice />
+      <TextArea label="Prompt: o que a IA deve fazer" value={d.objective} onChange={(v) => set({ objective: v, agent_id: undefined })} rows={5}
+        placeholder="Ex.: Você é a Ana, atendente da Loja X. Responda dúvidas sobre o curso e leve o lead a pagar o Pix de R$ 97. Seja simpática e direta, uma pergunta por mensagem."
+        hint="É assim que você treina a IA: diga quem ela é, o objetivo, o jeito de falar e o que não pode fazer." />
+      <TextArea label="Informações que ela pode usar" value={d.knowledge} onChange={(v) => set({ knowledge: v })} rows={6}
+        placeholder="Preço, formas de pagamento, prazo de entrega, garantia, perguntas frequentes..."
+        hint="A IA só promete o que estiver aqui. Quanto mais completo, melhor ela responde." />
       <TextArea label="Mensagem de abertura (opcional)" value={d.opening} onChange={(v) => set({ opening: v || undefined })} rows={2} hint="Vazio: o agente responde a última mensagem do lead (ou espera ele escrever)." />
       <div style={{ display: 'flex', gap: 8 }}>
         <Input label="Máx. de respostas" type="number" value={d.max_turns ?? 10} onChange={(e) => set({ max_turns: num(e.target.value) })} />
@@ -683,9 +704,9 @@ function Editor({ campaign, onBack, api, notify }) {
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
     const opt = (fn) => (fn ? fn() : Promise.resolve([])).catch(() => []);
-    const [g, templates, tags, integrations, pixels, channels, agents, emails, brands] = await Promise.all([
+    const [g, templates, tags, integrations, pixels, channels, agents, emails, brands, ai] = await Promise.all([
       api.flowGraph('get', { campaign_id: campaign.id }),
-      opt(api.listTemplates), opt(api.getTags), opt(api.listIntegrations), opt(api.listPixels), opt(api.listChannels), opt(api.listAgents), opt(api.listEmails), opt(api.listBrands),
+      opt(api.listTemplates), opt(api.getTags), opt(api.listIntegrations), opt(api.listPixels), opt(api.listChannels), opt(api.listAgents), opt(api.listEmails), opt(api.listBrands), (api.listAiKeys ? api.listAiKeys() : Promise.resolve(null)).catch(() => null),
     ]);
     if (g.error) { setState((s) => ({ ...s, loading: false, error: g.error })); return; }
     // sem versão publicada: abre o rascunho mais recente (ex.: fluxo criado pela tela Fluxos)
@@ -693,7 +714,7 @@ function Editor({ campaign, onBack, api, notify }) {
     if (!base && (g.versions || [])[0]) { const v = await api.flowGraph('get_version', { campaign_id: campaign.id, version: g.versions[0].version }); if (!v.error && v.graph) base = v.graph; }
     const c = toCanvas(base || emptyGraph());
     setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setEditId(null);
-    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [] });
+    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [], ai });
     setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null });
     setCopilot(null);
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos
