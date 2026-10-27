@@ -14,7 +14,7 @@ O Facebook avalia em inglês. Por isso cada bloco tem o texto **em inglês para 
   - **URL da Política de Privacidade:** `https://app.koblay.io/privacidade`
   - **URL dos Termos de Serviço:** `https://app.koblay.io/termos`
   - **URL de instruções de exclusão de dados:** `https://app.koblay.io/exclusao-de-dados`
-  - Categoria: **Negócios e páginas**. E-mail de contato: **contato@koblay.io**.
+  - Categoria: **Negócios e páginas**. E-mail de contato: **suportekobly@gmail.com**.
 - [ ] **Verificação da empresa** concluída (Central de segurança do Gerenciador de Negócios).
 - [ ] Configuração **"kobly Anúncios"** com as permissões ads_read, ads_management e business_management.
 - [ ] Uma **conta de teste na Kobly** para o revisor do Facebook entrar.
@@ -97,7 +97,7 @@ Respostas sugeridas:
 | Os dados são usados para anúncios ou vendidos? | **Não** |
 | Onde ficam os dados? | Servidores na nuvem (Railway e Vercel), com tokens criptografados (AES-256-GCM) |
 | Como o usuário apaga os dados? | Botão "Desconectar" na Kobly e a página `/exclusao-de-dados` |
-| Responsável pelos dados | Kobly — contato@koblay.io |
+| Responsável pelos dados | Kobly — suportekobly@gmail.com |
 
 ---
 
