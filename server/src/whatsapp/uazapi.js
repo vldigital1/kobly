@@ -14,6 +14,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
 import { encrypt, decrypt } from './crypto.js';
+import { OPT_OUT } from './service.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const STATUS = new Set(['disconnected', 'connecting', 'connected', 'hibernated']);
@@ -261,7 +262,12 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     const m = p.message;
     if (m.fromMe || m.isGroup || m.wasSentByApi) return { status: 200 }; // só o que o lead manda, fora de grupos
     const from = digits(m.sender || m.chatid);
-    if (!m.messageid || from.length < 8 || !onInbound) return { status: 200 };
+    if (!m.messageid || from.length < 8) return { status: 200 };
+    // "SAIR", "PARAR"...: o lead deixa de receber WhatsApp (mesma regra da API Oficial)
+    if (OPT_OUT.test(String(m.text || '')) && from.length >= 10) {
+      await pool.query(`update public.leads set whatsapp_opt_out = true where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 and not whatsapp_opt_out`, [row.organization_id, from.slice(-10)]);
+    }
+    if (!onInbound) return { status: 200 };
     await onInbound({ orgId: row.organization_id, accountId: null, instanceId: row.id,
       message: { id: `uaz:${m.messageid}`, from, type: 'text', text: { body: String(m.text || '') }, timestamp: m.messageTimestamp },
       contacts: m.senderName ? [{ profile: { name: m.senderName }, wa_id: from }] : [] });

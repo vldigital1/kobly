@@ -166,6 +166,12 @@ export function KoblyAuthScreen({ mode = 'login' }) {
             )}
           </div>
         </div>
+        {/* páginas públicas exigidas pela Meta e pelo Google (ficam em public/*.html) */}
+        <nav aria-label="Informações legais" style={{ display: 'flex', justifyContent: 'center', gap: 14, flexWrap: 'wrap', marginTop: 18, fontSize: 'var(--text-xs)' }}>
+          <a href="/privacidade" style={{ color: 'var(--text-subtle)' }}>Política de Privacidade</a>
+          <a href="/termos" style={{ color: 'var(--text-subtle)' }}>Termos de Uso</a>
+          <a href="/exclusao-de-dados" style={{ color: 'var(--text-subtle)' }}>Exclusão de dados</a>
+        </nav>
       </div>
     </div>
   );

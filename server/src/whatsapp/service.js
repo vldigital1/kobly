@@ -6,7 +6,7 @@ import { encrypt, decrypt } from './crypto.js';
 import { countVariables, bodyOf, buildSendComponents, normalizePhone, buildTemplateRequest } from './templates.js';
 
 const SAFE_COLS = 'id, organization_id, waba_id, phone_number_id, display_phone, verified_name, quality_rating, messaging_limit, status, last_error, webhook_public_id, verify_token, connected_at';
-const OPT_OUT = /^\s*(sair|parar|pare|stop|cancelar|descadastrar|nao quero|não quero)\s*[.!]?\s*$/i;
+export const OPT_OUT = /^\s*(sair|parar|pare|stop|cancelar|descadastrar|nao quero|não quero)\s*[.!]?\s*$/i;
 
 function metaToHttp(e) {
   if (!(e instanceof MetaError)) return e;

@@ -78,3 +78,12 @@ test('editar perfil: nome até 25, foto só JPEG, remover', { skip }, async () =
   assert.deepEqual(net.at(-2).body, { image: 'remove' });
   await assert.rejects(uaz.handle({ orgId: A.orgId, role: 'Suporte' }, {}, { action: 'profile', id: A.inst.id, name: 'x' }), /não pode/);
 });
+
+test('lead que responde "SAIR" pelo QR Code deixa de receber WhatsApp', { skip }, async () => {
+  const lead = (await pool.query(`insert into public.leads (organization_id, nome, telefone) values ($1,'Zé','(11) 98765-4321') returning id`, [A.orgId])).rows[0].id;
+  const msg = (text, id) => uaz.receiveWebhook(A.inst.webhook_public_id, JSON.stringify({ EventType: 'messages', token: 'tok-inst-1', message: { messageid: id, sender: '5511987654321@s.whatsapp.net', text, fromMe: false } }));
+  await msg('quero saber o preço', `m1-${stamp}`);
+  assert.equal((await pool.query(`select whatsapp_opt_out from public.leads where id = $1`, [lead])).rows[0].whatsapp_opt_out, false);
+  await msg('Sair', `m2-${stamp}`);
+  assert.equal((await pool.query(`select whatsapp_opt_out from public.leads where id = $1`, [lead])).rows[0].whatsapp_opt_out, true);
+});
