@@ -59,7 +59,7 @@ const initials = (s) => String(s || '?').trim().split(/\s+/).slice(0, 2).map((w)
 
 const KC_CSS = `
 .kc-hero { position: relative; overflow: hidden; border-radius: 20px; padding: 20px 22px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
-  background: radial-gradient(700px 260px at 0% 0%, rgba(37,211,102,.16), transparent 60%), radial-gradient(600px 260px at 100% 100%, rgba(139,92,246,.18), transparent 60%), rgba(14,16,24,.92);
+  background: radial-gradient(700px 260px at 0% 0%, rgba(37,211,102,.16), transparent 60%), radial-gradient(600px 260px at 100% 100%, rgba(255,98,1,.18), transparent 60%), rgba(14,16,24,.92);
   border: 1px solid rgba(255,255,255,.08); box-shadow: 0 18px 50px rgba(0,0,0,.45); }
 .kc-hero::after { content: ''; position: absolute; left: -30%; top: 0; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); animation: kc-sweep 5s linear infinite; pointer-events: none; }
 @keyframes kc-sweep { to { left: 130%; } }
@@ -69,8 +69,8 @@ const KC_CSS = `
 .kc-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 7px; border-radius: 999px; cursor: pointer; font-size: var(--text-sm); font-family: var(--font-sans);
   color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); transition: all .15s; }
 .kc-chip:hover { color: var(--text-strong); border-color: rgba(255,255,255,.18); }
-.kc-chip.on { color: #fff; background: linear-gradient(135deg, rgba(37,211,102,.22), rgba(139,92,246,.3)); border-color: transparent; box-shadow: inset 0 0 0 1px rgba(167,139,250,.55), 0 0 18px rgba(139,92,246,.25); }
-.kc-chip .all { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(135deg, #22d3ee, #8b5cf6); color: #fff; }
+.kc-chip.on { color: #fff; background: linear-gradient(135deg, rgba(37,211,102,.22), rgba(255,98,1,.3)); border-color: transparent; box-shadow: inset 0 0 0 1px rgba(255,148,82,.55), 0 0 18px rgba(255,98,1,.25); }
+.kc-chip .all { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(135deg, #f39200, #ff6201); color: #fff; }
 .kc-card { position: relative; border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 14px; overflow: hidden;
   background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.94); border: 1px solid rgba(255,255,255,.08);
   box-shadow: 0 14px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05); transition: border-color .2s, box-shadow .2s, transform .2s; }
@@ -96,8 +96,8 @@ const KC_CSS = `
 .kc-meta span { display: block; font-size: 10.5px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .07em; }
 .kc-meta b { display: block; font-size: 13px; color: var(--text-strong); margin-top: 2px; font-weight: 600; }
 .kc-link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); color: var(--text-body); text-align: left;
-  background: linear-gradient(135deg, rgba(34,211,238,.07), rgba(139,92,246,.09)); border: 1px solid rgba(167,139,250,.22); transition: border-color .15s, box-shadow .15s; }
-.kc-link:hover { border-color: rgba(167,139,250,.55); box-shadow: 0 0 18px rgba(139,92,246,.2); }
+  background: linear-gradient(135deg, rgba(243,146,0,.07), rgba(255,98,1,.09)); border: 1px solid rgba(255,148,82,.22); transition: border-color .15s, box-shadow .15s; }
+.kc-link:hover { border-color: rgba(255,148,82,.55); box-shadow: 0 0 18px rgba(255,98,1,.2); }
 .kc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border-radius: 11px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600;
   color: var(--text-strong); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); transition: all .15s; }
 .kc-btn:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); }
@@ -117,11 +117,11 @@ const KC_CSS = `
 .kc-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; cursor: pointer; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); font-size: var(--text-sm); color: var(--text-body); }
 .kc-switch { position: relative; width: 40px; height: 22px; flex: none; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.08); cursor: pointer; padding: 0; transition: all .2s; }
 .kc-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #cbd5e1; transition: all .2s cubic-bezier(.3,1.4,.5,1); }
-.kc-switch.on { border-color: transparent; background: linear-gradient(135deg, #25D366, #8b5cf6); box-shadow: 0 0 14px rgba(37,211,102,.4); }
+.kc-switch.on { border-color: transparent; background: linear-gradient(135deg, #f39200, #ff6201); box-shadow: 0 0 14px rgba(255,98,1,.45); }
 .kc-switch.on::after { left: 20px; background: #fff; }
 .kc-tabs { display: flex; padding: 4px; gap: 4px; border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
 .kc-tabs button { flex: 1; border: 0; padding: 9px 12px; border-radius: 10px; background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; display: inline-flex; gap: 7px; align-items: center; justify-content: center; }
-.kc-tabs button.on { color: #fff; background: linear-gradient(135deg, rgba(37,211,102,.28), rgba(139,92,246,.36)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.5); }
+.kc-tabs button.on { color: #fff; background: linear-gradient(135deg, rgba(37,211,102,.28), rgba(255,98,1,.36)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.5); }
 .kc-photo { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: 16px; cursor: pointer; border: 1.5px dashed rgba(37,211,102,.4); background: radial-gradient(circle at 0% 50%, rgba(37,211,102,.1), transparent 60%), rgba(255,255,255,.02); transition: all .15s; }
 .kc-photo:hover, .kc-photo.over { border-color: #25D366; box-shadow: 0 0 22px rgba(37,211,102,.22); }
 .kc-photo img, .kc-photo .ph { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; flex: none; display: grid; place-items: center; background: #1b1f2c; color: #fff; font-weight: 800; font-size: 24px; box-shadow: 0 0 0 3px #0d1018, 0 0 0 5px #25D366; }
@@ -242,7 +242,7 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, na
 
       {(c.kind === 'qr' || c.kind === 'oficial') && (
         <button type="button" className="kc-link" style={{ position: 'relative', zIndex: 1 }} onClick={() => navigate('fluxos')}>
-          <Icon name="zap" size={16} style={{ color: '#a78bfa' }} />
+          <Icon name="zap" size={16} style={{ color: '#ff9452' }} />
           <span style={{ flex: 1 }}><b style={{ color: 'var(--text-strong)' }}>{flowsActive}</b> fluxo{flowsActive === 1 ? '' : 's'} rodando com {c.status === 'connected' ? 'este número' : 'os números conectados'}</span>
           <Icon name="chevron-right" size={16} style={{ color: 'var(--text-subtle)' }} />
         </button>
@@ -367,7 +367,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
         <div style={{ display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
           <div className="kc-stat"><b style={{ color: '#34d399' }}>{on}</b><span>conectados</span></div>
           <div className="kc-stat"><b style={{ color: waiting ? '#fbbf24' : undefined }}>{waiting}</b><span>aguardando</span></div>
-          <div className="kc-stat"><b style={{ color: '#a78bfa' }}>{st.flows}</b><span>fluxos rodando</span></div>
+          <div className="kc-stat"><b style={{ color: '#ff9452' }}>{st.flows}</b><span>fluxos rodando</span></div>
         </div>
         <div style={{ display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
           <IconButton icon="refresh-cw" aria-label="Atualizar" onClick={load} />
@@ -385,7 +385,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
       </div>
       {st.error && <Banner tone="danger">{st.error}</Banner>}
       {!st.loading && cards.length === 0 && (
-        <div className="kc-card" style={{ '--brand': '#8b5cf6', alignItems: 'center', textAlign: 'center', padding: 34 }}>
+        <div className="kc-card" style={{ '--brand': '#ff6201', alignItems: 'center', textAlign: 'center', padding: 34 }}>
           {soonFilter ? <ChannelLogo kind={soonFilter.id} size={52} /> : <div style={{ display: 'flex', gap: 6 }}><ChannelLogo kind="qr" size={44} /><ChannelLogo kind="telegram" size={44} /></div>}
           <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 16 }}>{soonFilter ? `${soonFilter.label} chega em breve` : `Nenhuma conexão${filter !== 'todos' ? ' deste canal' : ''} ainda`}</div>
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', maxWidth: 420 }}>{soonFilter ? soonFilter.desc : 'Comece conectando seu WhatsApp: leva menos de um minuto, é só ler o QR Code.'}</div>

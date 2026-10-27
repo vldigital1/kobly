@@ -9,8 +9,8 @@ import { useKobly } from '@/store/store.jsx';
 // abrir a conversa no Chat ao vivo. KoblyPipeline
 
 const STAGES = [
-  { key: 'novo', label: 'Novo lead', icon: 'sparkles', c: '#22d3ee', hint: 'Chegou e ainda não recebeu mensagem' },
-  { key: 'contato', label: 'Em contato', icon: 'send', c: '#a78bfa', hint: 'A Kobly já mandou mensagem' },
+  { key: 'novo', label: 'Novo lead', icon: 'sparkles', c: '#f39200', hint: 'Chegou e ainda não recebeu mensagem' },
+  { key: 'contato', label: 'Em contato', icon: 'send', c: '#ff9452', hint: 'A Kobly já mandou mensagem' },
   { key: 'respondeu', label: 'Respondeu', icon: 'message-circle-reply', c: '#25D366', hint: 'O lead respondeu no WhatsApp' },
   { key: 'cobranca', label: 'Cobrança enviada', icon: 'qr-code', c: '#f59e0b', hint: 'Pix, boleto ou cobrança do fluxo gerada' },
   { key: 'comprou', label: 'Comprou', icon: 'badge-check', c: '#34d399', hint: 'Compra aprovada' },
@@ -31,7 +31,7 @@ const KP_CSS = `
 .kp-search input { flex: 1; background: transparent; border: 0; outline: none; color: var(--text-strong); font: inherit; font-size: var(--text-sm); }
 .kp-seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
 .kp-seg button { border: 0; padding: 7px 12px; border-radius: 9px; background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; }
-.kp-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(34,211,238,.3), rgba(139,92,246,.42)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.55); }
+.kp-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(243,146,0,.3), rgba(255,98,1,.42)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
 .kp-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; min-height: 520px; }
 .kp-col { display: flex; flex-direction: column; min-height: 0; border-radius: 18px; background: rgba(12,14,22,.9); border: 1px solid rgba(255,255,255,.07); transition: border-color .15s, box-shadow .15s; }
 .kp-col.over { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 26px color-mix(in srgb, var(--c) 30%, transparent); }
@@ -49,7 +49,7 @@ const KP_CSS = `
 .kp-av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; flex: none; }
 .kp-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
 .kp-more { margin: 2px 10px 10px; padding: 8px; border-radius: 10px; border: 1px dashed rgba(255,255,255,.12); background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: 12px; }
-.kp-more:hover { color: var(--text-strong); border-color: rgba(167,139,250,.5); }
+.kp-more:hover { color: var(--text-strong); border-color: rgba(255,148,82,.5); }
 `;
 
 function KoblyPipeline() {
@@ -102,10 +102,10 @@ function KoblyPipeline() {
       <style>{KP_CSS}</style>
       {picker}
       <div className="kp-sum">
-        <div className="kp-s" style={{ '--c': '#22d3ee' }}><span>Leads no pipeline</span><b>{total.toLocaleString('pt-BR')}</b></div>
+        <div className="kp-s" style={{ '--c': '#f39200' }}><span>Leads no pipeline</span><b>{total.toLocaleString('pt-BR')}</b></div>
         <div className="kp-s" style={{ '--c': '#f59e0b' }}><span>Em negociação</span><b>{money(aberto)}</b></div>
         <div className="kp-s" style={{ '--c': '#34d399' }}><span>Vendido</span><b>{money(ganho)}</b></div>
-        <div className="kp-s" style={{ '--c': '#a78bfa' }}><span>Conversão</span><b>{conv}%</b></div>
+        <div className="kp-s" style={{ '--c': '#ff9452' }}><span>Conversão</span><b>{conv}%</b></div>
       </div>
       <div className="kp-bar">
         <div className="kp-search"><Icon name="search" size={15} style={{ color: 'var(--text-subtle)' }} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar nome, telefone, e-mail ou produto" /></div>
@@ -140,7 +140,7 @@ function KoblyPipeline() {
                         {l.valor != null && <b style={{ fontSize: 13, color: '#34d399' }}>{money(l.valor)}</b>}
                       </div>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {l.em_fluxo && !l.humano && <span className="kp-chip" style={{ color: '#a78bfa', background: 'rgba(139,92,246,.14)' }}><Icon name="git-branch" size={10} />em fluxo</span>}
+                        {l.em_fluxo && !l.humano && <span className="kp-chip" style={{ color: '#ff9452', background: 'rgba(255,98,1,.14)' }}><Icon name="git-branch" size={10} />em fluxo</span>}
                         {l.humano && <span className="kp-chip" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}><Icon name="hand" size={10} />humano</span>}
                         {l.manual && <button type="button" className="kp-chip" title="Voltar para a etapa automática" style={{ color: '#94a3b8', background: 'rgba(148,163,184,.1)', border: 0, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); auto(l); }}><Icon name="pin" size={10} />manual</button>}
                         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-subtle)' }}>{rel(l.ultima || l.criado)}</span>

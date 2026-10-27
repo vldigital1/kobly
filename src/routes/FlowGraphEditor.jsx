@@ -33,15 +33,15 @@ const VARS_HELP = '{{nome}} {{primeiro_nome}} {{produto}} {{valor}} {{cta_link}}
 
 // Linhas: gradiente ciano → violeta (caminho normal), âmbar (desvio) e rosa (falha), com um pulso correndo.
 const EDGE = {
-  ok: { from: '#22d3ee', to: '#a78bfa', glow: '#8b5cf6' },
+  ok: { from: '#f39200', to: '#ff9452', glow: '#ff6201' },
   warn: { from: '#fbbf24', to: '#f59e0b', glow: '#f59e0b' },
   danger: { from: '#fb7185', to: '#f43f5e', glow: '#f43f5e' },
 };
 
 const FLOW_CSS = `
 .kf-canvas { position: relative; background:
-  radial-gradient(900px 520px at 12% -8%, rgba(139,92,246,.16), transparent 62%),
-  radial-gradient(800px 480px at 105% 108%, rgba(34,211,238,.12), transparent 60%),
+  radial-gradient(900px 520px at 12% -8%, rgba(255,98,1,.16), transparent 62%),
+  radial-gradient(800px 480px at 105% 108%, rgba(243,146,0,.12), transparent 60%),
   #090b11; }
 .kf-canvas .react-flow { --xy-background-color: transparent; --xy-controls-button-background-color: rgba(20,23,33,.92); --xy-controls-button-border-color: rgba(255,255,255,.06); --xy-minimap-background-color: rgba(14,16,24,.92); }
 .kf-canvas .react-flow__controls { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.08); }
@@ -82,25 +82,25 @@ const FLOW_CSS = `
 @keyframes kf-pop { from { opacity: 0; transform: translateY(8px) scale(.97); } }
 .kf-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px; font-size: var(--text-sm); cursor: pointer; user-select: none;
   color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.09); transition: all .15s; }
-.kf-chip:hover { color: var(--text-strong); border-color: rgba(167,139,250,.5); }
-.kf-chip.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, rgba(34,211,238,.28), rgba(139,92,246,.38)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.65), 0 0 18px rgba(139,92,246,.32); }
+.kf-chip:hover { color: var(--text-strong); border-color: rgba(255,148,82,.5); }
+.kf-chip.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, rgba(243,146,0,.28), rgba(255,98,1,.38)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.65), 0 0 18px rgba(255,98,1,.32); }
 .kf-day { width: 46px; height: 46px; padding: 0; justify-content: center; border-radius: 14px; font-weight: 600; }
 .kf-switch { position: relative; width: 42px; height: 24px; flex: none; border-radius: 999px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.08); cursor: pointer; transition: all .2s; padding: 0; }
 .kf-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #cbd5e1; box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: all .2s cubic-bezier(.3,1.4,.5,1); }
-.kf-switch.on { border-color: transparent; background: linear-gradient(135deg, #22d3ee, #8b5cf6); box-shadow: 0 0 16px rgba(139,92,246,.5); }
+.kf-switch.on { border-color: transparent; background: linear-gradient(135deg, #f39200, #ff6201); box-shadow: 0 0 16px rgba(255,98,1,.5); }
 .kf-switch.on::after { left: 20px; background: #fff; }
 .kf-row { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 13px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.07); }
 .kf-seg { display: inline-flex; padding: 3px; gap: 3px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
 .kf-seg button { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 7px 14px; border-radius: 9px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--text-sm); transition: all .15s; }
-.kf-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(34,211,238,.3), rgba(139,92,246,.42)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.55); }
+.kf-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(243,146,0,.3), rgba(255,98,1,.42)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
 .kf-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 26px 16px; border-radius: 16px; cursor: pointer; text-align: center;
-  border: 1.5px dashed rgba(167,139,250,.38); background: radial-gradient(circle at 50% 0%, rgba(139,92,246,.10), transparent 70%), rgba(255,255,255,.02); transition: all .15s; }
-.kf-drop:hover, .kf-drop.over { border-color: #a78bfa; background: radial-gradient(circle at 50% 0%, rgba(139,92,246,.2), transparent 70%), rgba(255,255,255,.03); box-shadow: 0 0 26px rgba(139,92,246,.22); }
+  border: 1.5px dashed rgba(255,148,82,.38); background: radial-gradient(circle at 50% 0%, rgba(255,98,1,.10), transparent 70%), rgba(255,255,255,.02); transition: all .15s; }
+.kf-drop:hover, .kf-drop.over { border-color: #ff9452; background: radial-gradient(circle at 50% 0%, rgba(255,98,1,.2), transparent 70%), rgba(255,255,255,.03); box-shadow: 0 0 26px rgba(255,98,1,.22); }
 .kf-ta { background: rgba(255,255,255,.03); color: var(--text-strong); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 11px 12px; font: inherit; resize: vertical; outline: none; transition: border-color .15s, box-shadow .15s; }
-.kf-ta:focus { border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(139,92,246,.22); }
+.kf-ta:focus { border-color: #ff9452; box-shadow: 0 0 0 3px rgba(255,98,1,.22); }
 .kf-name { font: inherit; font-weight: 700; font-size: 18px; color: var(--text-strong); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 4px 8px; outline: none; width: 100%; max-width: 520px; transition: border-color .15s, background .15s; }
 .kf-name:hover { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
-.kf-name:focus { border-color: #a78bfa; background: rgba(255,255,255,.04); box-shadow: 0 0 0 3px rgba(139,92,246,.2); }
+.kf-name:focus { border-color: #ff9452; background: rgba(255,255,255,.04); box-shadow: 0 0 0 3px rgba(255,98,1,.2); }
 .kf-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5; pointer-events: none; padding: 7px 14px; border-radius: 999px; font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
 `;
 
@@ -112,7 +112,7 @@ function BlockNode({ id, data, selected }) {
   const exits = exitsOf({ type: data.type, data: data.data });
   return (
     <div className={`kf-node${selected ? ' sel' : ''}`} style={{ '--tone': color }}>
-      {!data.isStart && <Handle type="target" position={Position.Left} className="kf-h" style={{ '--hc': '#a78bfa' }} />}
+      {!data.isStart && <Handle type="target" position={Position.Left} className="kf-h" style={{ '--hc': '#ff9452' }} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 12px 6px' }}>
         <span className="kf-ico"><Icon name={b.icon} size={16} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -124,7 +124,7 @@ function BlockNode({ id, data, selected }) {
       </div>
       {lookups.metrics && (
         <div style={{ display: 'flex', gap: 6, padding: '0 12px 6px' }}>
-          <span title="Leads que chegaram a este bloco" style={{ background: 'rgba(34,211,238,.12)', color: '#67e8f9', borderRadius: 'var(--radius-pill)', padding: '1px 8px', fontSize: 11, fontWeight: 600 }}>
+          <span title="Leads que chegaram a este bloco" style={{ background: 'rgba(243,146,0,.12)', color: '#ffb020', borderRadius: 'var(--radius-pill)', padding: '1px 8px', fontSize: 11, fontWeight: 600 }}>
             {(lookups.metrics[id] && lookups.metrics[id].leads) || 0} leads
           </span>
           {lookups.metrics[id] && lookups.metrics[id].here > 0 && (
@@ -338,7 +338,7 @@ function MediaFields({ d, set, upload }) {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.current && input.current.click(); } }}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files && e.dataTransfer.files[0]); }}>
-            <span className="kf-ico" style={{ '--tone': '#a78bfa', width: 44, height: 44, borderRadius: 14 }}><Icon name={busy ? 'loader-circle' : 'upload'} size={20} /></span>
+            <span className="kf-ico" style={{ '--tone': '#ff9452', width: 44, height: 44, borderRadius: 14 }}><Icon name={busy ? 'loader-circle' : 'upload'} size={20} /></span>
             <div style={{ color: 'var(--text-strong)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{busy ? 'Enviando…' : 'Arraste o arquivo aqui ou clique para escolher'}</div>
             <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{m.formats}</div>
           </div>
@@ -886,9 +886,9 @@ function Editor({ campaign, onBack, api, notify }) {
               onNodesChange={(ch) => { onNodesChange(ch); if (ch.some((c) => c.type === 'position' || c.type === 'remove')) touch(); }}
               onEdgesChange={(ch) => { onEdgesChange(ch); if (ch.some((c) => c.type === 'remove')) touch(); }}
               onConnect={onConnect} onNodeClick={(_, n) => setEditId(n.id)}
-              defaultEdgeOptions={{ type: 'kobly' }} connectionLineType={ConnectionLineType.Bezier} connectionLineStyle={{ stroke: '#a78bfa', strokeWidth: 2.4, strokeDasharray: '6 6' }}
+              defaultEdgeOptions={{ type: 'kobly' }} connectionLineType={ConnectionLineType.Bezier} connectionLineStyle={{ stroke: '#ff9452', strokeWidth: 2.4, strokeDasharray: '6 6' }}
               deleteKeyCode={editId ? null : ['Delete', 'Backspace']} minZoom={0.2} maxZoom={1.75} proOptions={{ hideAttribution: true }}>
-              <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="rgba(167,139,250,.22)" />
+              <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="rgba(255,148,82,.22)" />
               <Controls showInteractive={false} />
               <MiniMap pannable zoomable nodeColor={(n) => TONES[metaOf(n.data.type, n.data.data).tone] || '#64748b'} nodeBorderRadius={6} maskColor="rgba(5,7,12,.65)" style={{ width: 150, height: 100 }} />
             </ReactFlow>
@@ -908,7 +908,7 @@ function Editor({ campaign, onBack, api, notify }) {
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{copilot.leads} leads analisados</span>
                   {copilot.summary && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.5 }}>{copilot.summary}</div>}
                   {copilot.suggestions.map((s, i) => {
-                    const c = s.severity === 'alta' ? '#f43f5e' : s.severity === 'media' ? '#f59e0b' : '#22d3ee';
+                    const c = s.severity === 'alta' ? '#f43f5e' : s.severity === 'media' ? '#f59e0b' : '#f39200';
                     return (
                       <button key={i} type="button" onClick={() => s.ref && focusRef(s.ref, false)} style={{ textAlign: 'left', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)', borderLeft: `3px solid ${c}`, borderRadius: 10, padding: '8px 10px', cursor: s.ref ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{s.title}{s.ref ? <span style={{ color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', fontWeight: 400, fontSize: 10 }}> · {s.ref}</span> : null}</span>

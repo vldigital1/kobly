@@ -13,8 +13,8 @@ import { useKobly } from '@/store/store.jsx';
 const POLL_MS = 5000;
 const DE = {
   lead: { label: 'Lead', mine: false, icon: null },
-  fluxo: { label: 'Fluxo', mine: true, icon: 'git-branch', color: '#a78bfa' },
-  agente: { label: 'IA', mine: true, icon: 'sparkles', color: '#22d3ee' },
+  fluxo: { label: 'Fluxo', mine: true, icon: 'git-branch', color: '#ff9452' },
+  agente: { label: 'IA', mine: true, icon: 'sparkles', color: '#f39200' },
   humano: { label: 'Equipe', mine: true, icon: 'user', color: '#25D366' },
 };
 const FILTROS = [['todas', 'Todas', 'messages-square'], ['aguardando', 'Aguardando você', 'bell-ring'], ['fluxo', 'Em fluxo', 'git-branch'], ['humano', 'Com humano', 'hand']];
@@ -32,17 +32,17 @@ const KH_CSS = `
 .kh-shell.two { grid-template-columns: 340px 1fr; } .kh-shell.one { grid-template-columns: 1fr; }
 .kh-col { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .kh-col + .kh-col { border-left: 1px solid rgba(255,255,255,.07); }
-.kh-top { padding: 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.07); background: linear-gradient(180deg, rgba(139,92,246,.08), transparent); }
+.kh-top { padding: 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.07); background: linear-gradient(180deg, rgba(255,98,1,.08), transparent); }
 .kh-search { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
 .kh-search input { flex: 1; background: transparent; border: 0; outline: none; color: var(--text-strong); font: inherit; font-size: var(--text-sm); }
 .kh-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .kh-f { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--font-sans); color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); }
-.kh-f.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, rgba(37,211,102,.3), rgba(139,92,246,.38)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.55); }
+.kh-f.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, rgba(37,211,102,.3), rgba(255,98,1,.38)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
 .kh-list { flex: 1; min-height: 0; overflow-y: auto; }
 .kh-item { display: flex; gap: 11px; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid rgba(255,255,255,.04); cursor: pointer; font-family: var(--font-sans); background: transparent; position: relative; transition: background .12s; }
 .kh-item:hover { background: rgba(255,255,255,.03); }
-.kh-item.on { background: linear-gradient(90deg, rgba(139,92,246,.16), rgba(139,92,246,.03)); }
-.kh-item.on::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: linear-gradient(#22d3ee, #8b5cf6); }
+.kh-item.on { background: linear-gradient(90deg, rgba(255,98,1,.16), rgba(255,98,1,.03)); }
+.kh-item.on::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: linear-gradient(#f39200, #ff6201); }
 .kh-av { width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff; position: relative; }
 .kh-av .st { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #0c0e16; }
 .kh-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
@@ -52,18 +52,18 @@ const KH_CSS = `
 .kh-btn:hover { background: rgba(255,255,255,.09); }
 .kh-btn.hot { color: #fff; border-color: transparent; background: linear-gradient(135deg, #25D366, #128C7E); box-shadow: 0 0 16px rgba(37,211,102,.35); }
 .kh-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 6%; display: flex; flex-direction: column; gap: 4px;
-  background: radial-gradient(circle at 20% 10%, rgba(139,92,246,.06), transparent 40%), radial-gradient(circle at 80% 90%, rgba(37,211,102,.05), transparent 40%), #0b111a; }
+  background: radial-gradient(circle at 20% 10%, rgba(255,98,1,.06), transparent 40%), radial-gradient(circle at 80% 90%, rgba(37,211,102,.05), transparent 40%), #0b111a; }
 .kh-day { align-self: center; margin: 10px 0 6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; color: #cbd5e1; background: rgba(255,255,255,.06); }
 .kh-b { max-width: min(72%, 520px); padding: 8px 11px 18px; border-radius: 12px; position: relative; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; color: #e9edef; box-shadow: 0 2px 8px rgba(0,0,0,.25); animation: kh-in .2s both; }
 @keyframes kh-in { from { opacity: 0; transform: translateY(4px); } }
 .kh-b.lead { align-self: flex-start; background: #1f2c33; border-top-left-radius: 4px; }
 .kh-b.mine { align-self: flex-end; background: #005c4b; border-top-right-radius: 4px; }
-.kh-b.mine.ia { background: linear-gradient(135deg, #0e4a5c, #3b2a6b); }
+.kh-b.mine.ia { background: linear-gradient(135deg, #732500, #ad200e); }
 .kh-b .meta { position: absolute; right: 9px; bottom: 3px; font-size: 10.5px; color: rgba(233,237,239,.6); display: flex; gap: 5px; align-items: center; }
 .kh-b .who { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; margin-bottom: 2px; }
 .kh-compose { padding: 10px 14px 14px; border-top: 1px solid rgba(255,255,255,.07); position: relative; background: rgba(255,255,255,.02); }
 .kh-box { display: flex; align-items: flex-end; gap: 8px; padding: 6px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); transition: border-color .15s, box-shadow .15s; }
-.kh-box:focus-within { border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
+.kh-box:focus-within { border-color: #ff9452; box-shadow: 0 0 0 3px rgba(255,98,1,.18); }
 .kh-box textarea { flex: 1; background: transparent; border: 0; outline: none; resize: none; color: var(--text-strong); font: inherit; font-size: 14px; padding: 8px 6px; max-height: 140px; }
 .kh-ic { width: 38px; height: 38px; border-radius: 12px; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--text-muted); background: transparent; flex: none; }
 .kh-ic:hover { color: var(--text-strong); background: rgba(255,255,255,.06); }
@@ -71,12 +71,12 @@ const KH_CSS = `
 .kh-send:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
 .kh-pop { position: absolute; left: 14px; right: 14px; bottom: calc(100% - 4px); border-radius: 14px; overflow: hidden; background: rgba(15,17,26,.98); border: 1px solid rgba(255,255,255,.12); box-shadow: 0 -10px 30px rgba(0,0,0,.5); }
 .kh-pop button { display: block; width: 100%; text-align: left; padding: 9px 12px; background: none; border: 0; cursor: pointer; color: var(--text-body); font-family: var(--font-sans); font-size: var(--text-sm); }
-.kh-pop button:hover { background: rgba(139,92,246,.14); }
+.kh-pop button:hover { background: rgba(255,98,1,.14); }
 .kh-side { overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
 .kh-sec { display: flex; flex-direction: column; gap: 8px; }
 .kh-sec > span { font-size: 10.5px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .08em; }
 .kh-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--font-sans); color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.09); }
-.kh-tag.on { color: #fff; border-color: transparent; background: rgba(139,92,246,.3); box-shadow: inset 0 0 0 1px rgba(167,139,250,.6); }
+.kh-tag.on { color: #fff; border-color: transparent; background: rgba(255,98,1,.3); box-shadow: inset 0 0 0 1px rgba(255,148,82,.6); }
 .kh-empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 30px; background: #0b111a; }
 .kh-pulse { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 14px; display: grid; place-items: center; background: radial-gradient(circle, rgba(37,211,102,.25), transparent 70%); animation: kh-breathe 2.4s ease-in-out infinite; }
 @keyframes kh-breathe { 50% { transform: scale(1.08); opacity: .8; } }
@@ -103,10 +103,10 @@ function LeadSide({ lead, flows, tags, canEdit, onToggleTag }) {
       <div className="kh-sec"><span>Contato</span>
         {lead.telefone && <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}><ChannelLogo kind="qr" size={18} />+{lead.telefone}
           <button type="button" className="kh-ic" style={{ width: 26, height: 26 }} title="Copiar" onClick={() => navigator.clipboard && navigator.clipboard.writeText(lead.telefone)}><Icon name="copy" size={13} /></button></div>}
-        {lead.email && <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-body)', wordBreak: 'break-all' }}><Icon name="mail" size={15} style={{ color: '#4C8DFF' }} />{lead.email}</div>}
+        {lead.email && <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-body)', wordBreak: 'break-all' }}><Icon name="mail" size={15} style={{ color: '#ffb485' }} />{lead.email}</div>}
         {lead.produto && <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}><Icon name="package" size={15} style={{ color: '#f59e0b' }} />{lead.produto}</div>}
         {lead.utm && lead.utm.utm_source && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Veio de: {lead.utm.utm_source}{lead.utm.utm_campaign ? ` · ${lead.utm.utm_campaign}` : ''}</div>}
-        {lead.link_recuperacao && <a href={lead.link_recuperacao} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--text-xs)', color: '#a78bfa' }}>Abrir link de pagamento ↗</a>}
+        {lead.link_recuperacao && <a href={lead.link_recuperacao} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--text-xs)', color: '#ff9452' }}>Abrir link de pagamento ↗</a>}
       </div>
       <div className="kh-sec"><span>Etiquetas</span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -116,14 +116,14 @@ function LeadSide({ lead, flows, tags, canEdit, onToggleTag }) {
       </div>
       <div className="kh-sec"><span>Automação</span>
         {lead.automation_paused ? <div style={{ fontSize: 'var(--text-sm)', color: '#fbbf24' }}>Pausada: você está atendendo.</div>
-          : flows.length ? flows.map((f) => <div key={f.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}><Icon name="git-branch" size={14} style={{ color: '#a78bfa' }} />{f.campanha}<span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{f.status === 'waiting' ? (f.wait_kind === 'reply' ? 'esperando resposta' : 'aguardando') : 'rodando'}</span></div>)
+          : flows.length ? flows.map((f) => <div key={f.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}><Icon name="git-branch" size={14} style={{ color: '#ff9452' }} />{f.campanha}<span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{f.status === 'waiting' ? (f.wait_kind === 'reply' ? 'esperando resposta' : 'aguardando') : 'rodando'}</span></div>)
           : <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Nenhum fluxo rodando agora.</div>}
       </div>
       <div className="kh-sec"><span>Histórico de compra</span>
         {!(lead.eventos || []).length && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Nenhum evento do checkout.</div>}
         {(lead.eventos || []).map((e, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-xs)' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: e.tipo === 'Compra Aprovada' ? '#34d399' : e.tipo === 'Compra Recusada' ? '#fb7185' : '#22d3ee' }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: e.tipo === 'Compra Aprovada' ? '#34d399' : e.tipo === 'Compra Recusada' ? '#fb7185' : '#f39200' }} />
             <span style={{ flex: 1, color: 'var(--text-body)' }}>{e.tipo}{e.produto ? ` · ${e.produto}` : ''}</span>
             <span style={{ color: 'var(--text-subtle)' }}>{e.valor != null ? money(e.valor) : ''}</span>
           </div>
@@ -200,7 +200,7 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
           <Avatar name={nomeOf(lead)} size={40} online={lead.janela_aberta} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{nomeOf(lead)}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: lead.automation_paused ? '#fbbf24' : st.flows.length ? '#a78bfa' : 'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--text-xs)', color: lead.automation_paused ? '#fbbf24' : st.flows.length ? '#ff9452' : 'var(--text-muted)' }}>
               {lead.automation_paused ? 'Você está atendendo' : st.flows.length ? `Kobly atendendo pelo fluxo ${st.flows[0].campanha}` : (lead.telefone ? `+${lead.telefone}` : 'sem telefone')}
             </div>
           </div>
@@ -230,7 +230,7 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
           <div className="kh-compose">
             {sugest.length > 0 && (
               <div className="kh-pop">
-                {sugest.map((q) => <button key={q.id} type="button" onClick={() => setText(q.body)}><b style={{ color: '#a78bfa' }}>/{q.shortcut}</b> <span style={{ color: 'var(--text-muted)' }}>{q.body.slice(0, 90)}</span></button>)}
+                {sugest.map((q) => <button key={q.id} type="button" onClick={() => setText(q.body)}><b style={{ color: '#ff9452' }}>/{q.shortcut}</b> <span style={{ color: 'var(--text-muted)' }}>{q.body.slice(0, 90)}</span></button>)}
               </div>
             )}
             {!lead.janela_aberta ? (
@@ -312,7 +312,7 @@ function KoblyChats() {
                 </div>
                 <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
                   {c.automation_paused && <span className="kh-badge" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}><Icon name="hand" size={10} />Humano</span>}
-                  {c.em_fluxo && !c.automation_paused && <span className="kh-badge" style={{ color: '#a78bfa', background: 'rgba(139,92,246,.14)' }}><Icon name="git-branch" size={10} />Em fluxo</span>}
+                  {c.em_fluxo && !c.automation_paused && <span className="kh-badge" style={{ color: '#ff9452', background: 'rgba(255,98,1,.14)' }}><Icon name="git-branch" size={10} />Em fluxo</span>}
                   {c.valor_compra != null && <span className="kh-badge" style={{ color: '#34d399', background: 'rgba(52,211,153,.1)' }}>{money(c.valor_compra)}</span>}
                 </div>
               </div>

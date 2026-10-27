@@ -12,23 +12,23 @@ import { useKobly } from '@/store/store.jsx';
 
 const KD_CSS = `
 .kd-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 22px 24px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
-  background: radial-gradient(800px 300px at 0% 0%, rgba(139,92,246,.22), transparent 60%), radial-gradient(700px 300px at 100% 100%, rgba(34,211,238,.16), transparent 60%), rgba(12,14,22,.95);
+  background: radial-gradient(800px 300px at 0% 0%, rgba(255,98,1,.22), transparent 60%), radial-gradient(700px 300px at 100% 100%, rgba(243,146,0,.16), transparent 60%), rgba(12,14,22,.95);
   border: 1px solid rgba(255,255,255,.08); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
-.kd-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(rgba(167,139,250,.18) 1px, transparent 1px); background-size: 22px 22px; mask-image: linear-gradient(90deg, transparent, #000 40%, transparent); opacity: .5; pointer-events: none; }
+.kd-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(rgba(255,148,82,.18) 1px, transparent 1px); background-size: 22px 22px; mask-image: linear-gradient(90deg, transparent, #000 40%, transparent); opacity: .5; pointer-events: none; }
 .kd-hero::after { content: ''; position: absolute; left: -30%; top: 0; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); animation: kd-sweep 6s linear infinite; pointer-events: none; }
 @keyframes kd-sweep { to { left: 130%; } }
 .kd-core { position: relative; width: 64px; height: 64px; flex: none; display: grid; place-items: center; }
-.kd-core .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; border-top-color: #22d3ee; border-right-color: #8b5cf6; animation: kd-spin 2.4s linear infinite; }
-.kd-core .ring.r2 { inset: 8px; border-top-color: #ec4899; border-right-color: transparent; border-left-color: #a78bfa; animation-duration: 3.6s; animation-direction: reverse; }
-.kd-core .dot { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #a78bfa 45%, #6d28d9); box-shadow: 0 0 24px #8b5cf6, 0 0 48px rgba(34,211,238,.4); animation: kd-pulse 2s ease-in-out infinite; }
+.kd-core .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; border-top-color: #f39200; border-right-color: #ff6201; animation: kd-spin 2.4s linear infinite; }
+.kd-core .ring.r2 { inset: 8px; border-top-color: #ffd6bd; border-right-color: transparent; border-left-color: #ff9452; animation-duration: 3.6s; animation-direction: reverse; }
+.kd-core .dot { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #ff9452 45%, #b24500); box-shadow: 0 0 24px #ff6201, 0 0 48px rgba(243,146,0,.4); animation: kd-pulse 2s ease-in-out infinite; }
 @keyframes kd-spin { to { transform: rotate(360deg); } }
-@keyframes kd-pulse { 50% { transform: scale(.82); box-shadow: 0 0 14px #8b5cf6, 0 0 30px rgba(34,211,238,.3); } }
-.kd-live { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: #a5f3fc; }
+@keyframes kd-pulse { 50% { transform: scale(.82); box-shadow: 0 0 14px #ff6201, 0 0 30px rgba(243,146,0,.3); } }
+.kd-live { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: #ffb485; }
 .kd-live i { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.6); animation: kd-ping 1.8s infinite; }
 @keyframes kd-ping { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); } 70% { box-shadow: 0 0 0 9px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
 .kd-seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); position: relative; z-index: 1; }
 .kd-seg button { border: 0; padding: 7px 13px; border-radius: 9px; background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; }
-.kd-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(34,211,238,.3), rgba(139,92,246,.42)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.55); }
+.kd-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(243,146,0,.3), rgba(255,98,1,.42)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
 .kd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 .kd-kpi { position: relative; overflow: hidden; border-radius: 18px; padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 6px;
   background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.95); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 34px rgba(0,0,0,.4); animation: kd-in .5s both; }
@@ -127,7 +127,7 @@ function AreaChart({ serie, lines }) {
               </g>
             );
           })}
-          {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={P} y2={H - P} stroke="rgba(167,139,250,.5)" />}
+          {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={P} y2={H - P} stroke="rgba(255,148,82,.5)" />}
           {hover !== null && vis.map((l) => <circle key={l.key} cx={x(hover)} cy={y(serie[hover][l.key] || 0)} r="4" fill={l.color} stroke="#0d1018" strokeWidth="2" />)}
         </svg>
         {hover !== null && serie[hover] && (
@@ -172,8 +172,8 @@ function ClientDashboard() {
   const col = (k) => serie.map((x) => x[k] || 0);
   const nome = String((store.session && (store.session.nome || store.session.name)) || '').split(' ')[0];
   const eventosMax = Math.max(1, ...((d && d.eventos) || []).map((e) => e.n));
-  const EV_COLOR = { 'Compra Aprovada': '#34d399', 'Pix Gerado': '#22d3ee', 'Abandono de carrinho': '#f59e0b', 'Boleto Gerado': '#a78bfa', 'Compra Recusada': '#fb7185' };
-  const FEED = { evento: ['#22d3ee', 'shopping-cart'], resposta: ['#25D366', 'message-circle'], venda: ['#34d399', 'badge-dollar-sign'] };
+  const EV_COLOR = { 'Compra Aprovada': '#34d399', 'Pix Gerado': '#f39200', 'Abandono de carrinho': '#f59e0b', 'Boleto Gerado': '#ff9452', 'Compra Recusada': '#fb7185' };
+  const FEED = { evento: ['#f39200', 'shopping-cart'], resposta: ['#25D366', 'message-circle'], venda: ['#34d399', 'badge-dollar-sign'] };
 
   if (st.error && !st.data) return <ErrorState message={st.error} onRetry={() => setDays((x) => x)} />;
   return (
@@ -192,26 +192,26 @@ function ClientDashboard() {
       )}
       <div className="kd-grid">
         {st.loading && !d ? Array.from({ length: 6 }, (_, i) => <div key={i} className="kd-skel" />) : d && (<>
-          <Kpi label="Leads que chegaram" icon="user-plus" color="#22d3ee" value={d.leads.cur} prev={d.leads.prev} sub={`em ${days} dias`} spark={col('leads')} />
+          <Kpi label="Leads que chegaram" icon="user-plus" color="#f39200" value={d.leads.cur} prev={d.leads.prev} sub={`em ${days} dias`} spark={col('leads')} />
           <Kpi label="Mensagens enviadas" logo="qr" color="#25D366" value={d.enviadas.cur} prev={d.enviadas.prev} sub="no WhatsApp" spark={col('enviadas')} delay={60} />
-          <Kpi label="Respostas recebidas" icon="message-circle-reply" color="#a78bfa" value={d.recebidas.cur} prev={d.recebidas.prev} sub={d.enviadas.cur ? `${Math.round((d.recebidas.cur / Math.max(1, d.enviadas.cur)) * 100)}% de resposta` : 'dos leads'} spark={col('recebidas')} delay={120} />
+          <Kpi label="Respostas recebidas" icon="message-circle-reply" color="#ff9452" value={d.recebidas.cur} prev={d.recebidas.prev} sub={d.enviadas.cur ? `${Math.round((d.recebidas.cur / Math.max(1, d.enviadas.cur)) * 100)}% de resposta` : 'dos leads'} spark={col('recebidas')} delay={120} />
           <Kpi label="Vendas aprovadas" icon="badge-dollar-sign" color="#34d399" value={d.vendas.valor} prev={d.vendas.valor_prev} format={money} sub={`${fmt(d.vendas.cur)} venda(s) no checkout`} spark={col('vendas')} delay={180} />
           <Kpi label="Recuperadas pelos fluxos" icon="sparkles" color="#f59e0b" value={d.recuperadas.valor} format={money} sub={`${fmt(d.recuperadas.n)} venda(s) vindas da Kobly`} delay={240} />
-          <Kpi label="Fluxos no ar" icon="git-branch" color="#ec4899" value={d.fluxos_ativos} sub={`${fmt(d.leads_em_fluxo)} lead(s) neles agora · ${fmt(d.emails.cur)} e-mails enviados`} delay={300} />
+          <Kpi label="Fluxos no ar" icon="git-branch" color="#ffd6bd" value={d.fluxos_ativos} sub={`${fmt(d.leads_em_fluxo)} lead(s) neles agora · ${fmt(d.emails.cur)} e-mails enviados`} delay={300} />
         </>)}
       </div>
       {d && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}>
           <div className="kd-panel" style={{ gridColumn: 'span 2' }}>
-            <h3><Icon name="activity" size={16} style={{ color: '#22d3ee' }} />Movimento por dia</h3>
-            <AreaChart serie={serie} lines={[{ key: 'leads', label: 'Leads', color: '#22d3ee' }, { key: 'enviadas', label: 'Enviadas', color: '#25D366' }, { key: 'recebidas', label: 'Respostas', color: '#a78bfa' }, { key: 'vendas', label: 'Vendas', color: '#34d399' }]} />
+            <h3><Icon name="activity" size={16} style={{ color: '#f39200' }} />Movimento por dia</h3>
+            <AreaChart serie={serie} lines={[{ key: 'leads', label: 'Leads', color: '#f39200' }, { key: 'enviadas', label: 'Enviadas', color: '#25D366' }, { key: 'recebidas', label: 'Respostas', color: '#ff9452' }, { key: 'vendas', label: 'Vendas', color: '#34d399' }]} />
           </div>
           <div className="kd-panel">
-            <h3><Icon name="radar" size={16} style={{ color: '#a78bfa' }} />Atividade ao vivo</h3>
+            <h3><Icon name="radar" size={16} style={{ color: '#ff9452' }} />Atividade ao vivo</h3>
             <div className="kd-feed">
               {!d.atividade.length && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Assim que chegar um evento do checkout ou uma resposta no WhatsApp, aparece aqui.</div>}
               {d.atividade.map((a, i) => {
-                const [c, ic] = a.tipo === 'evento' ? [EV_COLOR[a.titulo] || '#22d3ee', a.titulo === 'Compra Aprovada' ? 'badge-check' : 'shopping-cart'] : FEED[a.tipo];
+                const [c, ic] = a.tipo === 'evento' ? [EV_COLOR[a.titulo] || '#f39200', a.titulo === 'Compra Aprovada' ? 'badge-check' : 'shopping-cart'] : FEED[a.tipo];
                 return (
                   <div key={i} className="it" style={{ '--c': c, animationDelay: `${i * 40}ms` }}>
                     <span className="ic"><Icon name={ic} size={15} /></span>
@@ -237,13 +237,13 @@ function ClientDashboard() {
             {d.oportunidades > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{fmt(d.oportunidades)} oportunidade(s) de recuperação no período (abandonos, Pix, boletos e recusas).</div>}
           </div>
           <div className="kd-panel" style={{ gridColumn: 'span 2' }}>
-            <h3><Icon name="git-branch" size={16} style={{ color: '#ec4899' }} />Fluxos que mais trabalham</h3>
+            <h3><Icon name="git-branch" size={16} style={{ color: '#ffd6bd' }} />Fluxos que mais trabalham</h3>
             {!d.top_fluxos.length && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Nenhum fluxo publicado ainda. <button type="button" className="kd-seg" style={{ padding: '4px 10px', cursor: 'pointer', color: 'var(--text-strong)', fontFamily: 'var(--font-sans)' }} onClick={() => store.navigate('fluxos')}>Criar fluxo</button></div>}
             {d.top_fluxos.length > 0 && <div className="kd-row" style={{ color: 'var(--text-subtle)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.07em' }}><span>Fluxo</span><span>Leads</span><span>Agora</span><span>Vendas</span></div>}
             {d.top_fluxos.map((f) => (
               <div key={f.id} className="kd-row" style={{ cursor: 'pointer' }} onClick={() => store.navigate('fluxos')}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}><span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: f.status === 'Ativa' ? '#34d399' : '#64748b', boxShadow: f.status === 'Ativa' ? '0 0 8px #34d399' : 'none' }} /><b style={{ color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nome}</b></span>
-                <span>{fmt(f.leads)}</span><span style={{ color: '#a78bfa' }}>{fmt(f.agora)}</span><span style={{ color: '#34d399' }}>{f.vendas ? `${fmt(f.vendas)} · ${money(f.valor)}` : '—'}</span>
+                <span>{fmt(f.leads)}</span><span style={{ color: '#ff9452' }}>{fmt(f.agora)}</span><span style={{ color: '#34d399' }}>{f.vendas ? `${fmt(f.vendas)} · ${money(f.valor)}` : '—'}</span>
               </div>
             ))}
           </div>
@@ -276,10 +276,10 @@ function AdminDashboard() {
         line={d ? `${fmt(t.empresas_ativas)} empresa(s) ativas · ${fmt(t.em_fluxo)} lead(s) dentro de fluxos agora · ${fmt(t.numeros)} número(s) de WhatsApp conectados` : 'Lendo a plataforma…'} />
       <div className="kd-grid">
         {st.loading && !d ? Array.from({ length: 6 }, (_, i) => <div key={i} className="kd-skel" />) : d && (<>
-          <Kpi label="Empresas" icon="building-2" color="#22d3ee" value={t.empresas} sub={`+${fmt(t.empresas_novas)} em ${days} dias`} spark={col('empresas')} />
-          <Kpi label="Usuários" icon="users" color="#a78bfa" value={t.usuarios} sub={`${fmt(t.empresas_ativas)} empresa(s) usando o WhatsApp`} delay={60} />
+          <Kpi label="Empresas" icon="building-2" color="#f39200" value={t.empresas} sub={`+${fmt(t.empresas_novas)} em ${days} dias`} spark={col('empresas')} />
+          <Kpi label="Usuários" icon="users" color="#ff9452" value={t.usuarios} sub={`${fmt(t.empresas_ativas)} empresa(s) usando o WhatsApp`} delay={60} />
           <Kpi label="Números conectados" logo="qr" color="#25D366" value={t.numeros} sub={cap ? `${fmt(used)} de ${fmt(cap)} vagas nos servidores` : 'sem servidor Uazapi cadastrado'} delay={120} />
-          <Kpi label="Mensagens enviadas" icon="send" color="#22d3ee" value={t.mensagens} sub={`${fmt(t.respostas)} respostas recebidas`} spark={col('mensagens')} delay={180} />
+          <Kpi label="Mensagens enviadas" icon="send" color="#f39200" value={t.mensagens} sub={`${fmt(t.respostas)} respostas recebidas`} spark={col('mensagens')} delay={180} />
           <Kpi label="Leads na plataforma" icon="user-plus" color="#f59e0b" value={t.leads} sub={`em ${days} dias`} spark={col('leads')} delay={240} />
           <Kpi label="Vendas recuperadas" icon="badge-dollar-sign" color="#34d399" value={t.vendas_valor} format={money} sub={`${fmt(t.vendas)} venda(s) pelos fluxos`} delay={300} />
         </>)}
@@ -287,8 +287,8 @@ function AdminDashboard() {
       {d && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}>
           <div className="kd-panel" style={{ gridColumn: 'span 2' }}>
-            <h3><Icon name="activity" size={16} style={{ color: '#22d3ee' }} />Crescimento por dia</h3>
-            <AreaChart serie={serie} lines={[{ key: 'mensagens', label: 'Mensagens', color: '#25D366' }, { key: 'leads', label: 'Leads', color: '#f59e0b' }, { key: 'empresas', label: 'Novas empresas', color: '#22d3ee' }]} />
+            <h3><Icon name="activity" size={16} style={{ color: '#f39200' }} />Crescimento por dia</h3>
+            <AreaChart serie={serie} lines={[{ key: 'mensagens', label: 'Mensagens', color: '#25D366' }, { key: 'leads', label: 'Leads', color: '#f59e0b' }, { key: 'empresas', label: 'Novas empresas', color: '#f39200' }]} />
           </div>
           <div className="kd-panel">
             <h3><Icon name="server" size={16} style={{ color: '#25D366' }} />Servidores WhatsApp</h3>
@@ -309,7 +309,7 @@ function AdminDashboard() {
               <div key={o.id} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr auto', gap: 12, alignItems: 'center', fontSize: 'var(--text-sm)' }}>
                 <span style={{ color: i < 3 ? '#f59e0b' : 'var(--text-subtle)', fontWeight: 800 }}>#{i + 1}</span>
                 <b style={{ color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.nome}</b>
-                <div className="kd-bar" style={{ '--c': '#8b5cf6' }}><span style={{ width: `${((o.mensagens + o.leads) / topMax) * 100}%` }} /></div>
+                <div className="kd-bar" style={{ '--c': '#ff6201' }}><span style={{ width: `${((o.mensagens + o.leads) / topMax) * 100}%` }} /></div>
                 <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmt(o.mensagens)} msg · {fmt(o.leads)} leads{o.vendas ? ` · ${money(o.vendas)}` : ''}</span>
               </div>
             ))}
