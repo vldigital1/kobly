@@ -1,6 +1,7 @@
 import { createMailer } from './mailer.js';
 import { createFlowEmail } from './email/flowEmail.js';
 import { createBulk } from './bulk/service.js';
+import { createDashboard } from './workspace/dashboard.js';
 import { createInvites } from './invite.js';
 import { createStorage } from './storage.js';
 import { createUnsubscribe } from './unsubscribe.js';
@@ -116,7 +117,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const products = createProducts({ pool });
   const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms, uazapi, bulk });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms, uazapi, bulk, dashboard: createDashboard({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });

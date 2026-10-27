@@ -83,6 +83,8 @@ export function createFunctions(ctx) {
     'platforms': () => orgUserRoute('platforms', 'platforms'),
     'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
     'bulk-send': () => orgUserRoute('bulk', 'bulk-send'),
+    'dashboard': () => orgUserRoute('dashboard', 'dashboard'),
+    'admin-dashboard': () => platformAdminRoute((body) => ctx.dashboard.admin(body)),
     'uazapi-servers': () => platformAdminRoute((body) => ctx.uazapi.handleServers(body)),
   };
   return {
