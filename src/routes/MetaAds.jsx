@@ -267,7 +267,7 @@ const COLS_KEY = 'kobly:ads-cols';
 const readCols = () => { try { const v = JSON.parse(localStorage.getItem(COLS_KEY)); return Array.isArray(v) && v.length ? v : DEFAULT_COLS; } catch { return DEFAULT_COLS; } };
 
 const STATUS_PILL = { ACTIVE: ['on', 'Ativo'], PAUSED: ['off', 'Pausado'], CAMPAIGN_PAUSED: ['off', 'Campanha pausada'], ADSET_PAUSED: ['off', 'Conjunto pausado'],
-  PENDING_REVIEW: ['mid', 'Em análise'], IN_PROCESS: ['mid', 'Processando'], WITH_ISSUES: ['mid', 'Com problema'], DISAPPROVED: ['off', 'Reprovado'], PENDING_BILLING_INFO: ['mid', 'Pagamento pendente'] };
+  PENDING_REVIEW: ['mid', 'Em análise'], IN_PROCESS: ['mid', 'Aplicando mudança…'], WITH_ISSUES: ['mid', 'Com problema'], DISAPPROVED: ['off', 'Reprovado'], PENDING_BILLING_INFO: ['mid', 'Pagamento pendente'] };
 const PLATFORMS = {
   meta: { id: 'meta', name: 'Facebook Ads', api: (...a) => KoblyApi.metaAds(...a), where: 'no Facebook', hide: [], conv: 'Vendas (Meta)',
     level: { campaign: 'Campanha', adset: 'Conjunto', ad: 'Anúncio' }, plural: { campaign: 'campanhas', adset: 'conjuntos', ad: 'anúncios' }, tabs: { campaign: 'Campanhas', adset: 'Conjuntos', ad: 'Anúncios' },
@@ -414,6 +414,10 @@ function Entities({ P, orgId, level, conta, preset, tick, canEdit, notify, paren
   const [picking, setPicking] = useState(null);
   const [busy, setBusy] = useState({});
   const [budget, setBudget] = useState(null); // { item, value }
+  // depois de ligar/pausar ou mudar orçamento a rede fica uns segundos em "Processando": confere de novo logo
+  const recheck = useRef(null);
+  useEffect(() => () => clearTimeout(recheck.current), []);
+  const recheckSoon = () => { clearTimeout(recheck.current); recheck.current = setTimeout(() => load(true), 20_000); };
   const load = useCallback((force) => P.api('entities', { level, id: conta, date_preset: preset, force }, orgId).then((r) => setSt(r.error ? { error: r.error } : { items: r.items })), [P, orgId, level, conta, preset]);
   useEffect(() => { setSt({ loading: true }); load(tick.force); }, [load, tick]);
 
@@ -424,6 +428,7 @@ function Entities({ P, orgId, level, conta, preset, tick, canEdit, notify, paren
     setBusy((b) => ({ ...b, [it.id]: false }));
     if (r.error) { notify('danger', r.error); return; }
     setSt((s) => ({ items: s.items.map((x) => (x.id === it.id ? { ...x, status: next, effective_status: next } : x)) }));
+    recheckSoon();
     const fem = level === 'campaign';
     notify('success', `${P.level[level]} "${it.name}" ${next === 'ACTIVE' ? (fem ? 'ativada' : 'ativado') : (fem ? 'pausada' : 'pausado')}.`);
   }
@@ -432,7 +437,7 @@ function Entities({ P, orgId, level, conta, preset, tick, canEdit, notify, paren
     setBudget((b) => ({ ...b, saving: true }));
     const r = await P.api('set_budget', { id: it.account_id, level, object_id: it.id, value: budget.value }, orgId);
     if (r.error) { setBudget((b) => ({ ...b, saving: false })); notify('danger', r.error); return; }
-    setBudget(null); notify('success', `Orçamento atualizado ${P.where}.`); load(true);
+    setBudget(null); notify('success', `Orçamento atualizado ${P.where}.`); load(true); recheckSoon();
   }
 
   if (st.error) return <ErrorState message={st.error} onRetry={() => load(true)} />;
