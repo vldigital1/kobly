@@ -190,7 +190,7 @@ test('Conectar com Facebook: janelinha de login, troca do código e escolha das 
   assert.match(await back({ state, error: 'access_denied' }), /cancelou/);
   assert.equal((await fn('meta-ads', { action: 'oauth_accounts' }, B.token)).status, 410, 'sem login ainda');
   const ok = await back({ state, code: 'codigo-bom' });
-  assert.match(ok, /Facebook conectado/); assert.ok(ok.includes('postMessage({"kobly":"meta-oauth","ok":true'), 'avisa a janela da Kobly'); assert.ok(ok.includes('"https://app.kobly.test"'), 'só para o site da Kobly');
+  assert.match(ok, /Facebook conectado/); assert.ok(ok.includes('postMessage({"kobly":"meta-oauth","ok":true'), 'avisa a janela da Kobly'); assert.ok(ok.includes(',"*")'), 'avisa o site em qualquer endereço (sem segredo na mensagem)');
   assert.doesNotMatch(ok, /EAAB/, 'o token não aparece na página');
   await assert.rejects(asUser(B.userId, `select token_enc from public.meta_ads_oauth`), /permission denied/);
   assert.equal((await fn('meta-ads', { action: 'oauth_accounts' }, A.token)).status, 410, 'outra empresa não usa o login');

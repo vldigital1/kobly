@@ -140,7 +140,7 @@ export function createGoogleAds({ pool, secretKey, fetchImpl = globalThis.fetch,
       const data = JSON.stringify({ kobly: 'google-oauth', ok, message: msg });
       return `<!doctype html><meta charset="utf-8"><title>Kobly</title><body style="font-family:system-ui;background:#0d0d0d;color:#f6f6f6;display:grid;place-items:center;height:100vh;margin:0">
 <div style="text-align:center;max-width:340px;padding:16px"><div style="width:48px;height:48px;border-radius:12px;background:#ff6201;margin:0 auto 16px"></div><p>${msg}</p><p style="opacity:.6;font-size:13px">Pode fechar esta janela.</p></div>
-<script>try{window.opener&&window.opener.postMessage(${data},${JSON.stringify(siteUrl || '*')})}catch(e){}setTimeout(function(){window.close()},${ok ? 800 : 5000})</script></body>`;
+<script>try{window.opener&&window.opener.postMessage(${data},'*')}catch(e){}setTimeout(function(){window.close()},${ok ? 800 : 5000})</script></body>`;
     };
     const st = readState(q.state);
     if (!st) return page(false, 'Este link de login expirou. Volte para a Kobly e clique em "Conectar com Google" de novo.');

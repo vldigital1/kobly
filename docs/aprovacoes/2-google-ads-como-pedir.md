@@ -7,7 +7,7 @@ O formulário é em inglês. Abaixo estão as respostas prontas para colar.
 | Campo do formulário | Resposta para colar |
 |---|---|
 | Company name | Kobly |
-| Company website | https://kobly-six.vercel.app (troque por https://koblay.io quando o domínio estiver no ar) |
+| Company website | https://app.koblay.io |
 | Contact e-mail | contato@koblay.io |
 | Business model / How will you use the API? | Kobly is a SaaS for online businesses. Each customer connects their own Google Ads accounts via OAuth to see campaign, ad group and ad performance next to the sales Kobly tracked through UTM parameters, and can pause/enable items or change a campaign budget from the Kobly dashboard. |
 | Who will use the tool? | Advertisers (our customers) managing their own accounts, and agencies managing client accounts under their MCC. External users. |
@@ -26,11 +26,11 @@ O formulário é em inglês. Abaixo estão as respostas prontas para colar.
 
 O Google vai pedir:
 
-- **Página inicial:** https://kobly-six.vercel.app. Ela já tem os links de Privacidade, Termos e Exclusão de dados no rodapé.
-- **Política de privacidade:** https://kobly-six.vercel.app/privacidade. Ela já tem o texto de "Uso Limitado" que o Google exige.
+- **Página inicial:** https://app.koblay.io. Ela já tem os links de Privacidade, Termos e Exclusão de dados no rodapé.
+- **Política de privacidade:** https://app.koblay.io/privacidade. Ela já tem o texto de "Uso Limitado" que o Google exige.
 - **Vídeo:**
   - mostrando o botão "Conectar com Google";
   - a tela de permissão do Google, com a **barra de endereço aparecendo**, para mostrar o ID do cliente;
   - as campanhas aparecendo na Kobly;
   - o pausar e o mudar orçamento.
-- **Domínio verificado no Google Search Console.** O Google não aceita `vercel.app` como domínio seu. Para essa etapa, o ideal é já usar **koblay.io**.
+- **Domínio verificado no Google Search Console:** koblay.io (verificação por registro TXT no DNS da Hostinger).

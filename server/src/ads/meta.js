@@ -125,7 +125,8 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
   // GET /oauth/meta/callback — o Facebook volta aqui; a página avisa a janela da Kobly e fecha sozinha
   async function oauthCallback(q) {
     const page = (ok, msg) => {
-      const origin = JSON.stringify(siteUrl || '*');
+      // o site pode estar em mais de um endereço (app.koblay.io e o da Vercel); a mensagem não leva nada secreto
+      const origin = '"*"';
       const data = JSON.stringify({ kobly: 'meta-oauth', ok, message: msg });
       return `<!doctype html><meta charset="utf-8"><title>Kobly</title><body style="font-family:system-ui;background:#0d0d0d;color:#f6f6f6;display:grid;place-items:center;height:100vh;margin:0">
 <div style="text-align:center;max-width:340px;padding:16px"><div style="width:48px;height:48px;border-radius:12px;background:#ff6201;margin:0 auto 16px"></div><p>${msg}</p><p style="opacity:.6;font-size:13px">Pode fechar esta janela.</p></div>

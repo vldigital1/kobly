@@ -11,11 +11,10 @@ O Facebook avalia em inglês. Por isso cada bloco tem o texto **em inglês para 
 
 - [ ] **Configurações do app → Básico**
   - Ícone 1024×1024: o símbolo laranja da Kobly.
-  - **URL da Política de Privacidade:** `https://kobly-six.vercel.app/privacidade`
-  - **URL dos Termos de Serviço:** `https://kobly-six.vercel.app/termos`
-  - **URL de instruções de exclusão de dados:** `https://kobly-six.vercel.app/exclusao-de-dados`
+  - **URL da Política de Privacidade:** `https://app.koblay.io/privacidade`
+  - **URL dos Termos de Serviço:** `https://app.koblay.io/termos`
+  - **URL de instruções de exclusão de dados:** `https://app.koblay.io/exclusao-de-dados`
   - Categoria: **Negócios e páginas**. E-mail de contato: **contato@koblay.io**.
-  - Quando o domínio koblay.io estiver no ar, troque `kobly-six.vercel.app` por `koblay.io`.
 - [ ] **Verificação da empresa** concluída (Central de segurança do Gerenciador de Negócios).
 - [ ] Configuração **"kobly Anúncios"** com as permissões ads_read, ads_management e business_management.
 - [ ] Uma **conta de teste na Kobly** para o revisor do Facebook entrar.
@@ -79,7 +78,7 @@ Dica: antes de gravar, coloque o idioma do Facebook em inglês. Os revisores ent
 
 **Cole isto (inglês), trocando o e-mail e a senha:**
 
-> 1. Go to https://kobly-six.vercel.app and log in with: email: [E-MAIL DA CONTA DE TESTE] / password: [SENHA DA CONTA DE TESTE]
+> 1. Go to https://app.koblay.io and log in with: email: [E-MAIL DA CONTA DE TESTE] / password: [SENHA DA CONTA DE TESTE]
 > 2. In the left menu click "Anúncios" (Ads), then the "Facebook Ads" tab.
 > 3. Click "Conectar com Facebook" (Connect with Facebook) and approve the permissions in the Facebook popup.
 > 4. Select an ad account and click "Conectar conta" (Connect account).
