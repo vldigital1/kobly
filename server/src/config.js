@@ -32,11 +32,10 @@ export function loadConfig(env = process.env) {
     metaGraphBase: env.META_GRAPH_BASE || 'https://graph.facebook.com/v21.0',
     // Marketing API (Facebook Ads): versão atual da documentação
     metaAdsGraphBase: env.META_ADS_GRAPH_BASE || 'https://graph.facebook.com/v26.0',
-    // Google Ads ("Conectar com Google"): app OAuth da Kobly no Google Cloud + developer token do Google Ads;
+    // Google Ads ("Conectar com Google"): app OAuth da Kobly no Google Cloud (o acesso à API é do projeto; não há mais developer token);
     // GOOGLE_ADS_LOGIN_CUSTOMER_ID só se a Kobly acessar as contas pela própria MCC
     googleAdsClientId: env.GOOGLE_ADS_CLIENT_ID || '',
     googleAdsClientSecret: env.GOOGLE_ADS_CLIENT_SECRET || '',
-    googleAdsDeveloperToken: env.GOOGLE_ADS_DEVELOPER_TOKEN || '',
     googleAdsLoginCustomerId: (env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || '').replace(/-/g, ''),
     googleAdsApiVersion: env.GOOGLE_ADS_API_VERSION || 'v26',
     // Voz ElevenLabs (cada cliente usa a própria chave; aqui só o endereço da API)

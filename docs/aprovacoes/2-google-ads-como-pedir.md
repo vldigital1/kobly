@@ -1,14 +1,28 @@
-# Google Ads — como pedir o "Acesso básico" do token de desenvolvedor
+# Google Ads — como liberar o acesso de produção à API
 
-Onde: na sua **conta de administrador (MCC)** do Google Ads, em **Ferramentas → Configuração → Central de API**, botão **Solicitar acesso básico**.
+Desde 09/09/2026 o Google **não usa mais o token de desenvolvedor**. O nível de acesso agora é do **projeto "kobly" no Google Cloud**, o mesmo projeto onde está o cliente OAuth "Kobly Web". A Central de API da MCC só serve para o e-mail de contato.
+
+Níveis de acesso:
+
+- **Teste:** só lê contas de teste do Google Ads.
+- **Explorer:** contas reais, até 2.880 operações por dia. A análise costuma ser automática.
+- **Básico:** contas reais, com mais operações. Exige a **verificação da marca** do projeto.
+
+## Onde pedir
+
+**console.cloud.google.com** → projeto **kobly** → **APIs e serviços** → **Google Ads API** → cartão **Níveis de acesso** → **Gerenciar**.
+
+1. Peça primeiro o **Explorer**. Ele já basta para os primeiros clientes.
+2. Depois faça a **verificação da marca** em **Google Auth Platform → Central de verificação**.
+3. Em seguida, peça o **Básico**.
 
 O formulário é em inglês. Abaixo estão as respostas prontas para colar.
 
 | Campo do formulário | Resposta para colar |
 |---|---|
-| Company name | Kobly |
+| Company name | Agência VL Digital LTDA (Kobly) |
 | Company website | https://app.koblay.io |
-| Contact e-mail | contato@koblay.io |
+| Contact e-mail | suportekobly@gmail.com |
 | Business model / How will you use the API? | Kobly is a SaaS for online businesses. Each customer connects their own Google Ads accounts via OAuth to see campaign, ad group and ad performance next to the sales Kobly tracked through UTM parameters, and can pause/enable items or change a campaign budget from the Kobly dashboard. |
 | Who will use the tool? | Advertisers (our customers) managing their own accounts, and agencies managing client accounts under their MCC. External users. |
 | Which API services? | Reporting (GoogleAdsService.Search) and Campaign Management (status and budget changes only) |
@@ -16,13 +30,11 @@ O formulário é em inglês. Abaixo estão as respostas prontas para colar.
 | Design document | Anexe o arquivo **2-google-ads-design-document.pdf** (está nesta mesma pasta) |
 | Expected daily operations | Less than 2,000 |
 
-## Depois de enviar
+## Cuidado conhecido
 
-1. O Google responde por e-mail, geralmente em alguns dias. Às vezes ele pede mais detalhes. Se pedir, me mande o e-mail que eu escrevo a resposta.
-2. Enquanto não aprova, o token funciona só com **contas de teste**.
-3. Aprovado: siga o passo D do guia (publicar a tela de consentimento e pedir a verificação do app no Google Cloud).
+O Google avisa que projetos em **"Teste grátis" do Cloud**, ou com faturamento suspenso, podem ser recusados. Por isso não ative o "Teste grátis".
 
-## Verificação do app no Google Cloud (passo D)
+## Verificação da marca e do app no Google Cloud
 
 O Google vai pedir:
 
@@ -33,4 +45,4 @@ O Google vai pedir:
   - a tela de permissão do Google, com a **barra de endereço aparecendo**, para mostrar o ID do cliente;
   - as campanhas aparecendo na Kobly;
   - o pausar e o mudar orçamento.
-- **Domínio verificado no Google Search Console:** koblay.io (verificação por registro TXT no DNS da Hostinger).
+- **Domínio verificado no Google Search Console:** koblay.io (já está verificado).

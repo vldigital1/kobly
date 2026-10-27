@@ -122,7 +122,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase,
     appId: config.metaAdsAppId, appSecret: config.metaAdsAppSecret, configId: config.metaAdsConfigId, publicBaseUrl: config.publicBaseUrl, siteUrl: config.siteUrl });
   const googleAds = createGoogleAds({ pool, secretKey: secretKeyBuf, fetchImpl, clientId: config.googleAdsClientId, clientSecret: config.googleAdsClientSecret,
-    developerToken: config.googleAdsDeveloperToken, loginCustomerId: config.googleAdsLoginCustomerId, apiVersion: config.googleAdsApiVersion,
+    loginCustomerId: config.googleAdsLoginCustomerId, apiVersion: config.googleAdsApiVersion,
     publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl });
   const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
   const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });

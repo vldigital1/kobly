@@ -2,7 +2,8 @@
 // gerenciador do Facebook (dashboard, contas, campanhas, grupos de anúncios e anúncios; ligar/pausar e orçamento).
 // "Conectar com Google": oauth_start → accounts.google.com → GET /oauth/google/callback guarda o refresh token
 // (cifrado) por 30 min em google_ads_oauth até o cliente escolher as contas. Contas dentro de uma MCC usam o
-// login-customer-id da MCC. A API exige o developer token da Kobly (GOOGLE_ADS_DEVELOPER_TOKEN).
+// login-customer-id da MCC. Desde 09/09/2026 o Google não usa mais developer token: o nível de acesso
+// (Teste, Explorer, Básico) é do projeto do Google Cloud dono do cliente OAuth.
 // Rastreio pela UTM com os ValueTrack do Google: utm_campaign={campaignid}, utm_medium={adgroupid}, utm_content={creative}.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
@@ -53,14 +54,14 @@ const sumMetrics = (list) => {
 };
 const statusOf = (raw, parentPaused) => (raw === 'ENABLED' ? (parentPaused ? 'CAMPAIGN_PAUSED' : 'ACTIVE') : raw === 'PAUSED' ? 'PAUSED' : raw || 'UNKNOWN');
 
-export function createGoogleAds({ pool, secretKey, fetchImpl = globalThis.fetch, clientId = '', clientSecret = '', developerToken = '', loginCustomerId = '',
+export function createGoogleAds({ pool, secretKey, fetchImpl = globalThis.fetch, clientId = '', clientSecret = '', loginCustomerId = '',
   apiVersion = 'v26', publicBaseUrl = '', siteUrl = '', now = () => new Date(),
   oauthBase = 'https://accounts.google.com/o/oauth2/v2/auth', tokenUrl = 'https://oauth2.googleapis.com/token', apiBase = 'https://googleads.googleapis.com' }) {
   const cache = new Map();
   const tokens = new Map(); // hash do refresh token → { at, exp }
   const fail = (msg) => { throw new AuthError(422, 'validation_failed', msg); };
   const needKey = () => { if (!secretKey) throw new AuthError(503, 'ads_unconfigured', 'Indisponível neste ambiente (chave de segurança ausente).'); };
-  const enabled = () => !!(clientId && clientSecret && developerToken && publicBaseUrl && secretKey);
+  const enabled = () => !!(clientId && clientSecret && publicBaseUrl && secretKey);
   const needOn = () => { if (!enabled()) throw new AuthError(503, 'google_ads_off', 'O Google Ads ainda não foi ativado pela Kobly (faltam as chaves do Google no servidor).'); };
   const redirectUri = () => `${publicBaseUrl}/oauth/google/callback`;
   async function cached(key, force, fn) {
@@ -91,7 +92,7 @@ export function createGoogleAds({ pool, secretKey, fetchImpl = globalThis.fetch,
   }
   async function api(at, path, { body, login } = {}) {
     let res;
-    const headers = { Authorization: `Bearer ${at}`, 'developer-token': developerToken, 'Content-Type': 'application/json' };
+    const headers = { Authorization: `Bearer ${at}`, 'Content-Type': 'application/json' };
     const lid = login || loginCustomerId;
     if (lid) headers['login-customer-id'] = String(lid).replace(/-/g, '');
     try { res = await fetchImpl(`${apiBase}/${apiVersion}${path}`, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) }); }
@@ -103,7 +104,7 @@ export function createGoogleAds({ pool, secretKey, fetchImpl = globalThis.fetch,
       const code = det[0] && det[0].errorCode ? Object.values(det[0].errorCode)[0] : '';
       const msg = (det[0] && det[0].message) || e.message || `HTTP ${res.status}`;
       if (res.status === 401) throw new AuthError(400, 'google_bad_token', 'O acesso ao Google Ads expirou ou foi removido. Conecte a conta de novo.');
-      if (code === 'DEVELOPER_TOKEN_NOT_APPROVED' || code === 'DEVELOPER_TOKEN_PROHIBITED') throw new AuthError(400, 'google_dev_token', 'O token de desenvolvedor da Kobly no Google ainda está em modo de teste: ele só acessa contas de teste até o Google aprovar o acesso básico.');
+      if (['CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION', 'ACTION_NOT_PERMITTED', 'DEVELOPER_TOKEN_NOT_APPROVED'].includes(code)) throw new AuthError(400, 'google_dev_token', 'O acesso da Kobly à API do Google Ads ainda está em modo de teste: ele só lê contas de teste até o Google liberar o acesso de produção.');
       if (code === 'USER_PERMISSION_DENIED' || code === 'CUSTOMER_NOT_ENABLED' || res.status === 403) throw new AuthError(400, 'google_permission', `Google Ads: ${msg}`);
       if (res.status === 429 || code === 'RESOURCE_EXHAUSTED') throw new AuthError(429, 'google_rate_limited', 'O Google limitou as consultas por alguns minutos.');
       throw new AuthError(502, 'google_error', `Google Ads: ${msg}`);

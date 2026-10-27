@@ -30,7 +30,7 @@ async function fakeFetch(url, init = {}) {
     if (f.get('grant_type') === 'refresh_token') return f.get('refresh_token') === `1//refresh-${stamp}` ? ok({ access_token: 'ya29.novo', expires_in: 3599 }) : no(400, { error: 'invalid_grant' });
   }
   if (u.hostname !== 'googleads.googleapis.com') throw new Error('rede não esperada: ' + url);
-  assert.equal(h['developer-token'], 'dev-token-kobly');
+  assert.equal(h['developer-token'], undefined);
   assert.ok(u.pathname.startsWith('/v26/'));
   if (h.Authorization !== 'Bearer ya29.novo') return no(401, { error: { message: 'UNAUTHENTICATED' } });
   const p = u.pathname.slice(4);
@@ -83,7 +83,7 @@ before(async () => {
   pool = new pg.Pool({ connectionString: URL_, max: 4 });
   const config = { jwtSecret: 'segredo-jwt-gads', requireConfirm: false, allowedOrigins: [], loginPerMin: 1000, signupPerMin: 1000, secretKey: KEY.toString('base64'),
     publicBaseUrl: 'https://api.kobly.test', siteUrl: 'https://app.kobly.test',
-    googleAdsClientId: 'cliente.apps.googleusercontent.com', googleAdsClientSecret: 'segredo-google', googleAdsDeveloperToken: 'dev-token-kobly', googleAdsApiVersion: 'v26' };
+    googleAdsClientId: 'cliente.apps.googleusercontent.com', googleAdsClientSecret: 'segredo-google', googleAdsApiVersion: 'v26' };
   ({ server } = createApp({ pool, config, fetchImpl: fakeFetch }));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;
