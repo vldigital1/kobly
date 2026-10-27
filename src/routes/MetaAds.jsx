@@ -8,7 +8,7 @@ import { GoogleAdsLogo, MetaLogo } from '@/lib/brandLogos.jsx';
 
 // Kobly — gerenciador do Facebook Ads: dashboard (faturamento, gasto, lucro, ROAS...), contas, campanhas,
 // conjuntos e anúncios com as vendas rastreadas pela UTM; liga/pausa e muda orçamento direto no Facebook.
-// Atualiza sozinho a cada minuto. KoblyMetaAds
+// Atualiza sozinho a cada 3 minutos (o Facebook dá pouca cota de consultas). KoblyMetaAds
 
 const money = (v, cur) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: cur || 'BRL' }));
 const int = (v) => Number(v || 0).toLocaleString('pt-BR');
@@ -414,10 +414,10 @@ function Entities({ P, orgId, level, conta, preset, tick, canEdit, notify, paren
   const [picking, setPicking] = useState(null);
   const [busy, setBusy] = useState({});
   const [budget, setBudget] = useState(null); // { item, value }
-  // depois de ligar/pausar ou mudar orçamento a rede fica uns segundos em "Processando": confere de novo logo
+  // depois de ligar/pausar ou mudar orçamento a rede fica um tempo "Aplicando mudança": confere de novo em 1 min
   const recheck = useRef(null);
   useEffect(() => () => clearTimeout(recheck.current), []);
-  const recheckSoon = () => { clearTimeout(recheck.current); recheck.current = setTimeout(() => load(true), 20_000); };
+  const recheckSoon = () => { clearTimeout(recheck.current); recheck.current = setTimeout(() => load(true), 60_000); };
   const load = useCallback((force) => P.api('entities', { level, id: conta, date_preset: preset, force }, orgId).then((r) => setSt(r.error ? { error: r.error } : { items: r.items })), [P, orgId, level, conta, preset]);
   useEffect(() => { setSt({ loading: true }); load(tick.force); }, [load, tick]);
 
@@ -437,7 +437,7 @@ function Entities({ P, orgId, level, conta, preset, tick, canEdit, notify, paren
     setBudget((b) => ({ ...b, saving: true }));
     const r = await P.api('set_budget', { id: it.account_id, level, object_id: it.id, value: budget.value }, orgId);
     if (r.error) { setBudget((b) => ({ ...b, saving: false })); notify('danger', r.error); return; }
-    setBudget(null); notify('success', `Orçamento atualizado ${P.where}.`); load(true); recheckSoon();
+    setBudget(null); notify('success', `Orçamento atualizado ${P.where}.`); load(false); recheckSoon();
   }
 
   if (st.error) return <ErrorState message={st.error} onRetry={() => load(true)} />;
@@ -682,7 +682,7 @@ function KoblyMetaAds() {
   // atualiza sozinho a cada minuto enquanto a aba está aberta
   useEffect(() => {
     if (!accs.list.length) return undefined;
-    const t = setInterval(() => { if (document.visibilityState === 'visible') refresh(false); }, 60_000);
+    const t = setInterval(() => { if (document.visibilityState === 'visible') refresh(false); }, 180_000);
     return () => clearInterval(t);
   }, [accs.list.length]);
   function choose(p) {
@@ -728,7 +728,7 @@ function KoblyMetaAds() {
               options={[{ value: 'all', label: 'Todas as contas' }, ...accs.list.map((a) => ({ value: a.id, label: `${a.name || a.ad_account_id || a.customer_id}` }))]} />}
             <Select label="Período" value={preset} onChange={(e) => setPreset(e.target.value)} style={{ width: 190 }} options={PERIODS.map(([value, label]) => ({ value, label }))} />
             <Button variant="secondary" iconLeft="refresh-cw" onClick={() => refresh(true)}>Atualizar</Button>
-            <span className="ka-upd" title="A tela busca os números de novo sozinha a cada 1 minuto."><i />Atualiza sozinho · {updated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span className="ka-upd" title="A tela busca os números de novo sozinha a cada 3 minutos."><i />Atualiza sozinho · {updated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
           {accs.list.some((a) => a.status === 'error') && <Banner tone="danger">{accs.list.find((a) => a.status === 'error').last_error}</Banner>}
           {tab === 'dashboard' && <Dashboard key={platform} P={P} orgId={orgId} conta={conta} preset={preset} tick={tick} onSettings={() => setSettings(true)} />}

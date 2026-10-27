@@ -19,7 +19,7 @@ const LEVELS = {
   adset: { edge: 'adsets', utm: 'utm_medium', fields: 'id,name,status,effective_status,daily_budget,lifetime_budget,campaign_id,campaign{name},created_time' },
   ad: { edge: 'ads', utm: 'utm_content', fields: 'id,name,status,effective_status,adset_id,adset{name},campaign_id,campaign{name},creative{thumbnail_url},created_time' },
 };
-const CACHE_MS = 60_000;
+const CACHE_MS = 180_000; // 3 min: o Facebook dá pouca cota de consultas a apps em acesso padrão
 const OBJ_ID = /^[0-9]{3,25}$/;
 
 const pick = (list, types) => { for (const t of types) { const a = (list || []).find((x) => x.action_type === t); if (a) return Number(a.value) || 0; } return 0; };
@@ -127,14 +127,23 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
   const cache = new Map();
   const fail = (msg) => { throw new AuthError(422, 'validation_failed', msg); };
   const presetOf = (b) => (Object.prototype.hasOwnProperty.call(PRESETS, b.date_preset) ? b.date_preset : 'today');
+  // guarda as respostas; se o Facebook limitar, devolve os últimos números em vez de erro
   async function cached(key, force, fn) {
     const hit = cache.get(key);
     if (!force && hit && Date.now() - hit.at < CACHE_MS) return hit.v;
-    const v = await fn();
-    cache.set(key, { at: Date.now(), v });
-    return v;
+    try {
+      const v = await fn();
+      cache.set(key, { at: Date.now(), v });
+      return v;
+    } catch (e) {
+      if (e && e.code === 'meta_rate_limited' && hit) return hit.v;
+      throw e;
+    }
   }
-  const dropCache = (accId) => { for (const k of cache.keys()) if (k.includes(accId)) cache.delete(k); };
+  // depois de pausar/mudar orçamento, corrige o item nos números guardados (sem gastar consultas do Facebook)
+  const patchCache = (accId, objId, patch) => {
+    for (const [k, hit] of cache) if (k.startsWith(`${accId}:`) && Array.isArray(hit.v)) hit.v = hit.v.map((x) => (x.id === objId ? { ...x, ...patch } : x));
+  };
 
   const settings = (orgId) => adsSettings(pool, orgId);
   const koblyFactsOf = (orgId, per) => koblyFacts(pool, orgId, per);
@@ -291,7 +300,7 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
         if (body.action === 'set_status') {
           if (!['ACTIVE', 'PAUSED'].includes(body.status)) fail('Situação inválida.');
           await post({ status: body.status });
-          dropCache(a.id);
+          patchCache(a.id, obj, { status: body.status, effective_status: body.status });
           return { ok: true, effective_status: body.status };
         }
         const kind = info.daily_budget != null && Number(info.daily_budget) > 0 ? 'daily_budget' : info.lifetime_budget != null && Number(info.lifetime_budget) > 0 ? 'lifetime_budget' : null;
@@ -300,7 +309,7 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
         if (!Number.isFinite(v) || v <= 0 || v > 10_000_000) fail('Digite um orçamento válido.');
         const minor = Math.round(v * budgetUnit(a.currency));
         await post({ [kind]: String(minor) });
-        dropCache(a.id);
+        patchCache(a.id, obj, { [kind]: minor });
         return { ok: true, [kind]: minor };
       }
       default: throw new AuthError(400, 'bad_action', 'Ação desconhecida.');

@@ -17,6 +17,21 @@ const CACHE_MS = 60_000;
 const OAUTH_SCOPES = 'ads_read,ads_management,business_management';
 const STATE_TTL_MS = 15 * 60_000;
 
+// quanto falta para o Facebook liberar de novo (cabeçalhos de uso que ele manda junto com o erro de limite)
+export function waitMinutes(headers) {
+  const get = (k) => { try { return headers && headers.get ? headers.get(k) : null; } catch { return null; } };
+  let min = 0;
+  try {
+    const buc = JSON.parse(get('x-business-use-case-usage') || '{}');
+    for (const list of Object.values(buc)) for (const u of list || []) min = Math.max(min, Number(u.estimated_time_to_regain_access) || 0);
+  } catch { /* cabeçalho estranho */ }
+  try {
+    const acc = JSON.parse(get('x-ad-account-usage') || '{}');
+    if (acc.reset_time_duration) min = Math.max(min, Math.ceil(Number(acc.reset_time_duration) / 60));
+  } catch { /* cabeçalho estranho */ }
+  return min;
+}
+
 // valor da primeira ação encontrada na ordem de preferência (a Meta repete a compra em vários tipos)
 export function actionValue(list, types) {
   for (const t of types) { const a = (list || []).find((x) => x.action_type === t); if (a) return Number(a.value) || 0; }
@@ -53,7 +68,12 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
     if (!res.ok || (j && j.error)) {
       const e = (j && j.error) || {};
       if (e.code === 190) throw new AuthError(400, 'meta_bad_token', 'O token do Facebook expirou ou foi revogado. Gere outro (usuário do sistema, permissão ads_read).');
-      if ([4, 17, 32, 613, 80000, 80004].includes(e.code)) throw new AuthError(429, 'meta_rate_limited', 'O Facebook limitou as consultas por alguns minutos.');
+      if ([4, 17, 32, 613, 80000, 80004].includes(e.code)) {
+        const min = waitMinutes(res.headers);
+        const quando = min ? `Tente de novo em uns ${min} minuto${min > 1 ? 's' : ''}.` : 'Tente de novo em alguns minutos.';
+        const extra = e.error_user_msg ? ` (${e.error_user_msg})` : '';
+        throw new AuthError(429, 'meta_rate_limited', `O Facebook limitou as consultas desta conta de anúncios. ${quando}${extra} Isso diminui quando o app da Kobly for aprovado na análise do Facebook.`);
+      }
       if (e.code === 10 || e.code === 200 || e.code === 100) throw new AuthError(400, 'meta_permission', `Facebook: ${e.message || 'sem permissão para esta conta de anúncios (precisa de ads_read).'}`);
       throw new AuthError(502, 'meta_error', `Facebook: ${e.message || `HTTP ${res.status}`}`);
     }

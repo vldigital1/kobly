@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { createApp } from '../src/app.js';
 import { utmKeys, profitOf, periodOf } from '../src/ads/manager.js';
+import { waitMinutes } from '../src/ads/meta.js';
 
 const URL_ = process.env.KOBLY_TEST_DATABASE_URL;
 const skip = !URL_;
@@ -90,6 +91,13 @@ before(async () => {
   await pool.query(`insert into public.flow_sales (organization_id, lead_id, amount) values ($1,$2,97)`, [A.orgId, l2]);
 });
 after(async () => { if (skip) return; await new Promise((r) => server.close(r)); await pool.end(); });
+
+test('quanto esperar quando o Facebook limita', () => {
+  const h = (o) => ({ get: (k) => o[k] || null });
+  assert.equal(waitMinutes(h({ 'x-business-use-case-usage': JSON.stringify({ 123: [{ type: 'ads_management', estimated_time_to_regain_access: 7 }] }) })), 7);
+  assert.equal(waitMinutes(h({ 'x-ad-account-usage': JSON.stringify({ acc_id_util_pct: 100, reset_time_duration: 290 }) })), 5);
+  assert.equal(waitMinutes(h({})), 0); assert.equal(waitMinutes(null), 0);
+});
 
 test('UTM "nome|id", período e lucro', () => {
   assert.deepEqual(utmKeys('Black Friday|1201'), ['black friday|1201', 'black friday', '1201']);
