@@ -132,7 +132,20 @@ export function createLlm({ apiKey, provider = null, baseUrl = 'https://api.deep
     return out && typeof out.resumo === 'string' ? out.resumo.trim().slice(0, 1200) : null;
   }
 
-  return { classify, extract, agentReply, summarize, configured: !!apiKey, provider: provider || 'openai_compat', model };
+  // Tradução do funil: devolve { id: texto traduzido } só para os ids pedidos; {{variáveis}} ficam intactas.
+  async function translate({ items, language }) {
+    const out = await chatJson(
+      `Você traduz mensagens de um funil de vendas pelo WhatsApp para ${language}. Mantenha o tom, os emojis, as quebras de linha, ` +
+      'os links e qualquer {{variavel}} exatamente como estão (não traduza o que está entre chaves duplas). Não acrescente nada. ' +
+      'Responda só com JSON no formato {"itens": [{"id": "<id>", "texto": "<tradução>"}]}.',
+      JSON.stringify({ itens: items.map((i) => ({ id: i.id, texto: String(i.text).slice(0, 4000) })) }),
+    );
+    const res = {};
+    for (const it of (out && Array.isArray(out.itens) ? out.itens : [])) if (it && typeof it.texto === 'string' && items.some((i) => i.id === it.id)) res[it.id] = it.texto;
+    return res;
+  }
+
+  return { classify, extract, agentReply, summarize, translate, configured: !!apiKey, provider: provider || 'openai_compat', model };
 }
 
 // Modelos disponíveis para a chave (também confirma que a chave funciona).

@@ -1092,6 +1092,7 @@ const SECTIONS = [
   { value: 'gateways', label: 'Gateways de pagamento', icon: 'credit-card', help: 'Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt, XPag, Mercado Pago, PushinPay, SyncPay, Woovi e Zenith: cada um com a sua página de conexão.' },
   { value: 'trackeamento', label: 'Trackeamento', icon: 'chart-line', help: 'Pixels (Meta, TikTok e Google), UTMify e de onde vêm os leads.' },
   { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },
+  { value: 'voz', label: 'Voz (ElevenLabs)', icon: 'mic', help: 'Sua chave da ElevenLabs: áudios com voz natural nos fluxos e tradução de fluxos com áudio.' },
   { value: 'postback', label: 'Postback', icon: 'webhook', help: 'URLs de postback para checkouts e integrações próprias.' },
   { value: 'produtos', label: 'Produtos', icon: 'package', help: 'Seus produtos, os nomes que cada checkout usa e os números de venda de cada um.' },
   { value: 'loja', label: 'Configuração de e-mail', icon: 'mail', help: 'Remetente e identidade visual dos e-mails.' },
@@ -1106,6 +1107,7 @@ const TrackingPanel = React.lazy(() => import('@/routes/Tracking.jsx').then((m) 
 const KoblyPlatformsTab = React.lazy(() => import('@/routes/PlatformsTab.jsx').then((m) => ({ default: m.KoblyPlatformsTab })));
 const KoblyAiKeysTab = React.lazy(() => import('@/routes/AiKeysTab.jsx').then((m) => ({ default: m.KoblyAiKeysTab })));
 const KoblyProductsLazy = React.lazy(() => import('@/routes/Products.jsx').then((m) => ({ default: m.KoblyProducts })));
+const KoblyVoiceTab = React.lazy(() => import('@/routes/VoiceTab.jsx').then((m) => ({ default: m.KoblyVoiceTab })));
 const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
   { value: 'dominio', label: 'Remetente', icon: 'send' },
@@ -1244,6 +1246,11 @@ function KoblyIntegrations() {
           {section === 'ia' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
               <KoblyAiKeysTab empresaId={empresaId} notify={store.notify} />
+            </React.Suspense>
+          )}
+          {section === 'voz' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <KoblyVoiceTab empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
           )}
           {section === 'mcp' && (

@@ -36,7 +36,7 @@ export function createAiKeys({ pool, secretKey, platform = null, allowPlatform =
           throw e;
         }
       };
-      llm = { ...base, classify: wrap('classify'), extract: wrap('extract'), agentReply: wrap('agentReply'), summarize: wrap('summarize') };
+      llm = { ...base, classify: wrap('classify'), extract: wrap('extract'), agentReply: wrap('agentReply'), summarize: wrap('summarize'), translate: wrap('translate') };
     }
     cache.set(orgId, { at: Date.now(), llm });
     return llm;

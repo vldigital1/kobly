@@ -80,6 +80,7 @@ export function createFunctions(ctx) {
     'tracking': () => orgUserRoute('tracking', 'tracking'),
     'ai-keys': () => orgUserRoute('aiKeys', 'ai-keys'),
     'meta-ads': () => orgUserRoute('metaAds', 'meta-ads'),
+    voice: () => orgUserRoute('voice', 'voice'),
     'platforms': () => orgUserRoute('platforms', 'platforms'),
     'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
     'bulk-send': () => orgUserRoute('bulk', 'bulk-send'),

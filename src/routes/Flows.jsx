@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
-import { Badge, Banner, Button, Card, DataTable, IconButton, Input, PageHeader } from '@/ds';
+import { Badge, Banner, Button, Card, DataTable, IconButton, Input, PageHeader, Select } from '@/ds';
 import { starterGraph } from '@/lib/flowGraph.js';
 import { useAsync } from '@/lib/hooks.jsx';
 import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
@@ -29,6 +29,7 @@ function KoblyFlows() {
   // vindo do "Novo fluxo" da tela Campanhas: abre direto a criação (lido uma vez, num efeito)
   useEffect(() => { try { if (sessionStorage.getItem('kobly:newflow')) { sessionStorage.removeItem('kobly:newflow'); sessionStorage.removeItem(OPEN_KEY); setOpen(null); setNovo(''); } } catch { /* ok */ } }, []);
   const [busy, setBusy] = useState(false);
+  const [trad, setTrad] = useState(null); // { flow, language, voice } — traduzir para outro idioma
   // Campanhas do formato antigo (lista de etapas): a tela Campanhas saiu; as que ainda existem aparecem aqui só para pausar ou excluir
   const legacy = useAsync(async () => (orgId ? ((await KoblyApi.listCampaigns()).campaigns || []).filter((c) => c.empresaId === orgId) : []), [orgId]);
 
@@ -44,6 +45,20 @@ function KoblyFlows() {
       store.notify('success', `Fluxo "${c.nome}" criado. Monte os blocos e publique.`);
       openFlow({ id: c.id, nome: c.nome, empresaId: c.empresaId });
     } catch (e) { store.notify('danger', e.message || 'Não foi possível criar o fluxo.'); } finally { setBusy(false); }
+  }
+  // Traduzir: cópia do fluxo noutro idioma (textos pela IA do cliente, áudios pela ElevenLabs dele)
+  async function openTranslate(f) {
+    setTrad({ flow: f, language: 'en', voice: null, loading: true });
+    const v = await KoblyApi.voice('status', {}, orgId);
+    setTrad((t) => t && { ...t, loading: false, voice: v.error ? { connected: false } : v });
+  }
+  async function translate() {
+    setTrad((t) => ({ ...t, running: true }));
+    const r = await KoblyApi.voice('translate_flow', { campaign_id: trad.flow.campaign_id, language: trad.language }, orgId);
+    if (r.error) { setTrad((t) => ({ ...t, running: false })); store.notify('danger', r.error); return; }
+    setTrad(null); list.reload();
+    store.notify('success', `Pronto! "${r.nome}" criado com ${r.textos} texto(s)${r.audios ? ` e ${r.audios} áudio(s)` : ''} traduzidos. Revise e publique.`);
+    if (r.aviso) store.notify('warning', r.aviso);
   }
   async function toggleLegacy(c) {
     const status = c.status === 'Ativa' ? 'Pausada' : 'Ativa';
@@ -107,9 +122,10 @@ function KoblyFlows() {
               ) },
               { key: 'ativos', header: 'Leads no fluxo', align: 'end', render: (r) => <span style={{ fontWeight: 'var(--fw-semibold)', color: r.leads_ativos ? 'var(--text-strong)' : 'var(--text-muted)' }}>{r.leads_ativos}</span> },
               { key: 'total', header: 'Total de leads', align: 'end', render: (r) => r.leads_total },
-              { key: 'acao', header: '', align: 'end', width: 110, render: (r) => (
+              { key: 'acao', header: '', align: 'end', width: 140, render: (r) => (
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                   {canEdit && <IconButton icon={r.status === 'Ativa' ? 'pause' : 'play'} size="sm" aria-label={r.status === 'Ativa' ? 'Pausar fluxo' : 'Ativar fluxo'} onClick={() => toggle(r)} />}
+                  {canEdit && <IconButton icon="languages" size="sm" aria-label="Traduzir para outro idioma" onClick={() => openTranslate(r)} />}
                   <IconButton icon="pencil" size="sm" aria-label="Abrir no editor" onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} />
                 </div>
               ) },
@@ -147,6 +163,22 @@ function KoblyFlows() {
         </div>
       )}
 
+      <Modal open={!!trad} onClose={() => !(trad && trad.running) && setTrad(null)} title="Traduzir fluxo" subtitle={trad ? `Cria uma cópia de "${trad.flow.nome}" no idioma escolhido. O original não muda.` : ''}
+        footer={<><Button variant="ghost" disabled={!!(trad && trad.running)} onClick={() => setTrad(null)}>Cancelar</Button><Button variant="primary" iconLeft="languages" loading={!!(trad && trad.running)} disabled={!trad || trad.loading || trad.running} onClick={translate}>{trad && trad.running ? 'Traduzindo…' : 'Traduzir'}</Button></>}>
+        {trad && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Select label="Idioma" value={trad.language} onChange={(e) => setTrad((t) => ({ ...t, language: e.target.value }))}
+              options={((trad.voice && trad.voice.languages) || [{ id: 'en', label: 'Inglês' }, { id: 'es', label: 'Espanhol' }, { id: 'pt', label: 'Português' }]).map((l) => ({ value: l.id, label: l.label }))} />
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6 }}>
+              <div>• Textos, botões e legendas: traduzidos pela sua chave de IA (Integrações → IA).</div>
+              <div>• Áudios: transcritos e regravados {trad.voice && trad.voice.connected ? <>com a voz <b>{trad.voice.voice_name || 'escolhida'}</b> da sua ElevenLabs.</> : 'pela ElevenLabs.'}</div>
+              <div>• Modelos aprovados da Meta não são traduzidos: escolha um modelo no idioma certo no fluxo novo.</div>
+            </div>
+            {trad.voice && !trad.voice.connected && <Banner tone="info">Se o fluxo tiver áudios, conecte antes a ElevenLabs em Integrações → Voz (ElevenLabs). Fluxo só com texto traduz normalmente.</Banner>}
+            {trad.running && <Banner tone="info">Isso pode levar um ou dois minutos se houver muitos áudios. Não feche esta janela.</Banner>}
+          </div>
+        )}
+      </Modal>
       <Modal open={novo !== null} onClose={() => setNovo(null)} title="Novo fluxo" subtitle="Você monta os blocos no editor; nada roda até publicar e ativar."
         footer={<><Button variant="ghost" onClick={() => setNovo(null)}>Cancelar</Button><Button variant="primary" iconLeft="arrow-right" disabled={busy} onClick={create}>Criar e abrir editor</Button></>}>
         <Input label="Nome do fluxo" value={novo || ''} placeholder="Ex.: Pix pendente — México" onChange={(e) => setNovo(e.target.value)} autoFocus />

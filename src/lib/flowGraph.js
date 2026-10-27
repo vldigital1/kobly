@@ -97,7 +97,7 @@ export const PAYMENT_METHODS = {
 };
 export const CURRENCY_LABEL = { BRL: 'Brasil — Real (BRL)', MXN: 'México — Peso (MXN)', COP: 'Colômbia — Peso (COP)', ARS: 'Argentina — Peso (ARS)', CLP: 'Chile — Peso (CLP)' };
 export const TONES = {
-  accent: 'var(--accent)', green: 'var(--green-500)', amber: 'var(--amber-500)', blue: '#4C8DFF', purple: '#9B6CFF', neutral: 'var(--ink-400)',
+  accent: 'var(--accent)', green: 'var(--green-500)', amber: 'var(--amber-500)', blue: '#4C8DFF', purple: '#ffb485', neutral: 'var(--ink-400)',
 };
 
 export function exitsOf(node) {

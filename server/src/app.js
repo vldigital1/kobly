@@ -19,6 +19,7 @@ import { createFlowRuntime } from './flows/runtime.js';
 import { createFlowAdmin } from './flows/admin.js';
 import { createAiKeys } from './ai/router.js';
 import { createMetaAds } from './ads/meta.js';
+import { createVoice } from './voice/elevenlabs.js';
 import { createPayments } from './payments/service.js';
 import { createXpag } from './payments/xpag.js';
 import { createMercadoPago, createWoovi, createPushinPay, createSyncPay } from './payments/pix_br.js';
@@ -119,7 +120,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase,
     appId: config.metaAppId, appSecret: config.metaAppSecret, publicBaseUrl: config.publicBaseUrl, siteUrl: config.siteUrl });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
+  const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, voice, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });

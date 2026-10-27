@@ -80,6 +80,9 @@ grant select (id, organization_id, provider, label, key_hint, model, is_active, 
 revoke all on public.meta_ads_accounts from kobly_authenticated, kobly_anon;
 grant select (id, organization_id, ad_account_id, name, currency, token_hint, status, last_error, last_sync_at, created_at, updated_at) on public.meta_ads_accounts to kobly_authenticated;
 revoke all on public.meta_ads_oauth from kobly_authenticated, kobly_anon;
+-- Voz ElevenLabs (0088): chave não legível; escrita só pelo serviço.
+revoke all on public.voice_credentials from kobly_authenticated, kobly_anon;
+grant select (organization_id, provider, key_hint, voice_id, voice_name, status, last_error, last_used_at, created_at, updated_at) on public.voice_credentials to kobly_authenticated;
 -- Chaves de API das plataformas de venda (0079): só o serviço lê e escreve.
 revoke all on public.platform_api_credentials from kobly_authenticated, kobly_anon;
 -- Instâncias Uazapi (0080): token da instância não legível; escrita só pelo serviço.

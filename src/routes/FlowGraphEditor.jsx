@@ -20,6 +20,7 @@ const defaultApi = {
   listChannels: () => KoblyApi.notifyChannels('list').then((r) => r.channels || []),
   listAgents: () => KoblyApi.workspaceSettings('get').then((r) => r.agents || []),
   uploadMedia: (file) => KoblyApi.uploadFlowMedia(file),
+  tts: (text) => KoblyApi.voice('tts', { text }),
   listEmails: () => KoblyApi.getFlowOptions().then((r) => r.emails || []),
   listBrands: () => KoblyApi.listBrands(),
   createEmail: (e) => KoblyApi.createEmail(e),
@@ -295,9 +296,10 @@ function DeleteOnTag({ d, set, tags }) {
 
 // Mídia: enviar do computador (fica hospedado na Kobly) ou colar um link
 const isOwnUpload = (u) => /\/storage\/v1\/object\/public\/flow-media\//.test(String(u || ''));
-function MediaFields({ d, set, upload }) {
+function MediaFields({ d, set, upload, tts }) {
   const m = MEDIA[d.kind] || MEDIA.document;
-  const [mode, setMode] = useState(d.url && !isOwnUpload(d.url) ? 'url' : 'file');
+  const [mode, setMode] = useState(d.kind === 'audio' && d.tts_text ? 'voice' : d.url && !isOwnUpload(d.url) ? 'url' : 'file');
+  const [fala, setFala] = useState(d.tts_text || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [over, setOver] = useState(false);
@@ -311,14 +313,31 @@ function MediaFields({ d, set, upload }) {
     try { r = await upload(file); } catch (e) { r = { error: (e && e.message) || 'Falha no envio.' }; }
     setBusy(false);
     if (!r || r.error) { setErr(typeof r?.error === 'string' ? r.error : (r?.error && r.error.message) || 'Falha no envio.'); return; }
-    set({ url: r.url, ...(d.kind === 'document' ? { filename: d.filename || file.name } : {}) });
+    set({ url: r.url, tts_text: undefined, ...(d.kind === 'document' ? { filename: d.filename || file.name } : {}) });
+  }
+  // áudio com a voz da ElevenLabs do cliente (Integrações → Voz)
+  async function speak() {
+    if (!tts) { setErr('Geração de voz indisponível aqui.'); return; }
+    setBusy(true); setErr(null);
+    let r;
+    try { r = await tts(fala); } catch (e) { r = { error: (e && e.message) || 'Falha ao gerar o áudio.' }; }
+    setBusy(false);
+    if (!r || r.error) { setErr(typeof r?.error === 'string' ? r.error : 'Falha ao gerar o áudio.'); return; }
+    set({ url: r.url, tts_text: r.text });
   }
   const name = d.filename || decodeURIComponent(String(d.url || '').split('/').pop() || '');
   const hasFile = mode === 'file' && d.url;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Segmented value={mode} onChange={setMode} options={[{ value: 'file', label: 'Arquivo', icon: 'upload' }, { value: 'url', label: 'URL', icon: 'link' }]} />
-      {mode === 'file' ? (<>
+      <Segmented value={mode} onChange={setMode} options={[{ value: 'file', label: 'Arquivo', icon: 'upload' }, { value: 'url', label: 'URL', icon: 'link' }, ...(d.kind === 'audio' ? [{ value: 'voice', label: 'Gerar com voz', icon: 'mic' }] : [])]} />
+      {mode === 'voice' ? (<>
+        <TextArea label="O que a voz vai falar" value={fala} onChange={setFala} rows={4} placeholder="Ex.: Oi! Vi que você gerou o Pix e ainda não pagou. Quer ajuda?" hint="Usa a voz escolhida em Integrações → Voz (ElevenLabs). Os créditos são da sua conta ElevenLabs." />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button size="sm" iconLeft="mic" loading={busy} disabled={busy || !fala.trim() || fala.trim() === (d.tts_text || '')} onClick={speak}>{d.tts_text ? 'Gerar de novo' : 'Gerar áudio'}</Button>
+          {d.tts_text && fala.trim() !== d.tts_text && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Você mudou o texto: gere de novo para atualizar o áudio.</span>}
+        </div>
+        {d.url && d.tts_text && <audio src={d.url} controls style={{ width: '100%' }} />}
+      </>) : mode === 'file' ? (<>
         <input ref={input} type="file" accept={m.accept} hidden onChange={(e) => { pick(e.target.files && e.target.files[0]); e.target.value = ''; }} />
         {hasFile ? (
           <div className="kf-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
@@ -329,7 +348,7 @@ function MediaFields({ d, set, upload }) {
               <span className="kf-ico" style={{ '--tone': TONES.green }}><Icon name={m.icon} size={15} /></span>
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{name}</span>
               <Button size="sm" variant="secondary" iconLeft="refresh-cw" loading={busy} onClick={() => input.current && input.current.click()}>Trocar</Button>
-              <IconButton icon="trash-2" size="sm" aria-label="Remover arquivo" onClick={() => set({ url: '', filename: undefined })} />
+              <IconButton icon="trash-2" size="sm" aria-label="Remover arquivo" onClick={() => set({ url: '', filename: undefined, tts_text: undefined })} />
             </div>
           </div>
         ) : (
@@ -344,7 +363,7 @@ function MediaFields({ d, set, upload }) {
           </div>
         )}
       </>) : (
-        <Input label="Link público (https)" value={d.url || ''} onChange={(e) => set({ url: e.target.value.trim() })} placeholder="https://..." hint="O WhatsApp baixa o arquivo deste link. Também aceita uma variável, como {{pagamento_qr}}." />
+        <Input label="Link público (https)" value={d.url || ''} onChange={(e) => set({ url: e.target.value.trim(), tts_text: undefined })} placeholder="https://..." hint="O WhatsApp baixa o arquivo deste link. Também aceita uma variável, como {{pagamento_qr}}." />
       )}
       {err && <div style={{ color: '#fda4af', fontSize: 'var(--text-xs)' }}>{err}</div>}
       {d.kind !== 'audio' && <TextArea label="Legenda (opcional)" value={d.caption} onChange={(v) => set({ caption: v })} rows={3} placeholder="Texto que vai junto com o arquivo" hint="Aceita {{variáveis}}." />}
@@ -475,7 +494,7 @@ function BlockFields({ node, onChange }) {
     </>);
     case 'send_email': return <EmailFields d={d} set={set} />;
     case 'send_media': return (<>
-      <MediaFields d={d} set={set} upload={lookups.uploadMedia} />
+      <MediaFields d={d} set={set} upload={lookups.uploadMedia} tts={lookups.tts} />
       <DeleteOnTag d={d} set={set} tags={tags} />
     </>);
     case 'send_buttons': return (<>
@@ -842,7 +861,7 @@ function Editor({ campaign, onBack, api, notify }) {
   );
 
   return (
-    <LookupsCtx.Provider value={{ ...lookups, metrics, uploadMedia: api.uploadMedia, openEmail, copyEmail }}>
+    <LookupsCtx.Provider value={{ ...lookups, metrics, uploadMedia: api.uploadMedia, tts: api.tts, openEmail, copyEmail }}>
       <style>{FLOW_CSS}</style>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 520, gap: 10 }}>
         {/* barra superior */}
