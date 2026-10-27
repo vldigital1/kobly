@@ -119,7 +119,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const products = createProducts({ pool });
   const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase,
-    appId: config.metaAppId, appSecret: config.metaAppSecret, publicBaseUrl: config.publicBaseUrl, siteUrl: config.siteUrl });
+    appId: config.metaAdsAppId, appSecret: config.metaAdsAppSecret, publicBaseUrl: config.publicBaseUrl, siteUrl: config.siteUrl });
   const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
   const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, voice, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.

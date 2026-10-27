@@ -76,7 +76,7 @@ before(async () => {
   pool = new pg.Pool({ connectionString: URL_, max: 4 });
   const config = { jwtSecret: 'segredo-jwt-integracao', requireConfirm: false, allowedOrigins: [], loginPerMin: 1000, signupPerMin: 1000, secretKey: KEY.toString('base64'),
     publicBaseUrl: 'https://api.kobly.test', metaAdsGraphBase: 'https://graph.facebook.com/v26.0', aiApiKey: 'chave-da-plataforma',
-    metaAppId: '1234', metaAppSecret: 'segredo-app-fb', siteUrl: 'https://app.kobly.test' };
+    metaAdsAppId: '1234', metaAdsAppSecret: 'segredo-app-fb', siteUrl: 'https://app.kobly.test' };
   ({ server } = createApp({ pool, config, fetchImpl: fakeFetch }));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;
