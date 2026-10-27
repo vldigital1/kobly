@@ -70,7 +70,8 @@ test('fluxo para uma lista colada: cria o lead novo e coloca no fluxo publicado'
 test('e-mail escolhido, fluxo não publicado recusado, cancelar para o resto', { skip }, async () => {
   const r = await bulk.handle(ctx(), {}, { action: 'create', modo: 'email', email_id: A.email, filtro: {} });
   await run();
-  assert.equal(mails.at(-1).subject, 'Oi Ana'); assert.match(mails.at(-1).html, /Olá Ana Souza/);
+  const ana = mails.find((m) => m.subject === 'Oi Ana');
+  assert.ok(ana, 'e-mail da Ana enviado com as variáveis'); assert.match(ana.html, /Olá Ana Souza/);
   const naoPub = (await pool.query(`insert into public.campaigns (organization_id, nome) values ($1,'Rascunho') returning id`, [A.org])).rows[0].id;
   await assert.rejects(bulk.handle(ctx(), {}, { action: 'create', modo: 'fluxo', campaign_id: naoPub, filtro: {} }), /ainda não foi publicado/);
   const longo = await bulk.handle(ctx(), {}, { action: 'create', modo: 'whatsapp', texto: 'x', origem: 'manual', lista: '11900000001\n11900000002\n11900000003', rate_por_min: 1 });

@@ -1125,6 +1125,7 @@ export const KoblyApi = {
   async bulk(action, extra = {}, empresaId = null) { return this.serviceCall('bulk-send', action, extra, empresaId); },
   // Dashboard novo (WhatsApp, fluxos e vendas) e o painel do Administrador da plataforma
   async dashboardOverview(days, empresaId = null) { return this.serviceCall('dashboard', 'overview', { days }, empresaId); },
+  async pipeline(action, extra = {}, empresaId = null) { return this.serviceCall('pipeline', action, extra, empresaId); },
   async adminDashboard(days) { return this.serviceCall('admin-dashboard', 'overview', { days }); },
   async listBulkSends(empresaId) {
     let q = supabase.from('bulk_sends').select('*').order('created_at', { ascending: false }).limit(20);

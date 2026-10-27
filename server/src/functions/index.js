@@ -6,7 +6,7 @@ import { AuthError } from '../auth.js';
 const bearerOf = (req) => { const m = /^Bearer (.+)$/i.exec(req.headers.authorization || ''); return m ? m[1] : null; };
 
 // Atendente: conversa com os leads e lê o que precisa para isso; nada de configurar a conta.
-const ATENDENTE = { inbox: null, 'workspace-settings': ['get'], 'flow-graph': ['list', 'get', 'get_version', 'stats'], team: ['list'] };
+const ATENDENTE = { inbox: null, 'workspace-settings': ['get'], 'flow-graph': ['list', 'get', 'get_version', 'stats'], team: ['list'], pipeline: null };
 export const atendentePode = (fn, action) => Object.prototype.hasOwnProperty.call(ATENDENTE, fn) && (ATENDENTE[fn] === null || ATENDENTE[fn].includes(action));
 
 export function createFunctions(ctx) {
@@ -84,6 +84,7 @@ export function createFunctions(ctx) {
     'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
     'bulk-send': () => orgUserRoute('bulk', 'bulk-send'),
     'dashboard': () => orgUserRoute('dashboard', 'dashboard'),
+    'pipeline': () => orgUserRoute('pipeline', 'pipeline'),
     'admin-dashboard': () => platformAdminRoute((body) => ctx.dashboard.admin(body)),
     'uazapi-servers': () => platformAdminRoute((body) => ctx.uazapi.handleServers(body)),
   };

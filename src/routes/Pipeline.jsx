@@ -1,407 +1,159 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
-import { KoblyMockDB } from '@/api/mockData.js';
-import { Avatar, Badge, Button, Icon, Input, Select } from '@/ds';
-import { PageIntro, useAsync } from '@/lib/hooks.jsx';
-import { useBreakpoint } from '@/lib/responsive.jsx';
-import { EmptyState, ErrorState, Segmented, SkeletonCards } from '@/lib/ui.jsx';
-import { LeadDrawer } from '@/routes/Leads.jsx';
+import { Icon, Select } from '@/ds';
+import { useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
 
-// Kobly — Pipeline de recuperação (kanban / lista), server-driven para escalar:
-// estágio derivado NO BANCO (RPCs da 0029), colunas paginadas de 25 em 25, busca
-// server-side. Camada de negócio na tela: resumo (valor em aberto / recuperado /
-// conversão), proporção por coluna e cards densos (valor, último evento, tags,
-// métricas de e-mail e tempo de casa).
-
-const PAGE = 25;
+// Kobly — Pipeline de WhatsApp e vendas. Colunas pelo que aconteceu com o lead: Novo → Em contato (a Kobly mandou
+// mensagem) → Respondeu → Cobrança → Comprou, e Perdido. Arraste o cartão para mudar a etapa à mão; clique para
+// abrir a conversa no Chat ao vivo. KoblyPipeline
 
 const STAGES = [
-  { key: 'novo', label: 'Novo', icon: 'sparkles', tone: 'info' },
-  { key: 'enviado', label: 'E-mail enviado', icon: 'send', tone: 'accent' },
-  { key: 'abriu', label: 'Abriu', icon: 'mail-open', tone: 'warning' },
-  { key: 'clicou', label: 'Clicou', icon: 'mouse-pointer-click', tone: 'info' },
-  { key: 'recuperado', label: 'Recuperado', icon: 'circle-check', tone: 'success' },
+  { key: 'novo', label: 'Novo lead', icon: 'sparkles', c: '#22d3ee', hint: 'Chegou e ainda não recebeu mensagem' },
+  { key: 'contato', label: 'Em contato', icon: 'send', c: '#a78bfa', hint: 'A Kobly já mandou mensagem' },
+  { key: 'respondeu', label: 'Respondeu', icon: 'message-circle-reply', c: '#25D366', hint: 'O lead respondeu no WhatsApp' },
+  { key: 'cobranca', label: 'Cobrança enviada', icon: 'qr-code', c: '#f59e0b', hint: 'Pix, boleto ou cobrança do fluxo gerada' },
+  { key: 'comprou', label: 'Comprou', icon: 'badge-check', c: '#34d399', hint: 'Compra aprovada' },
+  { key: 'perdido', label: 'Perdido', icon: 'circle-x', c: '#fb7185', hint: 'Pediu para sair, reembolso ou movido à mão' },
 ];
+const money = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const ini = (s) => String(s || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+const hue = (s) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
+const rel = (iso) => { if (!iso) return ''; const s = (Date.now() - new Date(iso).getTime()) / 1000; if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min`; if (s < 86400) return `${Math.round(s / 3600)} h`; return `${Math.round(s / 86400)} d`; };
 
-// Períodos de entrada do lead (created_at) — server-side via p_since.
-const PERIODS = [
-  { value: '', label: 'Todo o período' },
-  { value: '7d', label: 'Últimos 7 dias' },
-  { value: '30d', label: 'Últimos 30 dias' },
-  { value: '90d', label: 'Últimos 90 dias' },
-];
-
-function sinceFromPeriod(period) {
-  if (!period) return null;
-  const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 0;
-  if (!days) return null;
-  return new Date(Date.now() - days * 864e5).toISOString();
-}
-
-const toneFg = (t) => (t === 'accent' ? 'var(--accent)' : `var(--status-${t}-fg)`);
-const toneBg = (t) => (t === 'accent' ? 'var(--accent-soft)' : `var(--status-${t}-bg)`);
-
-// Tempo relativo curto para "está aqui há X" (a data exata vive no drawer).
-function relDays(iso) {
-  if (!iso) return '';
-  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
-  if (d <= 0) return 'hoje';
-  if (d === 1) return 'há 1 dia';
-  if (d < 30) return `há ${d} dias`;
-  const m = Math.floor(d / 30);
-  return `há ${m} ${m === 1 ? 'mês' : 'meses'}`;
-}
-
-// Card denso: avatar + nome + valor em destaque, produto, último evento com tom,
-// tags, mini-métricas de e-mail (só as > 0) e tempo desde a entrada.
-function LeadCard({ lead, tagNames, onClick }) {
-  const DB = KoblyMockDB;
-  const nome = [lead.nome, lead.sobrenome].filter(Boolean).join(' ') || lead.email;
-  const evTone = DB.eventTone[lead.ultimoEvento] || 'neutral';
-  const m = lead.metricas || {};
-  const tags = (lead.tags || []).map((tid) => tagNames[tid]).filter(Boolean);
-  return (
-    <button
-      onClick={onClick}
-      className="kbly-lift"
-      style={{
-        width: '100%', textAlign: 'start', cursor: 'pointer', fontFamily: 'var(--font-sans)',
-        background: 'var(--surface-card)', border: '1px solid var(--border-subtle)',
-        borderInlineStart: `3px solid var(--status-${evTone === 'accent' ? 'info' : evTone}-fg)`,
-        borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)',
-        padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7,
-      }}
-    >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Avatar name={nome} size="sm" />
-        <span style={{ minWidth: 0, flex: 1 }}>
-          <span style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nome}</span>
-          <span style={{ display: 'block', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email}</span>
-        </span>
-        {lead.valorCompra > 0 && (
-          <span className="kbly-num" style={{ flex: 'none', fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-bold)', color: 'var(--text-strong)' }}>
-            {KoblyApi.money(lead.valorCompra)}
-          </span>
-        )}
-      </span>
-
-      {lead.produto && (
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.produto}</span>
-      )}
-
-      {tags.length > 0 && (
-        <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {tags.slice(0, 2).map((t) => <Badge key={t} tone="info" size="sm">{t}</Badge>)}
-          {tags.length > 2 && <Badge tone="neutral" size="sm">+{tags.length - 2}</Badge>}
-        </span>
-      )}
-
-      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 7 }}>
-        <Badge tone={evTone} size="sm" dot>{lead.ultimoEvento || '—'}</Badge>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', flex: 'none' }}>
-          {m.enviados > 0 && <span className="kbly-num" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="send" size={11} />{m.enviados}</span>}
-          {m.aberturas > 0 && <span className="kbly-num" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="eye" size={11} />{m.aberturas}</span>}
-          {m.cliques > 0 && <span className="kbly-num" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="mouse-pointer-click" size={11} />{m.cliques}</span>}
-          <span>{relDays(lead.createdAt)}</span>
-        </span>
-      </span>
-    </button>
-  );
-}
-
-// Resumo do board — os números que um dono de operação quer ver primeiro.
-function SummaryStrip({ counts }) {
-  const total = Object.values(counts).reduce((s, c) => s + c.total, 0);
-  const recTotal = (counts.recuperado || {}).total || 0;
-  const recValor = (counts.recuperado || {}).valor || 0;
-  const abertoValor = STAGES.filter((s) => s.key !== 'recuperado')
-    .reduce((s, st) => s + ((counts[st.key] || {}).valor || 0), 0);
-  const conversao = total ? recTotal / total : 0;
-  const items = [
-    { icon: 'users-round', tone: 'info', label: 'Leads no pipeline', value: KoblyApi.br(total) },
-    { icon: 'wallet', tone: 'warning', label: 'Valor em recuperação', value: KoblyApi.money(abertoValor) },
-    { icon: 'circle-check', tone: 'success', label: 'Recuperado', value: `${KoblyApi.money(recValor)} · ${KoblyApi.br(recTotal)}` },
-    { icon: 'trending-up', tone: 'accent', label: 'Conversão do pipeline', value: KoblyApi.pct(conversao) },
-  ];
-  return (
-    <div className="kbly-grid-kpi" style={{ gap: 12 }}>
-      {items.map((it) => (
-        <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: '12px 14px' }}>
-          <span style={{ display: 'inline-flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', background: toneBg(it.tone), color: toneFg(it.tone), flex: 'none' }}>
-            <Icon name={it.icon} size={15} />
-          </span>
-          <span style={{ minWidth: 0 }}>
-            <span className="kbly-num" style={{ display: 'block', fontSize: 'var(--text-lg)', fontWeight: 'var(--fw-bold)', color: 'var(--text-strong)', whiteSpace: 'nowrap' }}>{it.value}</span>
-            <span style={{ display: 'block', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 'var(--ls-eyebrow)' }}>{it.label}</span>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Estado por coluna: { rows, loading, error } — paginação independente.
-const emptyCols = () => Object.fromEntries(STAGES.map((s) => [s.key, { rows: [], loading: true, error: null }]));
+const KP_CSS = `
+.kp-sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.kp-s { border-radius: 16px; padding: 14px 16px; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.95); border: 1px solid rgba(255,255,255,.08); position: relative; overflow: hidden; }
+.kp-s::before { content: ''; position: absolute; left: 14px; right: 14px; top: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--c), transparent); }
+.kp-s span { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .07em; } .kp-s b { display: block; font-size: 24px; color: var(--text-strong); margin-top: 4px; }
+.kp-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.kp-search { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); flex: 1; min-width: 220px; max-width: 380px; }
+.kp-search input { flex: 1; background: transparent; border: 0; outline: none; color: var(--text-strong); font: inherit; font-size: var(--text-sm); }
+.kp-seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.kp-seg button { border: 0; padding: 7px 12px; border-radius: 9px; background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; }
+.kp-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(34,211,238,.3), rgba(139,92,246,.42)); box-shadow: inset 0 0 0 1px rgba(167,139,250,.55); }
+.kp-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; min-height: 520px; }
+.kp-col { display: flex; flex-direction: column; min-height: 0; border-radius: 18px; background: rgba(12,14,22,.9); border: 1px solid rgba(255,255,255,.07); transition: border-color .15s, box-shadow .15s; }
+.kp-col.over { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 26px color-mix(in srgb, var(--c) 30%, transparent); }
+.kp-head { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.kp-head .t { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text-strong); }
+.kp-head .ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent); }
+.kp-head .n { margin-left: auto; padding: 1px 9px; border-radius: 999px; font-size: 12px; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.kp-meter { height: 4px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+.kp-meter span { display: block; height: 100%; background: var(--c); box-shadow: 0 0 8px var(--c); transition: width .6s; }
+.kp-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100dvh - 380px); }
+.kp-card { position: relative; border-radius: 14px; padding: 11px 12px; cursor: grab; display: flex; flex-direction: column; gap: 7px; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015)); border: 1px solid rgba(255,255,255,.08); transition: transform .12s, border-color .15s, box-shadow .15s; animation: kp-in .3s both; }
+.kp-card:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--c) 50%, transparent); box-shadow: 0 8px 22px rgba(0,0,0,.4), 0 0 16px color-mix(in srgb, var(--c) 16%, transparent); }
+.kp-card.drag { opacity: .4; }
+@keyframes kp-in { from { opacity: 0; transform: translateY(4px); } }
+.kp-av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; flex: none; }
+.kp-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+.kp-more { margin: 2px 10px 10px; padding: 8px; border-radius: 10px; border: 1px dashed rgba(255,255,255,.12); background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: 12px; }
+.kp-more:hover { color: var(--text-strong); border-color: rgba(167,139,250,.5); }
+`;
 
 function KoblyPipeline() {
   const store = useKobly();
-  const isGestor = store.role === 'Gestor';
-  const DB = KoblyMockDB;
-  const clients = useAsync(() => (isGestor ? KoblyApi.listClients() : Promise.resolve([])), [store.role]);
-  const tagsA = useAsync(() => KoblyApi.getTags(), []);
-  const [view, setView] = useState('kanban');
-  const [contaId, setContaId] = useState('');
+  const { orgId, picker, canEdit } = useTargetOrg();
+  const [days, setDays] = useState(30);
   const [q, setQ] = useState('');
-  const [qDeb, setQDeb] = useState('');
-  const [evt, setEvt] = useState('');         // último evento de checkout
-  const [tagId, setTagId] = useState('');     // tag aplicada
-  const [period, setPeriod] = useState('');   // 7d | 30d | 90d
-  const [sel, setSel] = useState(null);
-  const [counts, setCounts] = useState(null); // { stage: { total, valor } }
-  const [cols, setCols] = useState(emptyCols);
-  const [fatal, setFatal] = useState(null);
-  const { isMobile } = useBreakpoint();
+  const [tagId, setTagId] = useState('');
+  const [tags, setTags] = useState([]);
+  const [cols, setCols] = useState(null);
+  const [drag, setDrag] = useState(null); // { id, from }
+  const [over, setOver] = useState(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setQDeb(q.trim()), 350);
-    return () => clearTimeout(t);
-  }, [q]);
+  const filters = { days: days || undefined, q, tag_id: tagId || undefined };
+  const load = useCallback(async () => {
+    if (!orgId) { setCols(null); return; }
+    const r = await KoblyApi.pipeline('board', { days: days || undefined, q, tag_id: tagId || undefined }, orgId).catch(() => null);
+    setCols(r && r.columns ? r.columns : Object.fromEntries(STAGES.map((s) => [s.key, { total: 0, valor: 0, leads: [] }])));
+  }, [orgId, days, q, tagId]);
+  useEffect(() => { const t = setTimeout(load, q ? 300 : 0); return () => clearTimeout(t); }, [load, q]);
+  useEffect(() => { KoblyApi.getTags().then((t) => setTags(t || [])).catch(() => {}); }, [orgId]);
 
-  const orgScope = isGestor ? (contaId || null) : (store.session.empresaId || null);
-  const tagNames = useMemo(() => Object.fromEntries((tagsA.data || []).map((t) => [t.id, t.nome])), [tagsA.data]);
-  const eventosPresentes = useMemo(() => Object.keys(DB.eventTone || {}), [DB]);
-  const since = useMemo(() => sinceFromPeriod(period), [period]);
-  const filterKey = useMemo(
-    () => JSON.stringify({ orgScope, qDeb, evt, tagId, since }),
-    [orgScope, qDeb, evt, tagId, since],
-  );
-  const hasFilters = !!(q.trim() || evt || tagId || period || (isGestor && contaId));
+  async function more(stage) {
+    const r = await KoblyApi.pipeline('more', { ...filters, stage, offset: cols[stage].leads.length }, orgId);
+    if (r && r.leads) setCols((c) => ({ ...c, [stage]: { ...c[stage], leads: [...c[stage].leads, ...r.leads] } }));
+  }
+  async function drop(stage) {
+    setOver(null);
+    if (!drag || drag.from === stage) return;
+    const lead = cols[drag.from].leads.find((l) => l.id === drag.id);
+    setCols((c) => ({ ...c, [drag.from]: { ...c[drag.from], total: c[drag.from].total - 1, valor: c[drag.from].valor - Number(lead.valor || 0), leads: c[drag.from].leads.filter((l) => l.id !== drag.id) },
+      [stage]: { ...c[stage], total: c[stage].total + 1, valor: c[stage].valor + Number(lead.valor || 0), leads: [{ ...lead, etapa: stage, manual: true }, ...c[stage].leads] } }));
+    const r = await KoblyApi.pipeline('move', { lead_id: drag.id, stage }, orgId);
+    setDrag(null);
+    if (r && r.error) { store.notify('danger', r.error); load(); } else store.notify('success', `${lead.nome} → ${STAGES.find((s) => s.key === stage).label}`);
+  }
+  async function auto(lead) {
+    const r = await KoblyApi.pipeline('move', { lead_id: lead.id, stage: 'auto' }, orgId);
+    if (r && r.error) store.notify('danger', r.error); else { store.notify('info', 'O lead volta para a etapa automática.'); load(); }
+  }
+  const openChat = (lead) => { try { sessionStorage.setItem('kobly:chat-lead', lead.id); } catch { /* ok */ } store.navigate('chats'); };
 
-  const filterArgs = useMemo(() => ({
-    empresaId: orgScope,
-    search: qDeb || null,
-    evento: evt || null,
-    tagId: tagId || null,
-    since: since || null,
-  }), [orgScope, qDeb, evt, tagId, since]);
-
-  const clearFilters = () => {
-    setQ(''); setQDeb(''); setEvt(''); setTagId(''); setPeriod(''); setContaId('');
-  };
-
-  const loadStage = useCallback(async (stage, offset) => {
-    setCols((c) => ({ ...c, [stage]: { ...c[stage], loading: true, error: null } }));
-    try {
-      const { rows } = await KoblyApi.getLeadsPage({ ...filterArgs, stage, limit: PAGE, offset });
-      setCols((c) => ({
-        ...c,
-        [stage]: { rows: offset === 0 ? rows : [...c[stage].rows, ...rows], loading: false, error: null },
-      }));
-    } catch (e) {
-      setCols((c) => ({ ...c, [stage]: { ...c[stage], loading: false, error: e.message } }));
-    }
-  }, [filterArgs]);
-
-  const loadAll = useCallback(async () => {
-    setFatal(null);
-    setCols(emptyCols());
-    try {
-      // Contagens + valor por coluna já respeitam search/evento/tag/período no RPC.
-      const [cts] = await Promise.all([
-        KoblyApi.getPipelineCounts(filterArgs),
-        ...STAGES.map((s) => loadStage(s.key, 0)),
-      ]);
-      setCounts(cts);
-    } catch (e) {
-      setFatal(e.message);
-    }
-  }, [filterArgs, loadStage]);
-
-  useEffect(() => { loadAll(); }, [loadAll, filterKey]);
-
-  if (fatal) return <ErrorState message={fatal} onRetry={loadAll} />;
-
-  const totalLeads = counts ? Object.values(counts).reduce((s, c) => s + c.total, 0) : null;
-  const maxStage = counts ? Math.max(1, ...Object.values(counts).map((c) => c.total)) : 1;
-  const loadingAll = counts === null;
-
-  const columnHeader = (s) => {
-    const ct = (counts && counts[s.key]) || { total: 0, valor: 0 };
-    const share = totalLeads ? ct.total / totalLeads : 0;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ display: 'inline-flex', width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', background: toneBg(s.tone), color: toneFg(s.tone), flex: 'none' }}>
-            <Icon name={s.icon} size={14} />
-          </span>
-          <span style={{ flex: 1, fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-bold)', color: 'var(--text-strong)' }}>{s.label}</span>
-          <span className="kbly-num" style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--fw-bold)', color: 'var(--text-strong)' }}>{KoblyApi.br(ct.total)}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span className="kbly-num" style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>
-            {ct.valor > 0 ? KoblyApi.money(ct.valor) : '—'}
-          </span>
-          <span className="kbly-num" style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>{totalLeads ? KoblyApi.pct(share) : ''}</span>
-        </div>
-        {/* proporção da coluna vs. a maior — leitura instantânea da distribuição */}
-        <div style={{ height: 3, borderRadius: 'var(--radius-pill)', background: 'var(--surface-raised)', overflow: 'hidden' }}>
-          <div style={{ width: `${Math.round((ct.total / maxStage) * 100)}%`, height: '100%', background: toneFg(s.tone), borderRadius: 'var(--radius-pill)', transition: 'width var(--dur-med) var(--ease-out)' }} />
-        </div>
-      </div>
-    );
-  };
-
-  const columnBody = (s, { scroll = true } = {}) => {
-    const col = cols[s.key];
-    const ct = (counts && counts[s.key]) || { total: 0 };
-    const remaining = Math.max(0, ct.total - col.rows.length);
-    return (
-      <div style={{
-        display: 'flex', flexDirection: 'column', gap: 8, minHeight: 40, flex: 1,
-        ...(scroll ? { overflowY: 'auto', paddingRight: 2 } : {}),
-      }}>
-        {col.error && <ErrorState compact message={col.error} onRetry={() => loadStage(s.key, col.rows.length)} />}
-        {!col.error && col.rows.length === 0 && !col.loading && (
-          <div style={{ border: '1px dashed var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '22px 10px', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-            <Icon name={s.icon} size={16} style={{ opacity: 0.5 }} />
-            Sem leads aqui
-          </div>
-        )}
-        {col.rows.map((l) => <LeadCard key={l.id} lead={l} tagNames={tagNames} onClick={() => setSel(l)} />)}
-        {col.loading && <SkeletonCards count={2} height={96} />}
-        {!col.loading && remaining > 0 && (
-          <Button variant="ghost" size="sm" iconLeft="chevrons-down" onClick={() => loadStage(s.key, col.rows.length)} style={{ justifyContent: 'center' }}>
-            Carregar mais ({KoblyApi.br(remaining)})
-          </Button>
-        )}
-      </div>
-    );
-  };
+  const total = cols ? STAGES.reduce((a, s) => a + cols[s.key].total, 0) : 0;
+  const aberto = cols ? ['novo', 'contato', 'respondeu', 'cobranca'].reduce((a, k) => a + cols[k].valor, 0) : 0;
+  const ganho = cols ? cols.comprou.valor : 0;
+  const conv = total && cols ? Math.round((cols.comprou.total / total) * 100) : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <PageIntro action={<Segmented value={view} onChange={setView} options={[{ value: 'kanban', label: 'Kanban' }, { value: 'lista', label: 'Lista' }]} />}>
-        Pipeline de recuperação — cada lead avança de coluna conforme a jornada real (evento → e-mail → abriu → clicou → recuperado).
-      </PageIntro>
-
-      {/* Barra de filtros — espelha Leads (conta/evento) + tag + período (contexto de pipeline). */}
-      <div className="kbly-toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 240px', maxWidth: 360, minWidth: 0 }}>
-          <Input icon="search" placeholder="Buscar (nome, e-mail, produto)…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        {isGestor && (
-          <Select
-            value={contaId}
-            onChange={(e) => setContaId(e.target.value)}
-            options={[{ value: '', label: 'Todas as contas' }, ...((clients.data || []).map((c) => ({ value: c.id, label: c.nome })))]}
-            style={{ minWidth: 180 }}
-          />
-        )}
-        <Select
-          value={evt}
-          onChange={(e) => setEvt(e.target.value)}
-          options={[{ value: '', label: 'Todos os eventos' }, ...eventosPresentes.map((x) => ({ value: x, label: x }))]}
-          style={{ minWidth: 170 }}
-        />
-        <Select
-          value={tagId}
-          onChange={(e) => setTagId(e.target.value)}
-          options={[
-            { value: '', label: 'Todas as tags' },
-            ...((tagsA.data || []).map((t) => ({ value: t.id, label: t.nome }))),
-          ]}
-          style={{ minWidth: 150 }}
-        />
-        <Select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          options={PERIODS}
-          style={{ minWidth: 150 }}
-        />
-        {hasFilters && (
-          <button
-            type="button"
-            onClick={clearFilters}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 'var(--text-sm)', fontFamily: 'var(--font-sans)', padding: '8px 4px', whiteSpace: 'nowrap' }}
-          >
-            Limpar filtros
-          </button>
-        )}
-        {counts && (
-          <span className="kbly-num" style={{ marginInlineStart: 'auto', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-            {KoblyApi.br(totalLeads || 0)} {(totalLeads || 0) === 1 ? 'lead' : 'leads'}
-          </span>
-        )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <style>{KP_CSS}</style>
+      {picker}
+      <div className="kp-sum">
+        <div className="kp-s" style={{ '--c': '#22d3ee' }}><span>Leads no pipeline</span><b>{total.toLocaleString('pt-BR')}</b></div>
+        <div className="kp-s" style={{ '--c': '#f59e0b' }}><span>Em negociação</span><b>{money(aberto)}</b></div>
+        <div className="kp-s" style={{ '--c': '#34d399' }}><span>Vendido</span><b>{money(ganho)}</b></div>
+        <div className="kp-s" style={{ '--c': '#a78bfa' }}><span>Conversão</span><b>{conv}%</b></div>
       </div>
-
-      {loadingAll ? (
-        <SkeletonCards count={5} height={220} />
-      ) : totalLeads === 0 ? (
-        <EmptyState
-          icon="kanban"
-          title={hasFilters ? 'Nada encontrado no pipeline' : 'Nenhum lead no pipeline ainda'}
-          message={hasFilters ? 'Ajuste ou limpe os filtros — busca, evento, tag e período contam.' : 'Eles entram aqui quando um evento de checkout chega.'}
-        />
-      ) : (
-        <>
-          <SummaryStrip counts={counts} />
-
-          {view === 'kanban' ? (
-            <div style={{ display: 'flex', gap: 14, overflowX: 'auto', scrollSnapType: isMobile ? 'x mandatory' : undefined, paddingBottom: 8, alignItems: 'stretch' }}>
-              {STAGES.map((s) => (
-                <div key={s.key} style={{
-                  flex: isMobile ? '0 0 240px' : '1 0 260px', minWidth: 240, scrollSnapAlign: 'start',
-                  background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)',
-                  borderTop: `2px solid ${toneFg(s.tone)}`, borderRadius: 'var(--radius-md)', padding: 12,
-                  display: 'flex', flexDirection: 'column', gap: 10,
-                  maxHeight: 'calc(100dvh - var(--topbar-height) - 320px)', minHeight: 320,
-                }}>
-                  {columnHeader(s)}
-                  {columnBody(s)}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {STAGES.map((s) => {
-                const col = cols[s.key];
-                const ct = (counts && counts[s.key]) || { total: 0, valor: 0 };
-                const remaining = Math.max(0, ct.total - col.rows.length);
-                return (
-                  <div key={s.key}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <span style={{ display: 'inline-flex', width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', background: toneBg(s.tone), color: toneFg(s.tone) }}>
-                        <Icon name={s.icon} size={13} />
-                      </span>
-                      <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{s.label}</span>
-                      <Badge tone="neutral">{KoblyApi.br(ct.total)}</Badge>
-                      {ct.valor > 0 && <span className="kbly-num" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{KoblyApi.money(ct.valor)}</span>}
+      <div className="kp-bar">
+        <div className="kp-search"><Icon name="search" size={15} style={{ color: 'var(--text-subtle)' }} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar nome, telefone, e-mail ou produto" /></div>
+        <div className="kp-seg">{[[7, '7 dias'], [30, '30 dias'], [90, '90 dias'], [0, 'Tudo']].map(([v, l]) => <button key={v} type="button" className={days === v ? 'on' : ''} onClick={() => setDays(v)}>{l}</button>)}</div>
+        <Select value={tagId} onChange={(e) => setTagId(e.target.value)} style={{ minWidth: 180 }} options={[{ value: '', label: 'Todas as etiquetas' }, ...tags.map((t) => ({ value: t.id, label: t.nome }))]} />
+      </div>
+      <div className="kp-board">
+        {STAGES.map((s) => {
+          const c = cols ? cols[s.key] : { total: 0, valor: 0, leads: [] };
+          return (
+            <div key={s.key} className={`kp-col${over === s.key ? ' over' : ''}`} style={{ '--c': s.c }}
+              onDragOver={(e) => { if (drag && canEdit) { e.preventDefault(); setOver(s.key); } }} onDragLeave={() => setOver(null)} onDrop={(e) => { e.preventDefault(); drop(s.key); }}>
+              <div className="kp-head" title={s.hint}>
+                <div className="t"><span className="ico"><Icon name={s.icon} size={15} /></span>{s.label}<span className="n">{c.total}</span></div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.valor ? money(c.valor) : '—'}</div>
+                <div className="kp-meter"><span style={{ width: `${total ? (c.total / total) * 100 : 0}%` }} /></div>
+              </div>
+              <div className="kp-list">
+                {!cols && <div style={{ color: 'var(--text-subtle)', fontSize: 12, padding: 6 }}>Carregando…</div>}
+                {cols && !c.leads.length && <div style={{ color: 'var(--text-subtle)', fontSize: 12, padding: 6, textAlign: 'center' }}>{canEdit ? 'Arraste um lead para cá' : 'Vazio'}</div>}
+                {c.leads.map((l, i) => {
+                  const h = hue(l.nome);
+                  return (
+                    <div key={l.id} className={`kp-card${drag && drag.id === l.id ? ' drag' : ''}`} style={{ animationDelay: `${Math.min(i, 10) * 25}ms` }} draggable={canEdit}
+                      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDrag({ id: l.id, from: s.key }); }} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={() => openChat(l)} title="Abrir conversa">
+                      <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+                        <span className="kp-av" style={{ background: `linear-gradient(135deg, hsl(${h} 65% 45%), hsl(${(h + 50) % 360} 70% 35%))` }}>{ini(l.nome)}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nome}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.produto || (l.telefone ? `+${l.telefone}` : l.email)}</div>
+                        </div>
+                        {l.valor != null && <b style={{ fontSize: 13, color: '#34d399' }}>{money(l.valor)}</b>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {l.em_fluxo && !l.humano && <span className="kp-chip" style={{ color: '#a78bfa', background: 'rgba(139,92,246,.14)' }}><Icon name="git-branch" size={10} />em fluxo</span>}
+                        {l.humano && <span className="kp-chip" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}><Icon name="hand" size={10} />humano</span>}
+                        {l.manual && <button type="button" className="kp-chip" title="Voltar para a etapa automática" style={{ color: '#94a3b8', background: 'rgba(148,163,184,.1)', border: 0, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); auto(l); }}><Icon name="pin" size={10} />manual</button>}
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-subtle)' }}>{rel(l.ultima || l.criado)}</span>
+                      </div>
                     </div>
-                    {col.rows.length === 0 && !col.loading ? (
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', padding: '2px 2px 8px' }}>Nenhum lead nesta etapa.</div>
-                    ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
-                        {col.rows.map((l) => <LeadCard key={l.id} lead={l} tagNames={tagNames} onClick={() => setSel(l)} />)}
-                      </div>
-                    )}
-                    {col.loading && <SkeletonCards count={3} height={96} />}
-                    {!col.loading && remaining > 0 && (
-                      <div style={{ marginTop: 8 }}>
-                        <Button variant="ghost" size="sm" iconLeft="chevrons-down" onClick={() => loadStage(s.key, col.rows.length)}>
-                          Carregar mais ({KoblyApi.br(remaining)})
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {cols && c.leads.length < c.total && <button type="button" className="kp-more" onClick={() => more(s.key)}>Ver mais ({c.total - c.leads.length})</button>}
             </div>
-          )}
-        </>
-      )}
-
-      {sel && <LeadDrawer lead={sel} onClose={() => setSel(null)} tags={tagsA.data || []} />}
+          );
+        })}
+      </div>
     </div>
   );
 }
