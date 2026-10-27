@@ -3,6 +3,7 @@ import { KoblyApi } from '@/api/mockApi.js';
 import { Avatar, Badge, Banner, Button, Card, IconButton, Input, Select } from '@/ds';
 import { Modal } from '@/lib/ui.jsx';
 import { fmtDateTime } from '@/lib/workspace.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Configurações → Equipe. Convida pessoas por e-mail como Administrador (configura tudo) ou Atendente
 // (só Chats ao vivo, Leads e Pipeline). O dono da conta é sempre administrador. Sem provedor de
@@ -36,7 +37,7 @@ function KoblyTeamCard({ orgId, notify }) {
   const resend = async (m) => done(await KoblyApi.team('resend', { profile_id: m.id }, orgId), 'Convite reenviado.');
   const setRole = async (m, team_role) => done(await KoblyApi.team('set_role', { profile_id: m.id, team_role }, orgId), `${m.nome} agora é ${PAPEL[team_role]}.`);
   async function remove(m) {
-    if (!confirm(`Remover ${m.nome} da equipe? O acesso termina na hora.`)) return;
+    if (!(await askConfirm(`Remover ${m.nome} da equipe? O acesso termina na hora.`))) return;
     done(await KoblyApi.team('remove', { profile_id: m.id }, orgId), `${m.nome} saiu da equipe.`);
   }
   const copy = async () => { try { await navigator.clipboard.writeText(link); notify('success', 'Link copiado'); } catch { notify('warning', 'Selecione e copie o link manualmente.'); } };

@@ -8,12 +8,13 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
 import { encrypt, decrypt } from '../whatsapp/crypto.js';
+import { createAdsManager, MANAGER_ACTIONS } from './manager.js';
 
 const PRESETS = { today: 0, yesterday: 1, last_7d: 7, last_14d: 14, last_30d: 30, this_month: 31 };
 const PURCHASE = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'];
 const LEAD = ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'];
 const CACHE_MS = 60_000;
-const OAUTH_SCOPES = 'ads_read,business_management';
+const OAUTH_SCOPES = 'ads_read,ads_management,business_management';
 const STATE_TTL_MS = 15 * 60_000;
 
 // valor da primeira ação encontrada na ordem de preferência (a Meta repete a compra em vários tipos)
@@ -38,11 +39,15 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
   const needKey = () => { if (!secretKey) throw new AuthError(503, 'ads_unconfigured', 'Indisponível neste ambiente (chave de segurança ausente).'); };
   const fail = (msg) => { throw new AuthError(422, 'validation_failed', msg); };
 
-  async function graph(token, path, query = {}) {
+  // GET com os parâmetros na URL; POST (alterar campanha) com o formulário no corpo
+  async function graph(token, path, query = {}, method = 'GET') {
     const url = new URL(graphBase.replace(/\/$/, '') + path);
-    for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    let body;
+    if (method === 'POST') { body = new URLSearchParams(query).toString(); headers['Content-Type'] = 'application/x-www-form-urlencoded'; }
+    else for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
     let res;
-    try { res = await fetchImpl(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(20000) }); }
+    try { res = await fetchImpl(url, { method, headers, body, signal: AbortSignal.timeout(20000) }); }
     catch { throw new AuthError(502, 'meta_unreachable', 'O Facebook não respondeu agora.'); }
     const j = await res.json().catch(() => null);
     if (!res.ok || (j && j.error)) {
@@ -59,6 +64,7 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
     if (!r) throw new AuthError(404, 'not_found', 'Conta de anúncios não encontrada.');
     return r;
   };
+  const manager = createAdsManager({ pool, graph, own, tokenOf: (a) => { needKey(); return decrypt(a.token_enc, secretKey); }, now });
   const cleanToken = (t) => { const s = String(t || '').trim(); if (s.length < 20) fail('Cole o token de acesso do Facebook (permissão ads_read).'); return s; };
   const cleanAct = (v) => { const s = String(v || '').replace(/^act_/, '').trim(); if (!/^[0-9]{5,25}$/.test(s)) fail('Conta de anúncios inválida.'); return s; };
 
@@ -221,7 +227,9 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
           { spend: 0, receita_meta: 0, compras_meta: 0, recuperadas: 0, receita_recuperada: 0 });
         return { date_preset: preset, fetched_at: fetchedAt, currency: a.currency, campaigns: rows, totals: tot };
       }
-      default: throw new AuthError(400, 'bad_action', 'Ação desconhecida.');
+      default:
+        if (MANAGER_ACTIONS.has(body.action)) return manager.handle(ctx, body);
+        throw new AuthError(400, 'bad_action', 'Ação desconhecida.');
     }
   }
   return { handle, oauthCallback };

@@ -6,6 +6,7 @@ import { Badge, Banner, Button, Card, Icon, Input, Select, Spinner } from '@/ds'
 import { useAsync } from '@/lib/hooks.jsx';
 import { PhoneField } from '@/lib/ui.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 const TPL_TONE = { APPROVED: 'success', PENDING: 'warning', IN_APPEAL: 'warning', REJECTED: 'danger', PAUSED: 'danger', DISABLED: 'danger' };
 const TPL_LABEL = { APPROVED: 'Aprovado', PENDING: 'Em análise', IN_APPEAL: 'Em recurso', REJECTED: 'Rejeitado', PAUSED: 'Pausado', DISABLED: 'Desativado' };
@@ -118,7 +119,7 @@ export function WhatsappMetaTab({ empresaId }) {
   async function refresh() { await run('refresh', () => KoblyApi.whatsappAccount('status', { refresh: true }, empresaId)); acc.reload(); }
   async function sync() { const r = await run('sync', () => KoblyApi.whatsappAccount('sync_templates', {}, empresaId), (x) => `${x.synced} modelo(s) sincronizado(s)`); if (!r.error) tpls.reload(); }
   async function disconnect() {
-    if (!window.confirm('Desconectar o WhatsApp desta empresa? As campanhas com WhatsApp param de enviar até conectar de novo.')) return;
+    if (!(await askConfirm('Desconectar o WhatsApp desta empresa? As campanhas com WhatsApp param de enviar até conectar de novo.'))) return;
     const r = await run('desconectar', () => KoblyApi.whatsappAccount('disconnect', {}, empresaId), () => 'WhatsApp desconectado');
     if (!r.error) { acc.reload(); tpls.reload(); }
   }

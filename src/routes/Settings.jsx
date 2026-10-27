@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, Modal, SkeletonForm } from '@/lib/ui.jsx';
 import { TextArea, useTargetOrg } from '@/lib/workspace.jsx';
 import { KoblyTeamCard } from '@/routes/TeamCard.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Configurações da automação: Empresa (nome e fuso, usado por horário comercial e
 // condições de hora), Respostas rápidas (/atalho no chat ao vivo), Campos personalizados
@@ -28,7 +29,7 @@ export function SettingsList({ orgId, kind, items, onSaved, canEdit, notify, tit
     notify('success', 'Salvo.'); setEdit(null); onSaved();
   }
   async function remove(it) {
-    if (!confirm('Excluir este item? Fluxos que usam ele passam a receber vazio.')) return;
+    if (!(await askConfirm('Excluir este item? Fluxos que usam ele passam a receber vazio.'))) return;
     const r = await KoblyApi.workspaceSettings('delete', { kind, id: it.id }, orgId);
     if (r.error) notify('danger', r.error); else onSaved();
   }

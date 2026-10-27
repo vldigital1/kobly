@@ -6,6 +6,7 @@ import { Button, Icon, IconButton, Input, Spinner } from '@/ds';
 import { Segmented } from '@/lib/ui.jsx';
 import { useBreakpoint } from '@/lib/responsive.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Editor de e-mail com geração de HTML por IA (legado: n8n /generate_html),
 // preview, e envio de teste. Modal. KoblyEmailEditor
@@ -170,12 +171,12 @@ function KoblyEmailEditor({ email, brand = null, brandContext = 'campanha', draf
 
   // UX-1: avisa ao fechar o editor se há alterações não salvas (cancelar perde o que
   // foi digitado). Comparação direta contra o e-mail original.
-  function tryClose() {
+  async function tryClose() {
     const changed = titulo !== (email ? email.titulo : 'Novo e-mail')
       || assunto !== (email ? email.assunto : '')
       || remetente !== (email ? (email.remetente || '') : '')
       || html !== (email ? (email.corpoHtml || '') : '');
-    if (changed && !window.confirm('Você tem alterações não salvas neste e-mail. Fechar e descartar?')) return;
+    if (changed && !(await askConfirm('Você tem alterações não salvas neste e-mail. Fechar e descartar?'))) return;
     clearDraft(dKey);
     onClose();
   }

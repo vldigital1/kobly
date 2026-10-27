@@ -6,6 +6,7 @@ import { Drawer, Modal } from '@/lib/ui.jsx';
 import { fmtDateTime } from '@/lib/workspace.jsx';
 import { WhatsappMetaTab } from '@/routes/WhatsappMeta.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Integrações → Conexões. Todos os canais da conta num lugar: WhatsApp comum (QR Code, pela Uazapi),
 // API oficial da Meta e bots do Telegram (alertas da equipe); Instagram e Messenger chegam depois.
@@ -337,7 +338,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
     notify('success', on ? 'Os fluxos pausam sozinhos se este número desconectar.' : 'Os fluxos seguem ativos mesmo se este número desconectar.');
   }
   async function act(fn, action, extra, msg, confirmText) {
-    if (confirmText && !confirm(confirmText)) return;
+    if (confirmText && !(await askConfirm(confirmText))) return;
     const r = await KoblyApi[fn](action, extra, empresaId);
     if (r.error) notify('danger', r.error); else { if (msg) notify('success', msg); load(); }
   }

@@ -1,26 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
-import { Badge, Banner, Button, Card, DataTable, IconButton, Input, MetricCard, PageHeader, Select } from '@/ds';
-import { EmptyState, ErrorState, SkeletonTable } from '@/lib/ui.jsx';
-import { fmtDateTime, useTargetOrg } from '@/lib/workspace.jsx';
+import { Banner, Button, Card, Icon, IconButton, Input, PageHeader, Select } from '@/ds';
+import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
+import { useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
 import { MetaLogo } from '@/lib/brandLogos.jsx';
 
-// Kobly — Facebook Ads ao vivo. Campanhas da conta de anúncios (gasto, cliques, compras e ROAS que a Meta
-// reporta) ao lado do que a Kobly mediu para a mesma campanha: leads, compras e vendas recuperadas pelo
-// WhatsApp. Casa pelo utm_campaign (nome ou ID da campanha). Atualiza sozinho a cada minuto. KoblyMetaAds
+// Kobly — gerenciador do Facebook Ads: dashboard (faturamento, gasto, lucro, ROAS...), contas, campanhas,
+// conjuntos e anúncios com as vendas rastreadas pela UTM; liga/pausa e muda orçamento direto no Facebook.
+// Atualiza sozinho a cada minuto. KoblyMetaAds
 
-const PRESETS = [['today', 'Hoje'], ['yesterday', 'Ontem'], ['last_7d', 'Últimos 7 dias'], ['last_14d', 'Últimos 14 dias'], ['last_30d', 'Últimos 30 dias']];
-const LIVE_MS = 60_000;
 const money = (v, cur) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: cur || 'BRL' }));
 const int = (v) => Number(v || 0).toLocaleString('pt-BR');
 const roas = (v) => (v == null ? '—' : `${v.toFixed(2)}x`);
 
 const STEPS = [
   ['Clique em "Conectar com Facebook"', 'Abre uma janelinha do próprio Facebook. Entre com o perfil que administra os seus anúncios.'],
-  ['Autorize a Kobly', 'O Facebook pergunta se a Kobly pode ler os resultados das campanhas. A Kobly só lê: não cria, não pausa e não gasta nada.'],
+  ['Autorize a Kobly', 'O Facebook pergunta se a Kobly pode ver as campanhas e alterá-las. A Kobly só liga, pausa ou muda orçamento quando você clica.'],
   ['Escolha as contas de anúncios', 'Marque as contas que você quer acompanhar aqui. Pronto: as campanhas aparecem ao vivo.'],
-  ['Marque as campanhas (opcional, mas recomendado)', 'No anúncio, em Parâmetros de URL, cole utm_campaign={{campaign.name}}. Assim a Kobly sabe de qual campanha veio cada venda.'],
+  ['Marque as campanhas (opcional, mas recomendado)', 'No anúncio, em Parâmetros de URL, cole os parâmetros que aparecem no fim desta página. Assim a Kobly sabe de qual campanha, conjunto e anúncio veio cada venda.'],
 ];
 
 function Connect({ orgId, notify, onDone }) {
@@ -179,97 +177,435 @@ function Connect({ orgId, notify, onDone }) {
   );
 }
 
+// ---- Gerenciador: dashboard, contas, campanhas, conjuntos e anúncios -------------------------------
+
+const CSS = `
+.ka { display: flex; flex-direction: column; gap: 16px; }
+.ka-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-subtle); overflow-x: auto; }
+.ka-tab { display: inline-flex; align-items: center; gap: 8px; padding: 11px 16px; border: 0; background: none; cursor: pointer; color: var(--text-muted);
+  font: 600 14px var(--font-sans); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.ka-tab:hover { color: var(--text-strong); }
+.ka-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+.ka-tab .n { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: rgba(255,255,255,.07); color: var(--text-body); }
+.ka-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; padding: 14px; border-radius: 16px; border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(255,98,1,.05), transparent 70%), var(--surface-card, #121212); }
+.ka-upd { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-subtle); padding-bottom: 10px; }
+.ka-upd i { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+.ka-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.ka-kpi { position: relative; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--border-subtle); background: var(--surface-card, #121212); overflow: hidden; }
+.ka-kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c, var(--accent)); }
+.ka-kpi .l { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); font-weight: 700; }
+.ka-kpi .v { margin-top: 8px; font-size: 26px; font-weight: 800; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.ka-kpi .v.neg { color: #f87171; }
+.ka-kpi .s { margin-top: 2px; font-size: 12px; color: var(--text-muted); }
+.ka-seg { display: inline-flex; padding: 3px; border-radius: 10px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.02); }
+.ka-seg button { border: 0; background: none; color: var(--text-muted); font: 600 12px var(--font-sans); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+.ka-seg button.on { background: var(--accent); color: #1b0d02; }
+.ka-card { border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--surface-card, #121212); }
+.ka-tablewrap { overflow-x: auto; }
+.ka-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ka-table th { text-align: right; padding: 11px 14px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-subtle); font-weight: 700;
+  border-bottom: 1px solid var(--border-subtle); white-space: nowrap; position: sticky; top: 0; background: var(--surface-card, #121212); }
+.ka-table th.l, .ka-table td.l { text-align: left; }
+.ka-table td { text-align: right; padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,.04); color: var(--text-body); white-space: nowrap; }
+.ka-table tr:hover td { background: rgba(255,98,1,.035); }
+.ka-table tfoot td { font-weight: 700; color: var(--text-strong); border-top: 1px solid var(--border-subtle); border-bottom: 0; }
+.ka-name { display: flex; flex-direction: column; gap: 3px; min-width: 220px; max-width: 340px; white-space: normal; }
+.ka-name b { color: var(--text-strong); font-weight: 600; }
+.ka-name button { all: unset; cursor: pointer; color: var(--text-strong); font-weight: 600; }
+.ka-name button:hover { color: var(--accent); }
+.ka-name span { font-size: 11px; color: var(--text-subtle); }
+.ka-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; width: fit-content; }
+.ka-pill.on { color: #4ade80; background: rgba(74,222,128,.1); } .ka-pill.off { color: #fca5a5; background: rgba(248,113,113,.1); } .ka-pill.mid { color: #fbbf24; background: rgba(251,191,36,.1); }
+.ka-sw { position: relative; width: 38px; height: 22px; border-radius: 99px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.08); cursor: pointer; transition: .2s; flex: none; }
+.ka-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #9ca3af; transition: .2s; }
+.ka-sw.on { background: linear-gradient(135deg, #f39200, #ff6201); border-color: transparent; }
+.ka-sw.on::after { left: 18px; background: #fff; }
+.ka-sw:disabled { opacity: .5; cursor: wait; }
+.ka-bud { display: inline-flex; align-items: center; gap: 6px; }
+.ka-bud button { all: unset; cursor: pointer; color: var(--text-subtle); display: inline-grid; }
+.ka-bud button:hover { color: var(--accent); }
+.ka-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; font-size: 12px; background: var(--accent-soft); color: var(--accent); }
+.ka-chip button { all: unset; cursor: pointer; display: inline-grid; }
+.ka-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+.ka-cols label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-body); cursor: pointer; padding: 4px 0; }
+.ka-cols h5 { grid-column: 1 / -1; margin: 10px 0 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+@media (max-width: 640px) { .ka-cols { grid-template-columns: 1fr; } .ka-kpi .v { font-size: 22px; } }
+`;
+
+const PERIODS = [['today', 'Hoje'], ['yesterday', 'Ontem'], ['last_7d', 'Últimos 7 dias'], ['last_14d', 'Últimos 14 dias'], ['last_30d', 'Últimos 30 dias'], ['this_month', 'Este mês'], ['last_month', 'Mês passado'], ['maximum', 'Todo o período']];
+const pct = (v) => (v == null ? '—' : `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`);
+const num2 = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
+// colunas que a pessoa liga e desliga (como nos rastreadores de UTM)
+const COLS = [
+  { key: 'budget', label: 'Orçamento', group: 'Financeiras', levels: ['campaign', 'adset'] },
+  { key: 'spend', label: 'Gasto', group: 'Financeiras', money: true },
+  { key: 'faturamento', label: 'Faturamento', group: 'Financeiras', money: true },
+  { key: 'lucro', label: 'Lucro', group: 'Financeiras', money: true, sign: true },
+  { key: 'roas', label: 'ROAS', group: 'Financeiras', fmt: (v) => roas(v) },
+  { key: 'roi', label: 'ROI', group: 'Financeiras', fmt: pct },
+  { key: 'margem', label: 'Margem', group: 'Financeiras', fmt: pct },
+  { key: 'cpa', label: 'CPA', group: 'Financeiras', money: true },
+  { key: 'vendas', label: 'Vendas', group: 'Vendas', fmt: int },
+  { key: 'compras_meta', label: 'Vendas (Meta)', group: 'Vendas', fmt: int },
+  { key: 'leads', label: 'Leads (Kobly)', group: 'Vendas', fmt: int },
+  { key: 'conversas', label: 'Conversas iniciadas', group: 'Mensagens', fmt: int },
+  { key: 'custo_por_conversa', label: 'Custo por conversa', group: 'Mensagens', money: true },
+  { key: 'impressions', label: 'Impressões', group: 'Tráfego', fmt: int },
+  { key: 'reach', label: 'Alcance', group: 'Tráfego', fmt: int },
+  { key: 'clicks', label: 'Cliques', group: 'Tráfego', fmt: int },
+  { key: 'ctr', label: 'CTR', group: 'Tráfego', fmt: pct },
+  { key: 'cpc', label: 'CPC', group: 'Tráfego', money: true },
+  { key: 'cpm', label: 'CPM', group: 'Tráfego', money: true },
+];
+const DEFAULT_COLS = ['budget', 'spend', 'faturamento', 'lucro', 'roas', 'vendas', 'cpa', 'conversas', 'custo_por_conversa', 'ctr', 'cpc'];
+const COLS_KEY = 'kobly:ads-cols';
+const readCols = () => { try { const v = JSON.parse(localStorage.getItem(COLS_KEY)); return Array.isArray(v) && v.length ? v : DEFAULT_COLS; } catch { return DEFAULT_COLS; } };
+
+const STATUS_PILL = { ACTIVE: ['on', 'Ativo'], PAUSED: ['off', 'Pausado'], CAMPAIGN_PAUSED: ['off', 'Campanha pausada'], ADSET_PAUSED: ['off', 'Conjunto pausado'],
+  PENDING_REVIEW: ['mid', 'Em análise'], IN_PROCESS: ['mid', 'Processando'], WITH_ISSUES: ['mid', 'Com problema'], DISAPPROVED: ['off', 'Reprovado'], PENDING_BILLING_INFO: ['mid', 'Pagamento pendente'] };
+const LEVEL_LABEL = { campaign: 'Campanha', adset: 'Conjunto', ad: 'Anúncio' };
+
+function Kpi({ label, value, sub, color, neg }) {
+  return <div className="ka-kpi" style={{ '--c': color }}><div className="l">{label}</div><div className={`v${neg ? ' neg' : ''}`}>{value}</div>{sub && <div className="s">{sub}</div>}</div>;
+}
+
+// gráfico de linhas simples (gasto x faturamento por dia), em SVG
+function Chart({ serie, fonte, cur }) {
+  const [hover, setHover] = useState(null);
+  if (!serie.length) return <EmptyState compact icon="chart-line" title="Sem dados no período" message="Troque o período para ver a evolução." />;
+  const W = 900, H = 240, P = { l: 56, r: 16, t: 16, b: 28 };
+  const fat = serie.map((d) => (fonte === 'meta' ? d.faturamento_meta : d.faturamento));
+  const max = Math.max(1, ...serie.map((d) => d.gasto), ...fat) * 1.1;
+  const x = (i) => P.l + (serie.length === 1 ? (W - P.l - P.r) / 2 : (i * (W - P.l - P.r)) / (serie.length - 1));
+  const y = (v) => H - P.b - (v / max) * (H - P.t - P.b);
+  const line = (vals) => vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const area = (vals) => `${line(vals)} L${x(vals.length - 1)},${H - P.b} L${x(0)},${H - P.b} Z`;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => max * t);
+  const dia = (s) => s.slice(8, 10) + '/' + s.slice(5, 7);
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} onMouseLeave={() => setHover(null)}>
+        <defs>
+          <linearGradient id="ka-g1" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#ff6201" stopOpacity=".35" /><stop offset="1" stopColor="#ff6201" stopOpacity="0" /></linearGradient>
+          <linearGradient id="ka-g2" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#22c55e" stopOpacity=".25" /><stop offset="1" stopColor="#22c55e" stopOpacity="0" /></linearGradient>
+        </defs>
+        {ticks.map((t) => <g key={t}><line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,.06)" strokeDasharray="3 4" />
+          <text x={P.l - 8} y={y(t) + 4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,.4)">{Math.round(t).toLocaleString('pt-BR')}</text></g>)}
+        <path d={area(fat)} fill="url(#ka-g2)" /><path d={line(fat)} fill="none" stroke="#22c55e" strokeWidth="2.2" />
+        <path d={area(serie.map((d) => d.gasto))} fill="url(#ka-g1)" /><path d={line(serie.map((d) => d.gasto))} fill="none" stroke="#ff6201" strokeWidth="2.2" />
+        {serie.map((d, i) => (serie.length <= 16 || i % Math.ceil(serie.length / 12) === 0) && <text key={d.dia} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,.4)">{dia(d.dia)}</text>)}
+        {serie.map((d, i) => <rect key={`h${d.dia}`} x={x(i) - (W / serie.length) / 2} y={0} width={W / serie.length} height={H} fill="transparent" onMouseEnter={() => setHover(i)} />)}
+        {hover != null && <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,.25)" />}
+      </svg>
+      {hover != null && (
+        <div style={{ position: 'absolute', top: 8, left: `${Math.min(70, (x(hover) / W) * 100)}%`, padding: '8px 12px', borderRadius: 10, background: '#1a1a1a', border: '1px solid var(--border-subtle)', fontSize: 12, pointerEvents: 'none' }}>
+          <div style={{ color: 'var(--text-strong)', fontWeight: 700, marginBottom: 4 }}>{dia(serie[hover].dia)}</div>
+          <div style={{ color: '#ff9452' }}>Gasto: {money(serie[hover].gasto, cur)}</div>
+          <div style={{ color: '#4ade80' }}>Faturamento: {money(fat[hover], cur)}</div>
+          <div style={{ color: 'var(--text-muted)' }}>Vendas: {int(fonte === 'meta' ? serie[hover].vendas_meta : serie[hover].vendas)}</div>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', padding: '6px 0 0 56px' }}>
+        <span><i style={{ display: 'inline-block', width: 10, height: 3, background: '#ff6201', marginRight: 6, verticalAlign: 'middle' }} />Gasto</span>
+        <span><i style={{ display: 'inline-block', width: 10, height: 3, background: '#22c55e', marginRight: 6, verticalAlign: 'middle' }} />Faturamento</span>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ orgId, conta, preset, tick, onSettings }) {
+  const [st, setSt] = useState({ loading: true });
+  const [fonte, setFonte] = useState('sistema');
+  useEffect(() => {
+    let on = true;
+    KoblyApi.metaAds('dashboard', { id: conta, date_preset: preset, force: tick.force }, orgId).then((r) => { if (on) setSt(r.error ? { error: r.error } : { d: r }); });
+    return () => { on = false; };
+  }, [orgId, conta, preset, tick]);
+  if (st.error) return <ErrorState message={st.error} />;
+  if (!st.d) return <SkeletonTable rows={4} />;
+  const d = st.d, cur = d.currency, m = fonte === 'meta' ? d.meta_ads : d.sistema;
+  return (
+    <div className="ka">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{fonte === 'meta' ? 'Vendas e faturamento que a Meta informa (estimativa do pixel).' : 'Vendas que a Kobly rastreou pela UTM: checkout aprovado + recuperadas pelo fluxo.'}</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button size="sm" variant="ghost" iconLeft="settings" onClick={onSettings}>Taxas e despesas</Button>
+          <div className="ka-seg"><button className={fonte === 'sistema' ? 'on' : ''} onClick={() => setFonte('sistema')}>Kobly (rastreado)</button><button className={fonte === 'meta' ? 'on' : ''} onClick={() => setFonte('meta')}>Meta Ads</button></div>
+        </div>
+      </div>
+      <div className="ka-kpis">
+        <Kpi label="Faturamento" value={money(m.faturamento, cur)} color="#22c55e" />
+        <Kpi label="Gasto Meta Ads" value={money(m.gasto, cur)} color="#ff6201" />
+        <Kpi label="Lucro" value={money(m.lucro, cur)} color={m.lucro < 0 ? '#f87171' : '#22c55e'} neg={m.lucro < 0} sub={m.despesas ? `já descontados ${money(m.despesas, cur)} de taxas` : null} />
+        <Kpi label="Ticket médio" value={money(m.ticket_medio, cur)} color="#f39200" />
+        <Kpi label="Margem de lucro" value={pct(m.margem)} color={m.margem != null && m.margem < 0 ? '#f87171' : '#22c55e'} neg={m.margem != null && m.margem < 0} />
+        <Kpi label="ROAS" value={roas(m.roas)} color={m.roas != null && m.roas < 1 ? '#f87171' : '#22c55e'} neg={m.roas != null && m.roas < 1} />
+        <Kpi label="Leads" value={int(m.leads)} color="#ffb485" />
+        <Kpi label="Vendas" value={int(m.vendas)} color="#22c55e" />
+        <Kpi label="Taxa de conversão" value={pct(m.taxa_conversao)} color="#ffb485" />
+        <Kpi label="Custo por venda" value={money(m.cpa, cur)} color="#f39200" />
+        <Kpi label="Custo por conversa" value={money(m.custo_por_conversa, cur)} color="#ff9452" sub={`${int(d.meta.conversas)} conversas iniciadas`} />
+        {fonte === 'sistema' && <Kpi label="Recuperadas pela Kobly" value={money(d.sistema.receita_recuperada, cur)} color="#ff6201" sub={`${int(d.sistema.recuperadas)} venda(s) pelo fluxo`} />}
+      </div>
+      <div className="ka-card" style={{ padding: 18 }}>
+        <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-subtle)', fontWeight: 700 }}>Gasto e faturamento por dia</div>
+        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-strong)', margin: '4px 0 12px' }}>{int(m.vendas)} venda(s) no período · {money(m.faturamento, cur)}</div>
+        <Chart serie={d.serie} fonte={fonte === 'meta' ? 'meta' : 'sistema'} cur={cur} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+        <Kpi label="Impressões" value={int(d.meta.impressions)} color="#525252" />
+        <Kpi label="Cliques" value={int(d.meta.clicks)} color="#525252" />
+        <Kpi label="CTR" value={pct(d.meta.ctr)} color="#525252" />
+        <Kpi label="CPC" value={money(d.meta.cpc, cur)} color="#525252" />
+        <Kpi label="CPM" value={money(d.meta.cpm, cur)} color="#525252" />
+      </div>
+    </div>
+  );
+}
+
+function Accounts({ orgId, preset, tick, canEdit, onDisconnect, onOpen }) {
+  const [st, setSt] = useState({ loading: true });
+  useEffect(() => {
+    let on = true;
+    KoblyApi.metaAds('accounts_overview', { date_preset: preset, force: tick.force }, orgId).then((r) => { if (on) setSt(r.error ? { error: r.error } : { list: r.accounts }); });
+    return () => { on = false; };
+  }, [orgId, preset, tick]);
+  if (st.error) return <ErrorState message={st.error} />;
+  if (!st.list) return <SkeletonTable rows={3} />;
+  return (
+    <div className="ka-card ka-tablewrap">
+      <table className="ka-table">
+        <thead><tr><th className="l">Conta</th><th className="l">Situação</th><th>Gasto</th><th>Faturamento</th><th>Lucro</th><th>Vendas</th><th>CPA</th><th>ROAS</th><th>Campanhas ativas</th><th /></tr></thead>
+        <tbody>
+          {st.list.map((a) => (
+            <tr key={a.id}>
+              <td className="l"><div className="ka-name"><button onClick={() => onOpen(a.id)}>{a.name}</button><span>{a.ad_account_id} · {a.currency}</span></div></td>
+              <td className="l">{a.erro ? <span className="ka-pill off" title={a.erro}>Erro ao ler</span> : <span className={`ka-pill ${a.ativa ? 'on' : 'off'}`}>{a.ativa ? 'Ativa' : 'Desativada'}</span>}</td>
+              <td>{money(a.spend, a.currency)}</td><td>{money(a.faturamento, a.currency)}</td>
+              <td style={{ color: a.lucro < 0 ? '#f87171' : a.lucro > 0 ? '#4ade80' : undefined }}>{money(a.lucro, a.currency)}</td>
+              <td>{a.erro ? '—' : int(a.vendas)}</td><td>{money(a.cpa, a.currency)}</td><td>{roas(a.roas)}</td><td>{a.erro ? '—' : int(a.campanhas_ativas)}</td>
+              <td>{canEdit && <IconButton icon="unplug" size="sm" aria-label="Desconectar conta" onClick={() => onDisconnect(a)} />}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {st.list.some((a) => a.erro) && <div style={{ padding: 14 }}><Banner tone="danger">{st.list.find((a) => a.erro).erro}</Banner></div>}
+    </div>
+  );
+}
+
+function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, onDrill, onClearParent }) {
+  const [st, setSt] = useState({ loading: true });
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('any');
+  const [cols, setCols] = useState(readCols);
+  const [picking, setPicking] = useState(null);
+  const [busy, setBusy] = useState({});
+  const [budget, setBudget] = useState(null); // { item, value }
+  const load = useCallback((force) => KoblyApi.metaAds('entities', { level, id: conta, date_preset: preset, force }, orgId).then((r) => setSt(r.error ? { error: r.error } : { items: r.items })), [orgId, level, conta, preset]);
+  useEffect(() => { setSt({ loading: true }); load(tick.force); }, [load, tick]);
+
+  async function toggle(it) {
+    const next = it.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    setBusy((b) => ({ ...b, [it.id]: true }));
+    const r = await KoblyApi.metaAds('set_status', { id: it.account_id, object_id: it.id, status: next }, orgId);
+    setBusy((b) => ({ ...b, [it.id]: false }));
+    if (r.error) { notify('danger', r.error); return; }
+    setSt((s) => ({ items: s.items.map((x) => (x.id === it.id ? { ...x, status: next, effective_status: next } : x)) }));
+    const fem = level === 'campaign';
+    notify('success', `${LEVEL_LABEL[level]} "${it.name}" ${next === 'ACTIVE' ? (fem ? 'ativada' : 'ativado') : (fem ? 'pausada' : 'pausado')}.`);
+  }
+  async function saveBudget() {
+    const it = budget.item;
+    setBudget((b) => ({ ...b, saving: true }));
+    const r = await KoblyApi.metaAds('set_budget', { id: it.account_id, object_id: it.id, value: budget.value }, orgId);
+    if (r.error) { setBudget((b) => ({ ...b, saving: false })); notify('danger', r.error); return; }
+    setBudget(null); notify('success', 'Orçamento atualizado no Facebook.'); load(true);
+  }
+
+  if (st.error) return <ErrorState message={st.error} onRetry={() => load(true)} />;
+  const shown = COLS.filter((c) => cols.includes(c.key) && (!c.levels || c.levels.includes(level)));
+  const items = (st.items || []).filter((it) => (!parent || (level === 'adset' ? it.campaign_id === parent.id : parent.type === 'campaign' ? it.campaign_id === parent.id : it.adset_id === parent.id))
+    && (!q || it.name.toLowerCase().includes(q.toLowerCase()))
+    && (status === 'any' || (status === 'active' ? it.effective_status === 'ACTIVE' : it.effective_status !== 'ACTIVE'))
+    && (status !== 'spend' || it.spend > 0));
+  const cur = (items[0] && items[0].currency) || 'BRL';
+  const sum = (k) => items.reduce((s, it) => s + (Number(it[k]) || 0), 0);
+  const tot = { spend: sum('spend'), faturamento: sum('faturamento'), lucro: sum('lucro'), vendas: sum('vendas'), compras_meta: sum('compras_meta'), leads: sum('leads'),
+    conversas: sum('conversas'), impressions: sum('impressions'), reach: sum('reach'), clicks: sum('clicks') };
+  Object.assign(tot, { roas: tot.spend ? tot.faturamento / tot.spend : null, roi: tot.spend ? tot.lucro / tot.spend * 100 : null, margem: tot.faturamento ? tot.lucro / tot.faturamento * 100 : null,
+    cpa: tot.vendas ? tot.spend / tot.vendas : null, custo_por_conversa: tot.conversas ? tot.spend / tot.conversas : null,
+    ctr: tot.impressions ? tot.clicks / tot.impressions * 100 : null, cpc: tot.clicks ? tot.spend / tot.clicks : null, cpm: tot.impressions ? tot.spend / tot.impressions * 1000 : null });
+  const cell = (c, it) => {
+    if (c.key === 'budget') {
+      const b = it.daily_budget || it.lifetime_budget;
+      if (!b) return <span style={{ color: 'var(--text-subtle)' }}>{level === 'adset' ? 'na campanha' : 'nos conjuntos'}</span>;
+      return <span className="ka-bud">{money(b / it.budget_unit, it.currency)}<small style={{ color: 'var(--text-subtle)' }}>{it.daily_budget ? '/dia' : ' total'}</small>
+        {canEdit && <button aria-label="Editar orçamento" onClick={() => setBudget({ item: it, value: String(b / it.budget_unit) })}><Icon name="pencil" size={13} /></button>}</span>;
+    }
+    const v = it[c.key];
+    if (c.money) return <span style={c.sign && v ? { color: v < 0 ? '#f87171' : '#4ade80' } : undefined}>{money(v, it.currency)}</span>;
+    return c.fmt ? c.fmt(v) : v;
+  };
+  return (
+    <div className="ka">
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Input label={`Buscar ${LEVEL_LABEL[level].toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filtrar por nome" style={{ minWidth: 220 }} />
+        <Select label="Situação" value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: 180 }}
+          options={[{ value: 'any', label: 'Qualquer' }, { value: 'active', label: 'Ativos' }, { value: 'paused', label: 'Pausados' }, { value: 'spend', label: 'Com gasto no período' }]} />
+        <Button variant="secondary" iconLeft="columns" onClick={() => setPicking(cols)}>Colunas</Button>
+        {parent && <span className="ka-chip">{parent.label}: {parent.name}<button aria-label="Limpar filtro" onClick={onClearParent}><Icon name="x" size={13} /></button></span>}
+      </div>
+      {!st.items ? <SkeletonTable rows={5} /> : (
+        <div className="ka-card ka-tablewrap">
+          <table className="ka-table">
+            <thead><tr>{canEdit && <th className="l" style={{ width: 60 }}>On/Off</th>}<th className="l">{LEVEL_LABEL[level]}</th>{shown.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
+            <tbody>
+              {items.length === 0 && <tr><td colSpan={shown.length + 2} className="l"><EmptyState compact icon="target" title="Nada por aqui" message="Troque o período, a conta ou o filtro de situação." /></td></tr>}
+              {items.map((it) => {
+                const [tone, label] = STATUS_PILL[it.effective_status] || ['mid', it.effective_status];
+                return (
+                  <tr key={it.id}>
+                    {canEdit && <td className="l"><button type="button" className={`ka-sw${it.status === 'ACTIVE' ? ' on' : ''}`} disabled={!!busy[it.id]} aria-label={it.status === 'ACTIVE' ? 'Pausar' : 'Ativar'} onClick={() => toggle(it)} /></td>}
+                    <td className="l"><div className="ka-name">
+                      {level !== 'ad' ? <button onClick={() => onDrill(level, it)}>{it.name}</button> : <b>{it.name}</b>}
+                      <span>{[level !== 'campaign' && it.campaign_name, level === 'ad' && it.adset_name, it.account_name].filter(Boolean).join(' · ')}</span>
+                      <span className={`ka-pill ${tone}`}>{label}</span>
+                    </div></td>
+                    {shown.map((c) => <td key={c.key}>{cell(c, it)}</td>)}
+                  </tr>
+                );
+              })}
+            </tbody>
+            {items.length > 1 && <tfoot><tr>{canEdit && <td />}<td className="l">{items.length} {LEVEL_LABEL[level].toLowerCase()}s</td>
+              {shown.map((c) => <td key={c.key}>{c.key === 'budget' ? '' : c.money ? money(tot[c.key], cur) : c.fmt ? c.fmt(tot[c.key]) : tot[c.key]}</td>)}</tr></tfoot>}
+          </table>
+        </div>
+      )}
+      <Modal open={!!picking} onClose={() => setPicking(null)} title="Personalize as colunas" subtitle="Escolha o que aparece na tabela. Vale para campanhas, conjuntos e anúncios." width={560}
+        footer={<><Button variant="ghost" iconLeft="rotate-ccw" onClick={() => setPicking(DEFAULT_COLS)}>Restaurar padrão</Button><Button variant="primary" onClick={() => { setCols(picking); try { localStorage.setItem(COLS_KEY, JSON.stringify(picking)); } catch { /* ok */ } setPicking(null); }}>Salvar</Button></>}>
+        {picking && <div className="ka-cols">
+          {[...new Set(COLS.map((c) => c.group))].map((g) => (
+            <React.Fragment key={g}><h5>{g}</h5>
+              {COLS.filter((c) => c.group === g).map((c) => (
+                <label key={c.key}><input type="checkbox" checked={picking.includes(c.key)} style={{ accentColor: 'var(--accent)' }}
+                  onChange={() => setPicking((p) => (p.includes(c.key) ? p.filter((k) => k !== c.key) : [...p, c.key]))} />{c.label}</label>
+              ))}
+            </React.Fragment>
+          ))}
+        </div>}
+      </Modal>
+      <Modal open={!!budget} onClose={() => !(budget && budget.saving) && setBudget(null)} title="Editar orçamento" subtitle={budget ? `${LEVEL_LABEL[level]} "${budget.item.name}" — muda direto no Facebook.` : ''}
+        footer={<><Button variant="ghost" onClick={() => setBudget(null)}>Cancelar</Button><Button variant="primary" loading={!!(budget && budget.saving)} onClick={saveBudget}>Salvar orçamento</Button></>}>
+        {budget && <Input label={budget.item.daily_budget ? 'Orçamento diário' : 'Orçamento total'} value={budget.value} inputMode="decimal" autoFocus
+          onChange={(e) => setBudget((b) => ({ ...b, value: e.target.value }))} hint={`Em ${budget.item.currency || 'BRL'}. Ex.: 50 ou 75,50.`} />}
+      </Modal>
+    </div>
+  );
+}
+
+function SettingsModal({ open, orgId, notify, onClose }) {
+  const [s, setS] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (open) KoblyApi.metaAds('get_settings', {}, orgId).then((r) => setS(r.settings || { imposto_pct: 0, taxa_gateway_pct: 0, custo_produto_pct: 0, custo_por_venda: 0 })); }, [open, orgId]);
+  async function save() {
+    setSaving(true);
+    const r = await KoblyApi.metaAds('save_settings', Object.fromEntries(Object.entries(s).map(([k, v]) => [k, Number(String(v).replace(',', '.')) || 0])), orgId);
+    setSaving(false);
+    if (r.error) { notify('danger', r.error); return; }
+    notify('success', 'Taxas salvas. O lucro já considera esses valores.'); onClose(true);
+  }
+  const f = (k, label, hint) => <Input label={label} value={s ? String(s[k]) : ''} inputMode="decimal" hint={hint} onChange={(e) => setS((x) => ({ ...x, [k]: e.target.value }))} />;
+  return (
+    <Modal open={open} onClose={() => onClose(false)} title="Taxas e despesas" subtitle="Usadas para calcular o lucro e a margem: saem do faturamento antes de chegar ao lucro."
+      footer={<><Button variant="ghost" onClick={() => onClose(false)}>Cancelar</Button><Button variant="primary" loading={saving} disabled={!s} onClick={save}>Salvar</Button></>}>
+      {!s ? <SkeletonTable rows={2} /> : <div style={{ display: 'grid', gap: 12 }}>
+        {f('imposto_pct', 'Imposto (%)', 'Ex.: 6 para Simples Nacional.')}
+        {f('taxa_gateway_pct', 'Taxa do checkout/gateway (%)', 'O quanto a plataforma de pagamento cobra por venda.')}
+        {f('custo_produto_pct', 'Custo do produto (%)', 'Para produto físico ou coprodução. Deixe 0 se não tiver.')}
+        {f('custo_por_venda', 'Custo fixo por venda', 'Frete, embalagem... em valor por venda.')}
+      </div>}
+    </Modal>
+  );
+}
+
 function KoblyMetaAds() {
   const store = useKobly();
   const { orgId, picker, canEdit } = useTargetOrg();
   const [accs, setAccs] = useState({ loading: true, list: [], error: null });
-  const [sel, setSel] = useState('');
-  const [preset, setPreset] = useState('today');
-  const [live, setLive] = useState(true);
-  const [data, setData] = useState({ loading: false, error: null, d: null });
+  const [tab, setTab] = useState('dashboard');
+  const [conta, setConta] = useState('all');
+  const [preset, setPreset] = useState('last_7d');
+  const [tick, setTick] = useState({ n: 0, force: false });
+  const [updated, setUpdated] = useState(new Date());
   const [adding, setAdding] = useState(false);
-  const inFlight = useRef(false);
+  const [drop, setDrop] = useState(null); // conta a desconectar
+  const [settings, setSettings] = useState(false);
+  const [parent, setParent] = useState(null); // filtro vindo do clique numa campanha/conjunto
 
   const loadAccs = useCallback(async () => {
     if (!orgId) { setAccs({ loading: false, list: [], error: null }); return; }
     const r = await KoblyApi.metaAds('accounts', {}, orgId);
     setAccs({ loading: false, list: r.accounts || [], error: r.error });
-    setSel((s) => s || ((r.accounts || [])[0] || {}).id || '');
   }, [orgId]);
   useEffect(() => { loadAccs(); }, [loadAccs]);
-
-  const loadInsights = useCallback(async (force = false, quiet = false) => {
-    if (!sel || inFlight.current) return;
-    inFlight.current = true;
-    if (!quiet) setData((s) => ({ ...s, loading: true }));
-    const r = await KoblyApi.metaAds('insights', { id: sel, date_preset: preset, force }, orgId);
-    inFlight.current = false;
-    setData((s) => (r.error ? { loading: false, error: r.error, d: quiet ? s.d : null } : { loading: false, error: null, d: r }));
-  }, [sel, preset, orgId]);
-  useEffect(() => { loadInsights(); }, [loadInsights]);
+  const refresh = (force) => { setTick((t) => ({ n: t.n + 1, force })); setUpdated(new Date()); };
+  // atualiza sozinho a cada minuto enquanto a aba está aberta
   useEffect(() => {
-    if (!live || !sel) return undefined;
-    const t = setInterval(() => { if (document.visibilityState === 'visible') loadInsights(false, true); }, LIVE_MS);
+    if (!accs.list.length) return undefined;
+    const t = setInterval(() => { if (document.visibilityState === 'visible') refresh(false); }, 60_000);
     return () => clearInterval(t);
-  }, [live, sel, loadInsights]);
+  }, [accs.list.length]);
 
   async function disconnect() {
-    const a = accs.list.find((x) => x.id === sel);
-    if (!a || !confirm(`Desconectar a conta "${a.name}"?`)) return;
-    const r = await KoblyApi.metaAds('disconnect', { id: a.id }, orgId);
-    if (r.error) store.notify('danger', r.error); else { setSel(''); setData({ loading: false, error: null, d: null }); loadAccs(); }
+    const r = await KoblyApi.metaAds('disconnect', { id: drop.id }, orgId);
+    if (r.error) { store.notify('danger', r.error); return; }
+    store.notify('success', `Conta "${drop.name}" desconectada.`);
+    setDrop(null); setConta('all'); loadAccs(); refresh(true);
   }
+  const drill = (level, it) => {
+    if (level === 'campaign') { setParent({ type: 'campaign', id: it.id, name: it.name, label: 'Campanha' }); setTab('adset'); }
+    else { setParent({ type: 'adset', id: it.id, name: it.name, label: 'Conjunto' }); setTab('ad'); }
+  };
+  const TABS = [['dashboard', 'Dashboard', 'layout-dashboard'], ['accounts', 'Contas', 'folder'], ['campaign', 'Campanhas', 'megaphone'], ['adset', 'Conjuntos', 'layout-grid'], ['ad', 'Anúncios', 'smartphone']];
 
-  const d = data.d, cur = d && d.currency;
-  const acc = accs.list.find((x) => x.id === sel);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId && accs.list.length > 0 ? <Button variant="secondary" iconLeft="plus" onClick={() => setAdding((v) => !v)}>Outra conta</Button> : null}>
-        Suas campanhas do Facebook e Instagram ao vivo, com o resultado real na Kobly: leads, compras e vendas recuperadas pelo WhatsApp. Para casar, use utm_campaign={'{{campaign.name}}'} nos parâmetros de URL dos anúncios.
+    <div className="ka">
+      <style>{CSS}</style>
+      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId && accs.list.length > 0 ? <Button variant="secondary" iconLeft="plus" onClick={() => setAdding((v) => !v)}>Conectar outra conta</Button> : null}>
+        Suas campanhas do Facebook e Instagram com as vendas que a Kobly rastreou: lucro, ROAS e custo por venda de verdade. Ligue, pause e mude o orçamento daqui.
       </PageHeader>
       {picker}
       {!orgId ? <EmptyState icon="users" title="Selecione uma conta" message="Escolha a conta do cliente acima." /> : accs.loading ? <SkeletonTable rows={3} /> : (<>
-        {(accs.list.length === 0 || adding) && canEdit && <Connect orgId={orgId} notify={store.notify} onDone={(a) => { setAdding(false); setSel(a.id); loadAccs(); }} />}
+        {(accs.list.length === 0 || adding) && canEdit && <Connect orgId={orgId} notify={store.notify} onDone={() => { setAdding(false); loadAccs(); refresh(true); }} />}
         {accs.list.length === 0 && !canEdit && <EmptyState icon="target" title="Nenhuma conta de anúncios conectada" message="Peça a um administrador para conectar." />}
         {accs.list.length > 0 && (<>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <Select label="Conta de anúncios" value={sel} onChange={(e) => setSel(e.target.value)} style={{ minWidth: 260 }} options={accs.list.map((a) => ({ value: a.id, label: `${a.name || a.ad_account_id} · ${a.ad_account_id}` }))} />
-            <Select label="Período" value={preset} onChange={(e) => setPreset(e.target.value)} style={{ width: 190 }} options={PRESETS.map(([value, label]) => ({ value, label }))} />
-            <Button variant={live ? 'primary' : 'secondary'} iconLeft={live ? 'radio' : 'pause'} onClick={() => setLive((v) => !v)}>{live ? 'Ao vivo' : 'Pausado'}</Button>
-            <IconButton icon="refresh-cw" aria-label="Atualizar agora" onClick={() => loadInsights(true)} />
-            {canEdit && <IconButton icon="unplug" aria-label="Desconectar conta" onClick={disconnect} />}
-            {d && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', paddingBottom: 10 }}>atualizado {fmtDateTime(d.fetched_at)}</span>}
+          <div className="ka-tabs" role="tablist">
+            {TABS.map(([id, label, icon]) => <button key={id} role="tab" aria-selected={tab === id} className={`ka-tab${tab === id ? ' on' : ''}`} onClick={() => { setTab(id); if (id === 'campaign' || id === 'dashboard' || id === 'accounts') setParent(null); }}><Icon name={icon} size={15} />{label}{id === 'accounts' && <span className="n">{accs.list.length}</span>}</button>)}
           </div>
-          {acc && acc.status === 'error' && <Banner tone="danger">{acc.last_error}</Banner>}
-          {data.error ? <ErrorState message={data.error} onRetry={() => loadInsights(true)} /> : data.loading && !d ? <SkeletonTable /> : d && (<>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-              <MetricCard label="Gasto" value={money(d.totals.spend, cur)} />
-              <MetricCard label="Compras (Meta)" value={int(d.totals.compras_meta)} />
-              <MetricCard label="ROAS (Meta)" value={roas(d.totals.spend ? d.totals.receita_meta / d.totals.spend : null)} />
-              <MetricCard label="Recuperadas pela Kobly" value={`${int(d.totals.recuperadas)} · ${money(d.totals.receita_recuperada, cur)}`} />
-            </div>
-            <Card pad={false}>
-              <DataTable rowKey="campaign_id" zebra rows={d.campaigns}
-                empty={<EmptyState compact icon="target" title="Sem campanhas com entrega no período" message="Troque o período ou confira se há campanhas ativas nesta conta." />}
-                columns={[
-                  { key: 'campaign_name', header: 'Campanha', render: (c) => (
-                    <div><span style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{c.campaign_name}</span>
-                      {!c.kobly && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>sem leads com este utm_campaign</div>}</div>
-                  ) },
-                  { key: 'spend', header: 'Gasto', align: 'end', render: (c) => money(c.spend, cur) },
-                  { key: 'clicks', header: 'Cliques', align: 'end', render: (c) => `${int(c.clicks)} · CTR ${c.ctr.toFixed(2)}%` },
-                  { key: 'cpc', header: 'CPC', align: 'end', render: (c) => money(c.cpc, cur) },
-                  { key: 'compras', header: 'Compras (Meta)', align: 'end', render: (c) => int(c.compras_meta) },
-                  { key: 'roas', header: 'ROAS Meta', align: 'end', render: (c) => roas(c.roas_meta) },
-                  { key: 'kleads', header: 'Leads Kobly', align: 'end', render: (c) => (c.kobly ? int(c.kobly.leads) : '—') },
-                  { key: 'krec', header: 'Recuperadas', align: 'end', render: (c) => (c.kobly ? <span style={{ color: c.kobly.recuperadas ? 'var(--status-success-fg)' : 'var(--text-muted)', fontWeight: 'var(--fw-semibold)' }}>{c.kobly.recuperadas} · {money(c.kobly.receita_recuperada, cur)}</span> : '—') },
-                  { key: 'kroas', header: 'ROAS real', align: 'end', render: (c) => (c.roas_kobly == null ? '—' : <Badge tone={c.roas_kobly >= 1 ? 'success' : 'warning'}>{roas(c.roas_kobly)}</Badge>) },
-                ]} />
-            </Card>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>ROAS real = (compras aprovadas no checkout + vendas recuperadas pelo fluxo, medidas pela Kobly) ÷ gasto. Os números da Meta são estimativas dela e podem levar alguns minutos para atualizar.</div>
-          </>)}
+          <div className="ka-bar">
+            {tab !== 'accounts' && <Select label="Conta de anúncios" value={conta} onChange={(e) => setConta(e.target.value)} style={{ minWidth: 240 }}
+              options={[{ value: 'all', label: 'Todas as contas' }, ...accs.list.map((a) => ({ value: a.id, label: `${a.name || a.ad_account_id}` }))]} />}
+            <Select label="Período" value={preset} onChange={(e) => setPreset(e.target.value)} style={{ width: 190 }} options={PERIODS.map(([value, label]) => ({ value, label }))} />
+            <Button variant="secondary" iconLeft="refresh-cw" onClick={() => refresh(true)}>Atualizar</Button>
+            <span className="ka-upd" title="A tela busca os números de novo sozinha a cada 1 minuto."><i />Atualiza sozinho · {updated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          {accs.list.some((a) => a.status === 'error') && <Banner tone="danger">{accs.list.find((a) => a.status === 'error').last_error}</Banner>}
+          {tab === 'dashboard' && <Dashboard orgId={orgId} conta={conta} preset={preset} tick={tick} onSettings={() => setSettings(true)} />}
+          {tab === 'accounts' && <Accounts orgId={orgId} preset={preset} tick={tick} canEdit={canEdit} onDisconnect={setDrop} onOpen={(id) => { setConta(id); setTab('campaign'); }} />}
+          {['campaign', 'adset', 'ad'].includes(tab) && <Entities key={tab} orgId={orgId} level={tab} conta={conta} preset={preset} tick={tick} canEdit={canEdit} notify={store.notify}
+            parent={tab === 'campaign' ? null : parent} onDrill={drill} onClearParent={() => setParent(null)} />}
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', lineHeight: 1.6 }}>
+            Para a Kobly saber de qual anúncio veio cada venda, use nos Parâmetros de URL dos anúncios:<br />
+            <code style={{ color: 'var(--text-muted)' }}>{'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}'}</code>
+          </div>
         </>)}
       </>)}
+      <Modal open={!!drop} onClose={() => setDrop(null)} title="Desconectar conta de anúncios?" subtitle={drop ? `"${drop.name}" sai da Kobly. As campanhas continuam rodando normalmente no Facebook.` : ''}
+        footer={<><Button variant="ghost" onClick={() => setDrop(null)}>Cancelar</Button><Button variant="danger" iconLeft="unplug" onClick={disconnect}>Desconectar</Button></>} />
+      <SettingsModal open={settings} orgId={orgId} notify={store.notify} onClose={(saved) => { setSettings(false); if (saved) refresh(false); }} />
     </div>
   );
 }

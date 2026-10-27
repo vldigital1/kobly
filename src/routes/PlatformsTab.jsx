@@ -4,6 +4,7 @@ import { Badge, Banner, Button, Icon, IconButton, Input } from '@/ds';
 import { Drawer } from '@/lib/ui.jsx';
 import { GATEWAYS, SALES_PLATFORMS } from '@/lib/platforms.js';
 import { fmtDateTime } from '@/lib/workspace.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Integrações → Gateways de pagamento. Um cartão (com a marca) por plataforma de venda e por gateway;
 // cada um abre a página dele: o que a Kobly faz com ela, como conectar e as conexões ativas.
@@ -52,7 +53,7 @@ function SalesPage({ p, conns, empresaId, notify, reload }) {
     reload(); return r;
   }
   async function disconnect(c) {
-    if (!confirm(`Desconectar esta ${p.name}? A URL deixa de aceitar avisos${c.via_api ? ' e a Kobly tenta remover o webhook da sua conta' : ''}.`)) return;
+    if (!(await askConfirm(`Desconectar esta ${p.name}? A URL deixa de aceitar avisos${c.via_api ? ' e a Kobly tenta remover o webhook da sua conta' : ''}.`))) return;
     const r = await run('disconnect', { id: c.id });
     if (r && r.remote_removed === false) notify('warning', `Desconectado na Kobly. Remova o webhook "Kobly" também no painel da ${p.name}.`);
   }
@@ -125,7 +126,7 @@ function GatewayPage({ g, accounts, empresaId, notify, reload }) {
     setForm({ label: '', client_id: '', client_secret: '', sandbox: false }); reload();
   }
   async function remove(i) {
-    if (!confirm(`Desconectar "${i.label}"? Fluxos que usam esta conta passam a sair por "erro" no bloco Cobrança.`)) return;
+    if (!(await askConfirm(`Desconectar "${i.label}"? Fluxos que usam esta conta passam a sair por "erro" no bloco Cobrança.`))) return;
     const r = await KoblyApi.paymentIntegrations('disconnect', { id: i.id }, empresaId);
     if (r.error) notify('danger', r.error); else reload();
   }

@@ -6,6 +6,7 @@ import { useAsync } from '@/lib/hooks.jsx';
 import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { fmtDateTime, useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Editor do fluxo em grafo: carregado só quando aberto (traz o React Flow junto).
 const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.jsx').then((m) => ({ default: m.KoblyFlowGraphEditor })));
@@ -67,7 +68,7 @@ function KoblyFlows() {
     store.notify('info', `"${c.nome}" → ${status}`);
   }
   async function removeLegacy(c) {
-    if (!confirm(`Excluir a campanha "${c.nome}"? Os envios agendados dela param e isso não pode ser desfeito.`)) return;
+    if (!(await askConfirm(`Excluir a campanha "${c.nome}"? Os envios agendados dela param e isso não pode ser desfeito.`))) return;
     const r = await KoblyApi.deleteCampaign(c.id);
     if (r.error) { store.notify('danger', r.error); return; }
     legacy.setData((d) => d.filter((x) => x.id !== c.id));

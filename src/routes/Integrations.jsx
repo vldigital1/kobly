@@ -14,6 +14,7 @@ import { useBreakpoint } from '@/lib/responsive.jsx';
 import { KoblyEmailEditor } from '@/routes/EmailEditor.jsx';
 import { WhatsappMetaTab } from '@/routes/WhatsappMeta.jsx';
 import { KoblySmsEditor } from '@/routes/SmsEditor.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Integrações. Fase 3: seções (Configuração da loja | Postback | Tags | Modelos)
 // com sub-abas na loja (Identidade · Remetente · WhatsApp · SMS). Conteúdo de e-mail
@@ -110,12 +111,12 @@ function PostbackSecurity({ t, onSaved }) {
     if (!r.ok) { store.notify('danger', r.error); return; }
     store.notify('success', msg); onSaved();
   }
-  function toggleStrict() {
+  async function toggleStrict() {
     if (!protegido) {
       const temProva = !!(t.hottok || hottok);
-      if (!confirm(temProva
+      if (!(await askConfirm(temProva
         ? 'Ligar o modo estrito? Eventos sem o Hottok correto (ou sem assinatura) passam a ser RECUSADOS. Confirme que a plataforma já está mandando o Hottok.'
-        : 'Ligar o modo estrito? Eventos SEM assinatura no cabeçalho passam a ser RECUSADOS — a plataforma precisa assinar com o segredo abaixo. Se for Hotmart, cadastre o Hottok antes.')) return;
+        : 'Ligar o modo estrito? Eventos SEM assinatura no cabeçalho passam a ser RECUSADOS — a plataforma precisa assinar com o segredo abaixo. Se for Hotmart, cadastre o Hottok antes.'))) return;
     }
     save({ require_signature: !protegido }, protegido ? 'Modo estrito desligado: a URL sozinha volta a valer.' : 'Modo estrito ligado: só eventos com prova no cabeçalho entram.');
   }
@@ -251,7 +252,7 @@ function PostbackTab({ data, empresaId }) {
   }
   // WEB-1: exclui um webhook (campanhas vinculadas voltam a "qualquer webhook").
   async function deleteWebhook(t) {
-    if (!confirm(`Excluir o webhook "${t.nome}"? Campanhas vinculadas a ele passarão a aceitar qualquer webhook da conta.`)) return;
+    if (!(await askConfirm(`Excluir o webhook "${t.nome}"? Campanhas vinculadas a ele passarão a aceitar qualquer webhook da conta.`))) return;
     const result = await KoblyApi.deletePostbackToken(t.id);
     // API retorna { ok, error } (antes era boolean silencioso → clique "sem ação").
     if (result && result.ok) {
@@ -791,7 +792,7 @@ function DomainTab({ empresaId }) {
     a.reload();
   }
   async function remove(id, url) {
-    if (!confirm(`Remover o domínio ${url}?`)) return;
+    if (!(await askConfirm(`Remover o domínio ${url}?`))) return;
     setBusyId(id);
     const { error } = await KoblyApi.deleteSendingDomain(id);
     setBusyId(null);
@@ -996,7 +997,7 @@ function BrandsList({ empresaId, onSaved }) {
     a.reload();
   }
   async function remove(b) {
-    if (!confirm(`Excluir a marca "${b.nome || 'Sem nome'}"? Campanhas vinculadas voltarão à marca padrão.`)) return;
+    if (!(await askConfirm(`Excluir a marca "${b.nome || 'Sem nome'}"? Campanhas vinculadas voltarão à marca padrão.`))) return;
     const { error } = await KoblyApi.deleteBrand(b.id);
     store.notify(error ? 'danger' : 'success', error || 'Marca excluída');
     if (!error) a.reload();

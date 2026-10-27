@@ -4,6 +4,7 @@ import { KoblyApi } from '@/api/mockApi.js';
 import { supabase } from '@/api/supabaseClient.js';
 import { KoblyAuthScreen } from '@/shell/Login.jsx';
 import { KoblyOnboarding } from '@/shell/Onboarding.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — store global + AUTENTICAÇÃO REAL (Supabase Auth).
 // Fases: loading → login → app (e recovery quando o usuário chega pelo link de
@@ -117,8 +118,10 @@ function KoblyStoreProvider({ children }) {
   const clearEditing = useCallback(() => setEditingState(null), []);
   const navigate = useCallback((v) => {
     if (editing && editing.dirty) {
-      const leave = window.confirm('Você tem alterações não salvas. O rascunho fica salvo e será recuperado quando voltar. Trocar de tela?');
-      if (!leave) return false;
+      // janela da Kobly (assíncrona): troca de tela só se a pessoa confirmar
+      askConfirm('Trocar de tela? Você tem alterações não salvas. O rascunho fica salvo e será recuperado quando voltar.', { danger: false, confirmLabel: 'Trocar de tela' })
+        .then((leave) => { if (leave) { setView(v); try { sessionStorage.setItem('kbly_view', v); } catch (_) { /* noop */ } } });
+      return false;
     }
     setView(v);
     try { sessionStorage.setItem('kbly_view', v); } catch (_) { /* noop */ }

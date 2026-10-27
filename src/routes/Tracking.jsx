@@ -4,6 +4,7 @@ import { Badge, Banner, Button, Card, DataTable, Icon, IconButton, Input, Select
 import { GoogleAdsLogo, MetaLogo, TikTokLogo, UtmifyLogo } from '@/lib/brandLogos.jsx';
 import { EmptyState, ErrorState, SkeletonTable } from '@/lib/ui.jsx';
 import { fmtDateTime } from '@/lib/workspace.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Integrações → Trackeamento. De onde vêm os leads (UTM do 1º toque, capturado do postback do checkout)
 // e quanto cada origem gera: abandonos, compras aprovadas e vendas recuperadas pelos fluxos.
@@ -29,7 +30,7 @@ function UtmifyCard({ orgId, canEdit, notify }) {
     setToken(''); notify('success', 'UTMify conectada.'); load();
   }
   async function disconnect() {
-    if (!confirm('Desconectar a UTMify? As próximas vendas do fluxo deixam de ser enviadas.')) return;
+    if (!(await askConfirm('Desconectar a UTMify? As próximas vendas do fluxo deixam de ser enviadas.'))) return;
     const r = await KoblyApi.tracking('disconnect_utmify', {}, orgId);
     if (r.error) notify('danger', r.error); else load();
   }
@@ -96,7 +97,7 @@ function PixelsCard({ orgId, canEdit, notify }) {
     if (r.error) notify('danger', r.error); else notify('success', `Pixel respondeu: ${r.detail}.`);
   }
   async function remove(x) {
-    if (!confirm(`Remover "${x.label}"? Blocos Pixel que usam ele param de enviar.`)) return;
+    if (!(await askConfirm(`Remover "${x.label}"? Blocos Pixel que usam ele param de enviar.`))) return;
     const r = await KoblyApi.pixelConfigs('delete', { id: x.id }, orgId);
     if (r.error) notify('danger', r.error); else load();
   }

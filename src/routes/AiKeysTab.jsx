@@ -3,6 +3,7 @@ import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, Icon, IconButton, Input, Select } from '@/ds';
 import { Modal } from '@/lib/ui.jsx';
 import { fmtDateTime } from '@/lib/workspace.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Integrações → IA. Cada empresa usa a PRÓPRIA chave de IA (OpenAI, Claude, Gemini, DeepSeek ou
 // OpenRouter) nos blocos de IA, no agente e no copiloto: o custo da IA fica na conta do cliente.
@@ -59,7 +60,7 @@ function KoblyAiKeysTab({ empresaId, notify = () => {} }) {
     notify('success', 'Modelo salvo.'); setEdit(null); load();
   }
   async function act(action, k, msg) {
-    if (action === 'remove' && !confirm(`Remover a chave ${nameOf(k.provider)} ${k.key_hint}?${k.is_active ? ' Os blocos de IA param até você ativar outra.' : ''}`)) return;
+    if (action === 'remove' && !(await askConfirm(`Remover a chave ${nameOf(k.provider)} ${k.key_hint}?${k.is_active ? ' Os blocos de IA param até você ativar outra.' : ''}`))) return;
     const r = await KoblyApi.aiKeys(action, { id: k.id }, empresaId);
     if (r.error) notify('danger', r.error); else { notify('success', msg); load(); }
   }

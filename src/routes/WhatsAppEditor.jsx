@@ -5,6 +5,7 @@ import { KoblyAI } from '@/api/ai.js';
 import { Button, Icon, IconButton, Input, Select, Spinner } from '@/ds';
 import { useBreakpoint } from '@/lib/responsive.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Editor de mensagem de WhatsApp + botões interativos (CTA URL/CALL/REPLY).
 // Com a API oficial da Meta o envio usa um MODELO aprovado (botões e texto vêm do modelo).
@@ -82,9 +83,9 @@ function KoblyWhatsAppEditor({ message, objetivo, draftScope = '', onClose, onSa
     } finally { setAiBusy(false); }
   }
 
-  function tryClose() {
+  async function tryClose() {
     const changed = JSON.stringify({ titulo, texto, botoes, templateId, templateVars }) !== JSON.stringify(base);
-    if (changed && !window.confirm('Voce tem alteracoes nao salvas nesta mensagem. Fechar e descartar?')) return;
+    if (changed && !(await askConfirm('Voce tem alteracoes nao salvas nesta mensagem. Fechar e descartar?'))) return;
     clearDraft(dKey);
     onClose();
   }

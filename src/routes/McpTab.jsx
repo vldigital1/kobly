@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { API_BASE_URL } from '@/api/supabaseClient.js';
 import { Badge, Banner, Button, Card, Icon, IconButton, Input } from '@/ds';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Integrações → Acesso de IA (MCP). Gera tokens para assistentes de IA (Claude, ChatGPT…)
 // montarem fluxos da conta. O assistente só salva RASCUNHOS; publicar é sempre no editor.
@@ -30,7 +31,7 @@ function KoblyMcpTab({ empresaId, notify = () => {} }) {
     setNovo(r.token); setLabel(''); load();
   }
   async function revoke(t) {
-    if (!confirm(`Revogar "${t.label}"? O assistente que usa este token perde o acesso na hora.`)) return;
+    if (!(await askConfirm(`Revogar "${t.label}"? O assistente que usa este token perde o acesso na hora.`))) return;
     const r = await KoblyApi.mcpTokens('revoke', { id: t.id }, empresaId);
     if (r.error) notify('danger', r.error); else load();
   }

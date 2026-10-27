@@ -3,6 +3,7 @@ import { clearDraft, draftKey, readDraft, useDraftAutosave } from '@/lib/editorD
 import { Button, Icon, Input } from '@/ds';
 import { useBreakpoint } from '@/lib/responsive.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Editor de mensagem de SMS (canal GTI SMS). Espelha o WhatsAppEditor,
 // sem botões (SMS é texto puro). Suporta {{cta_link}} e {{nome}}.
@@ -52,10 +53,10 @@ function KoblySmsEditor({ message, draftScope = '', onClose, onSave }) {
     .replace(/\{\{cta_link\}\}/gi, '[seu link aqui]')
     .replace(/\{\{nome\}\}/gi, '[nome]');
 
-  function tryClose() {
+  async function tryClose() {
     const changed = titulo !== (message ? message.titulo : 'Nova mensagem')
       || texto !== (message ? (message.corpoTexto || '') : '');
-    if (changed && !window.confirm('Você tem alterações não salvas nesta mensagem. Fechar e descartar?')) return;
+    if (changed && !(await askConfirm('Você tem alterações não salvas nesta mensagem. Fechar e descartar?'))) return;
     clearDraft(dKey);
     onClose();
   }

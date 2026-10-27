@@ -4,6 +4,7 @@ import { Badge, Button, Card, DataTable, IconButton, Input, PageHeader, Select }
 import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Produtos. Catálogo da empresa: casa com o nome/ID que o checkout manda (apelidos), mostra
 // abandonos, compras aprovadas e vendas recuperadas pelo fluxo por produto, e sugere cadastrar os
@@ -37,7 +38,7 @@ function KoblyProducts() {
     store.notify('success', 'Produto salvo.'); setEdit(null); load(true);
   }
   async function remove(p) {
-    if (!confirm(`Excluir "${p.nome}" do catálogo? Os eventos e vendas continuam no histórico.`)) return;
+    if (!(await askConfirm(`Excluir "${p.nome}" do catálogo? Os eventos e vendas continuam no histórico.`))) return;
     const r = await KoblyApi.products('delete', { id: p.id }, orgId);
     if (r.error) store.notify('danger', r.error); else load(true);
   }

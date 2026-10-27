@@ -3,6 +3,7 @@ import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, IconButton, Input, MetricCard, PageHeader } from '@/ds';
 import { ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { askConfirm, askPrompt } from '@/lib/confirm.jsx';
 
 // Kobly — Servidores WhatsApp (só Administrador). Servidores Uazapi que seguram os números conectados por
 // QR Code dos clientes. Cada número novo vai para o servidor ativo com mais folga; quando a ocupação total
@@ -43,7 +44,7 @@ function KoblyServers() {
     if (r.error) store.notify('danger', r.error); else { store.notify('success', msg); load(); }
   }
   async function remove(s) {
-    if (!confirm(`Remover "${s.label}" da Kobly?`)) return;
+    if (!(await askConfirm(`Remover "${s.label}" da Kobly?`))) return;
     const r = await KoblyApi.uazapiServers('remove', { id: s.id });
     if (r.error) store.notify('danger', r.error); else load();
   }
@@ -82,7 +83,7 @@ function KoblyServers() {
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>
                 <span><strong>{s.used}</strong> de {s.capacity} números ({pct(s.used, s.capacity)}%) · {s.connected} conectados agora</span>
                 {!s.fromEnv && (
-                  <Button size="sm" variant="secondary" onClick={() => { const v = prompt('Novo limite de números deste servidor:', String(s.capacity)); if (v) update(s, { capacity: Number(v) }, 'Limite atualizado.'); }}>Mudar limite</Button>
+                  <Button size="sm" variant="secondary" onClick={async () => { const v = (await askPrompt('Novo limite de números deste servidor:', String(s.capacity))); if (v) update(s, { capacity: Number(v) }, 'Limite atualizado.'); }}>Mudar limite</Button>
                 )}
               </div>
             </div>

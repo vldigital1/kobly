@@ -6,6 +6,8 @@ vi.mock('@/store/store.jsx', () => ({ useKobly: () => ({ notify, session: { emai
 vi.mock('@/lib/responsive.jsx', () => ({ useBreakpoint: () => ({ isNarrow: false }) }));
 vi.mock('@/api/ai.js', () => ({ KoblyAI: {} }));
 vi.mock('@/api/mockApi.js', () => ({ KoblyApi: { listWhatsappTemplates: vi.fn().mockResolvedValue([]) } }));
+const askConfirm = vi.fn();
+vi.mock('@/lib/confirm.jsx', () => ({ askConfirm: (...a) => askConfirm(...a) }));
 
 beforeEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); vi.useRealTimers(); });
 const sms = async () => (await import('@/routes/SmsEditor.jsx')).KoblySmsEditor;
@@ -45,11 +47,11 @@ describe('rascunho do editor sobrevive a sair/recarregar', () => {
     const onClose = vi.fn();
     render(<Ed message={msg} onClose={onClose} onSave={async () => ({})} />);
     fireEvent.change(txt(), { target: { value: 'b' } }); await wait(400);
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
-    fireEvent.click(screen.getByRole('button', { name: /Cancelar/ }));
+    askConfirm.mockResolvedValueOnce(false);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Cancelar/ })); });
     expect(onClose).not.toHaveBeenCalled(); expect(localStorage.length).toBe(1);
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
-    fireEvent.click(screen.getByRole('button', { name: /Cancelar/ }));
+    askConfirm.mockResolvedValueOnce(true);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Cancelar/ })); });
     expect(onClose).toHaveBeenCalled(); expect(localStorage.length).toBe(0);
   });
   it('rascunhos de mensagens diferentes não se misturam', async () => {
