@@ -33,7 +33,7 @@ export function normalizeInsight(r) {
 }
 
 export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, graphBase = 'https://graph.facebook.com/v26.0', now = () => new Date(),
-  appId = '', appSecret = '', publicBaseUrl = '', siteUrl = '' }) {
+  appId = '', appSecret = '', publicBaseUrl = '', siteUrl = '', configId = '' }) {
   const cache = new Map();
   const needKey = () => { if (!secretKey) throw new AuthError(503, 'ads_unconfigured', 'Indisponível neste ambiente (chave de segurança ausente).'); };
   const fail = (msg) => { throw new AuthError(422, 'validation_failed', msg); };
@@ -153,7 +153,9 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
         const ver = (/\/(v[0-9.]+)\/?$/.exec(graphBase) || [null, 'v26.0'])[1];
         const u = new URL(`https://www.facebook.com/${ver}/dialog/oauth`);
         u.searchParams.set('client_id', appId); u.searchParams.set('redirect_uri', redirectUri());
-        u.searchParams.set('state', makeState(orgId)); u.searchParams.set('scope', OAUTH_SCOPES); u.searchParams.set('response_type', 'code');
+        u.searchParams.set('state', makeState(orgId)); u.searchParams.set('response_type', 'code');
+        // app do tipo empresa (Login do Facebook para Empresas): as permissões vêm da configuração criada no painel
+        if (configId) u.searchParams.set('config_id', configId); else u.searchParams.set('scope', OAUTH_SCOPES);
         return { url: u.toString() };
       }
       case 'oauth_accounts': {

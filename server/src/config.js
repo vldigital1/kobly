@@ -27,6 +27,8 @@ export function loadConfig(env = process.env) {
     // App da Kobly no Facebook (login "Conectar com Facebook" do Facebook Ads; separado do META_APP_SECRET do WhatsApp); sem os dois, fica só o token colado
     metaAdsAppId: env.META_ADS_APP_ID || '',
     metaAdsAppSecret: env.META_ADS_APP_SECRET || '',
+    // ID da configuração do Login do Facebook para Empresas (app do tipo empresa); sem ele usa a lista de permissões
+    metaAdsConfigId: env.META_ADS_CONFIG_ID || '',
     metaGraphBase: env.META_GRAPH_BASE || 'https://graph.facebook.com/v21.0',
     // Marketing API (Facebook Ads): versão atual da documentação
     metaAdsGraphBase: env.META_ADS_GRAPH_BASE || 'https://graph.facebook.com/v26.0',
