@@ -3,6 +3,9 @@
 // Casamento: utm_campaign do lead = nome OU id da campanha (use utm_campaign={{campaign.name}} nos anúncios).
 // Marketing API: GET /me/adaccounts e GET /act_{id}/insights?level=campaign (permissão ads_read).
 // O token fica cifrado; vai no cabeçalho Authorization, nunca na URL.
+// "Conectar com Facebook": oauth_start devolve o link do login (janelinha); o Facebook volta em
+// GET /oauth/meta/callback, o token de longa duração fica em meta_ads_oauth e o cliente escolhe as contas.
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
 import { encrypt, decrypt } from '../whatsapp/crypto.js';
 
@@ -10,6 +13,8 @@ const PRESETS = { today: 0, yesterday: 1, last_7d: 7, last_14d: 14, last_30d: 30
 const PURCHASE = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'];
 const LEAD = ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'];
 const CACHE_MS = 60_000;
+const OAUTH_SCOPES = 'ads_read,business_management';
+const STATE_TTL_MS = 15 * 60_000;
 
 // valor da primeira ação encontrada na ordem de preferência (a Meta repete a compra em vários tipos)
 export function actionValue(list, types) {
@@ -27,7 +32,8 @@ export function normalizeInsight(r) {
   };
 }
 
-export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, graphBase = 'https://graph.facebook.com/v26.0', now = () => new Date() }) {
+export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, graphBase = 'https://graph.facebook.com/v26.0', now = () => new Date(),
+  appId = '', appSecret = '', publicBaseUrl = '', siteUrl = '' }) {
   const cache = new Map();
   const needKey = () => { if (!secretKey) throw new AuthError(503, 'ads_unconfigured', 'Indisponível neste ambiente (chave de segurança ausente).'); };
   const fail = (msg) => { throw new AuthError(422, 'validation_failed', msg); };
@@ -36,7 +42,7 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
     const url = new URL(graphBase.replace(/\/$/, '') + path);
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
     let res;
-    try { res = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) }); }
+    try { res = await fetchImpl(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(20000) }); }
     catch { throw new AuthError(502, 'meta_unreachable', 'O Facebook não respondeu agora.'); }
     const j = await res.json().catch(() => null);
     if (!res.ok || (j && j.error)) {
@@ -55,6 +61,67 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
   };
   const cleanToken = (t) => { const s = String(t || '').trim(); if (s.length < 20) fail('Cole o token de acesso do Facebook (permissão ads_read).'); return s; };
   const cleanAct = (v) => { const s = String(v || '').replace(/^act_/, '').trim(); if (!/^[0-9]{5,25}$/.test(s)) fail('Conta de anúncios inválida.'); return s; };
+
+  async function saveAccount(orgId, token, act) {
+    const a = await graph(token, `/act_${act}`, { fields: 'name,currency,account_status' });
+    const r = await pool.query(`insert into public.meta_ads_accounts (organization_id, ad_account_id, name, currency, token_enc, token_hint, status, last_error)
+      values ($1,$2,$3,$4,$5,$6,'connected',null)
+      on conflict (organization_id, ad_account_id) do update set name = excluded.name, currency = excluded.currency, token_enc = excluded.token_enc, token_hint = excluded.token_hint, status = 'connected', last_error = null
+      returning id, ad_account_id, name, currency, token_hint, status`, [orgId, act, a.name || '', a.currency || null, encrypt(token, secretKey), `…${token.slice(-4)}`]);
+    return r.rows[0];
+  }
+
+  // Login com Facebook: o "state" leva a empresa e a validade, assinado com a chave do serviço
+  const oauthOn = () => !!(appId && appSecret && publicBaseUrl && secretKey);
+  const redirectUri = () => `${publicBaseUrl}/oauth/meta/callback`;
+  const sign = (p) => createHmac('sha256', secretKey).update(`meta-oauth:${p}`).digest('base64url');
+  function makeState(orgId) {
+    const p = Buffer.from(JSON.stringify({ o: orgId, e: Date.now() + STATE_TTL_MS, n: randomBytes(8).toString('hex') })).toString('base64url');
+    return `${p}.${sign(p)}`;
+  }
+  function readState(state) {
+    const [p, sig] = String(state || '').split('.');
+    if (!p || !sig || !secretKey) return null;
+    const a = Buffer.from(sig), b = Buffer.from(sign(p));
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    try { const j = JSON.parse(Buffer.from(p, 'base64url').toString('utf8')); return j.e > Date.now() && typeof j.o === 'string' ? j : null; } catch { return null; }
+  }
+  const pendingToken = async (orgId) => {
+    const r = (await pool.query(`select token_enc, user_name from public.meta_ads_oauth where organization_id = $1 and expires_at > now()`, [orgId])).rows[0];
+    if (!r) throw new AuthError(410, 'meta_oauth_expired', 'O login com o Facebook expirou. Clique em "Conectar com Facebook" de novo.');
+    return { token: decrypt(r.token_enc, secretKey), userName: r.user_name };
+  };
+  const listAccounts = async (token) => {
+    const j = await graph(token, '/me/adaccounts', { fields: 'name,account_id,currency,account_status', limit: '100' });
+    return (j.data || []).map((a) => ({ ad_account_id: a.account_id, name: a.name, currency: a.currency, active: a.account_status === 1 }));
+  };
+
+  // GET /oauth/meta/callback — o Facebook volta aqui; a página avisa a janela da Kobly e fecha sozinha
+  async function oauthCallback(q) {
+    const page = (ok, msg) => {
+      const origin = JSON.stringify(siteUrl || '*');
+      const data = JSON.stringify({ kobly: 'meta-oauth', ok, message: msg });
+      return `<!doctype html><meta charset="utf-8"><title>Kobly</title><body style="font-family:system-ui;background:#0d0d0d;color:#f6f6f6;display:grid;place-items:center;height:100vh;margin:0">
+<div style="text-align:center;max-width:340px;padding:16px"><div style="width:48px;height:48px;border-radius:12px;background:#ff6201;margin:0 auto 16px"></div><p>${msg}</p><p style="opacity:.6;font-size:13px">Pode fechar esta janela.</p></div>
+<script>try{window.opener&&window.opener.postMessage(${data},${origin})}catch(e){}setTimeout(function(){window.close()},${ok ? 800 : 5000})</script></body>`;
+    };
+    const st = readState(q.state);
+    if (!st) return page(false, 'Este link de login expirou. Volte para a Kobly e clique em "Conectar com Facebook" de novo.');
+    if (q.error || !q.code) return page(false, 'Você cancelou o login do Facebook. Nada foi conectado.');
+    try {
+      const short = await graph(null, '/oauth/access_token', { client_id: appId, client_secret: appSecret, redirect_uri: redirectUri(), code: String(q.code) });
+      const long = await graph(null, '/oauth/access_token', { grant_type: 'fb_exchange_token', client_id: appId, client_secret: appSecret, fb_exchange_token: short.access_token }).catch(() => ({}));
+      const token = long.access_token || short.access_token;
+      if (!token) throw new Error('sem token');
+      const me = await graph(token, '/me', { fields: 'name' }).catch(() => ({}));
+      await pool.query(`insert into public.meta_ads_oauth (organization_id, token_enc, user_name, expires_at) values ($1,$2,$3, now() + interval '30 minutes')
+        on conflict (organization_id) do update set token_enc = excluded.token_enc, user_name = excluded.user_name, expires_at = excluded.expires_at, created_at = now()`,
+        [st.o, encrypt(token, secretKey), me.name || null]);
+      return page(true, 'Facebook conectado! Voltando para a Kobly…');
+    } catch {
+      return page(false, 'O Facebook não confirmou o login. Tente de novo em alguns instantes.');
+    }
+  }
 
   // Kobly no mesmo período: leads por utm_campaign (nome ou id), compras do checkout e vendas do fluxo
   async function koblyByCampaign(orgId, days) {
@@ -77,18 +144,38 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
     switch (body.action) {
       case 'discover': { // lista as contas de anúncios que o token enxerga (o token ainda não é salvo)
         editor();
-        const j = await graph(cleanToken(body.access_token), '/me/adaccounts', { fields: 'name,account_id,currency,account_status', limit: '100' });
-        return { accounts: (j.data || []).map((a) => ({ ad_account_id: a.account_id, name: a.name, currency: a.currency, active: a.account_status === 1 })) };
+        return { accounts: await listAccounts(cleanToken(body.access_token)) };
+      }
+      case 'oauth_status': return { enabled: oauthOn() };
+      case 'oauth_start': {
+        editor();
+        if (!oauthOn()) throw new AuthError(503, 'meta_oauth_off', 'O login com Facebook ainda não foi ativado pela Kobly. Use a opção de colar o token.');
+        const ver = (/\/(v[0-9.]+)\/?$/.exec(graphBase) || [null, 'v26.0'])[1];
+        const u = new URL(`https://www.facebook.com/${ver}/dialog/oauth`);
+        u.searchParams.set('client_id', appId); u.searchParams.set('redirect_uri', redirectUri());
+        u.searchParams.set('state', makeState(orgId)); u.searchParams.set('scope', OAUTH_SCOPES); u.searchParams.set('response_type', 'code');
+        return { url: u.toString() };
+      }
+      case 'oauth_accounts': {
+        editor();
+        const p = await pendingToken(orgId);
+        return { user_name: p.userName, accounts: await listAccounts(p.token) };
+      }
+      case 'oauth_connect': {
+        editor(); needKey();
+        const ids = [...new Set((Array.isArray(body.ad_account_ids) ? body.ad_account_ids : []).map(cleanAct))];
+        if (!ids.length) fail('Escolha pelo menos uma conta de anúncios.');
+        if (ids.length > 25) fail('Escolha até 25 contas de cada vez.');
+        const p = await pendingToken(orgId);
+        const accounts = [];
+        for (const act of ids) accounts.push(await saveAccount(orgId, p.token, act));
+        await pool.query(`delete from public.meta_ads_oauth where organization_id = $1`, [orgId]);
+        return { accounts };
       }
       case 'connect': {
         editor(); needKey();
         const token = cleanToken(body.access_token), act = cleanAct(body.ad_account_id);
-        const a = await graph(token, `/act_${act}`, { fields: 'name,currency,account_status' });
-        const r = await pool.query(`insert into public.meta_ads_accounts (organization_id, ad_account_id, name, currency, token_enc, token_hint, status, last_error)
-          values ($1,$2,$3,$4,$5,$6,'connected',null)
-          on conflict (organization_id, ad_account_id) do update set name = excluded.name, currency = excluded.currency, token_enc = excluded.token_enc, token_hint = excluded.token_hint, status = 'connected', last_error = null
-          returning id, ad_account_id, name, currency, token_hint, status`, [orgId, act, a.name || '', a.currency || null, encrypt(token, secretKey), `…${token.slice(-4)}`]);
-        return { account: r.rows[0] };
+        return { account: await saveAccount(orgId, token, act) };
       }
       case 'accounts': return { accounts: (await pool.query(`select id, ad_account_id, name, currency, token_hint, status, last_error, last_sync_at from public.meta_ads_accounts where organization_id = $1 order by created_at`, [orgId])).rows };
       case 'disconnect': {
@@ -135,5 +222,5 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
       default: throw new AuthError(400, 'bad_action', 'Ação desconhecida.');
     }
   }
-  return { handle };
+  return { handle, oauthCallback };
 }

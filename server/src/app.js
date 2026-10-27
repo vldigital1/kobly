@@ -117,7 +117,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const tracking = createTracking({ pool, utmify });
   const products = createProducts({ pool });
   const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
-  const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase });
+  const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase,
+    appId: config.metaAppId, appSecret: config.metaAppSecret, publicBaseUrl: config.publicBaseUrl, siteUrl: config.siteUrl });
   const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
@@ -239,6 +240,12 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
           const user = await auth.userFromAccessToken(bearer(req));
           return send(res, 200, await storage.upload(user, sp[2], sp[3], decodeURIComponent(sp[4]), await readBody(req, storage.maxFor(sp[2]) + 1024)));
         }
+      }
+      // Volta do login "Conectar com Facebook" (Facebook Ads): o "state" assinado diz de qual empresa é.
+      if (path === '/oauth/meta/callback' && req.method === 'GET') {
+        const html = await metaAds.oauthCallback(Object.fromEntries(url.searchParams));
+        res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Referrer-Policy', 'no-referrer'); return res.end(html);
       }
       if (path === '/functions/v1/unsubscribe' && (req.method === 'GET' || req.method === 'POST')) {
         const raw = req.method === 'POST' ? (await readBody(req, 16 * 1024)).toString('utf8') : '';

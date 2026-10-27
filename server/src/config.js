@@ -24,6 +24,8 @@ export function loadConfig(env = process.env) {
     secretKey: env.KOBLY_SECRET_KEY || '',
     publicBaseUrl: (env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
     metaAppSecret: env.META_APP_SECRET || '',
+    // App da Kobly no Facebook (login "Conectar com Facebook" do Facebook Ads); sem os dois, fica só o token colado
+    metaAppId: env.META_APP_ID || '',
     metaGraphBase: env.META_GRAPH_BASE || 'https://graph.facebook.com/v21.0',
     // Marketing API (Facebook Ads): versão atual da documentação
     metaAdsGraphBase: env.META_ADS_GRAPH_BASE || 'https://graph.facebook.com/v26.0',

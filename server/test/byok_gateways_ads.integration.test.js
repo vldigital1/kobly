@@ -40,6 +40,12 @@ async function fakeFetch(url, init = {}) {
     if (m) { const p = mp.payments.get(m[1]); return ok({ id: Number(m[1]), status: p.status, transaction_amount: p.amount }); }
   }
   if (u.hostname === 'graph.facebook.com') {
+    if (u.pathname.endsWith('/oauth/access_token')) {
+      assert.equal(u.searchParams.get('client_secret'), 'segredo-app-fb');
+      if (u.searchParams.get('code')) return u.searchParams.get('code') === 'codigo-bom' ? ok({ access_token: 'curto-123' }) : no(400, { error: { code: 100, message: 'Invalid code' } });
+      return ok({ access_token: `EAAB-token-ads-${stamp}` });
+    }
+    if (u.pathname.endsWith('/me') && auth === `Bearer EAAB-token-ads-${stamp}`) return ok({ name: 'Dona da Loja' });
     if (auth !== `Bearer EAAB-token-ads-${stamp}`) return no(400, { error: { code: 190, message: 'Invalid OAuth access token.' } });
     if (u.pathname.endsWith('/me/adaccounts')) return ok({ data: [{ account_id: '1234567890', name: 'Loja BR', currency: 'BRL', account_status: 1 }] });
     if (u.pathname.endsWith('/act_1234567890')) return ok({ name: 'Loja BR', currency: 'BRL', account_status: 1 });
@@ -69,7 +75,8 @@ before(async () => {
   if (skip) return;
   pool = new pg.Pool({ connectionString: URL_, max: 4 });
   const config = { jwtSecret: 'segredo-jwt-integracao', requireConfirm: false, allowedOrigins: [], loginPerMin: 1000, signupPerMin: 1000, secretKey: KEY.toString('base64'),
-    publicBaseUrl: 'https://api.kobly.test', metaAdsGraphBase: 'https://graph.facebook.com/v26.0', aiApiKey: 'chave-da-plataforma' };
+    publicBaseUrl: 'https://api.kobly.test', metaAdsGraphBase: 'https://graph.facebook.com/v26.0', aiApiKey: 'chave-da-plataforma',
+    metaAppId: '1234', metaAppSecret: 'segredo-app-fb', siteUrl: 'https://app.kobly.test' };
   ({ server } = createApp({ pool, config, fetchImpl: fakeFetch }));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -168,4 +175,29 @@ test('Facebook Ads: conta conectada com o token cifrado e campanhas ao lado das 
   assert.equal(net.length, n, 'cache de 1 minuto: não chama o Facebook de novo');
   assert.equal((await fn('meta-ads', { action: 'insights', id: c.account.id, date_preset: 'today', force: true }, A.token)).status, 200);
   assert.equal(net.length, n + 1);
+});
+
+test('Conectar com Facebook: janelinha de login, troca do código e escolha das contas', { skip }, async () => {
+  const st = await fn('meta-ads', { action: 'oauth_start' }, B.token);
+  assert.equal(st.status, 200, JSON.stringify(st));
+  const u = new URL(st.url);
+  assert.equal(u.hostname, 'www.facebook.com'); assert.equal(u.pathname, '/v26.0/dialog/oauth');
+  assert.equal(u.searchParams.get('redirect_uri'), 'https://api.kobly.test/oauth/meta/callback');
+  assert.match(u.searchParams.get('scope'), /ads_read/);
+  const state = u.searchParams.get('state');
+  const back = async (q) => (await fetch(base + '/oauth/meta/callback?' + new URLSearchParams(q))).text();
+  assert.match(await back({ state: state.slice(0, -2) + 'xx', code: 'codigo-bom' }), /expirou/, 'state adulterado não vale');
+  assert.match(await back({ state, error: 'access_denied' }), /cancelou/);
+  assert.equal((await fn('meta-ads', { action: 'oauth_accounts' }, B.token)).status, 410, 'sem login ainda');
+  const ok = await back({ state, code: 'codigo-bom' });
+  assert.match(ok, /Facebook conectado/); assert.ok(ok.includes('postMessage({"kobly":"meta-oauth","ok":true'), 'avisa a janela da Kobly'); assert.ok(ok.includes('"https://app.kobly.test"'), 'só para o site da Kobly');
+  assert.doesNotMatch(ok, /EAAB/, 'o token não aparece na página');
+  await assert.rejects(asUser(B.userId, `select token_enc from public.meta_ads_oauth`), /permission denied/);
+  assert.equal((await fn('meta-ads', { action: 'oauth_accounts' }, A.token)).status, 410, 'outra empresa não usa o login');
+  const ac = await fn('meta-ads', { action: 'oauth_accounts' }, B.token);
+  assert.equal(ac.user_name, 'Dona da Loja'); assert.equal(ac.accounts[0].ad_account_id, '1234567890');
+  const c = await fn('meta-ads', { action: 'oauth_connect', ad_account_ids: ['1234567890'] }, B.token);
+  assert.equal(c.status, 200, JSON.stringify(c)); assert.equal(c.accounts[0].name, 'Loja BR');
+  assert.equal((await fn('meta-ads', { action: 'accounts' }, B.token)).accounts.length, 1);
+  assert.equal((await pool.query(`select count(*)::int as n from public.meta_ads_oauth where organization_id = $1`, [B.orgId])).rows[0].n, 0, 'login usado é apagado');
 });
