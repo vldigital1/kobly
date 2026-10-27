@@ -4,7 +4,7 @@ import { Banner, Button, Card, Icon, IconButton, Input, PageHeader, Select } fro
 import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
-import { MetaLogo } from '@/lib/brandLogos.jsx';
+import { GoogleAdsLogo, MetaLogo } from '@/lib/brandLogos.jsx';
 
 // Kobly — gerenciador do Facebook Ads: dashboard (faturamento, gasto, lucro, ROAS...), contas, campanhas,
 // conjuntos e anúncios com as vendas rastreadas pela UTM; liga/pausa e muda orçamento direto no Facebook.
@@ -140,8 +140,8 @@ function Connect({ orgId, notify, onDone }) {
             {(manual || oauth === false ? [
               ['Abra o Gerenciador de Negócios', 'Em business.facebook.com, vá em Configurações → Usuários → Usuários do sistema.'],
               ['Crie um usuário do sistema', 'Clique em Adicionar, dê um nome (ex.: Kobly) e escolha a função Funcionário.'],
-              ['Dê acesso à conta de anúncios', 'Em Atribuir ativos, escolha Contas de anúncios, marque a sua e ligue "Ver desempenho".'],
-              ['Gere o token e cole aqui', 'Clique em Gerar token, marque a permissão ads_read e cole o token no campo abaixo.'],
+              ['Dê acesso à conta de anúncios', 'Em Atribuir ativos, escolha Contas de anúncios, marque a sua e dê controle total (para a Kobly poder pausar e mudar orçamento).'],
+              ['Gere o token e cole aqui', 'Clique em Gerar token, marque as permissões ads_read e ads_management e cole o token no campo abaixo.'],
             ] : STEPS).map(([t, d], i) => (
               <div key={t} style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface-raised, rgba(255,255,255,.02))' }}>
                 <span style={{ flex: 'none', width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#1b0d02', background: 'linear-gradient(135deg, #f39200, #ff6201)' }}>{i + 1}</span>
@@ -181,6 +181,9 @@ function Connect({ orgId, notify, onDone }) {
 
 const CSS = `
 .ka { display: flex; flex-direction: column; gap: 16px; }
+.ka-plat { display: inline-flex; gap: 6px; padding: 5px; border-radius: 14px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.02); width: fit-content; max-width: 100%; overflow-x: auto; }
+.ka-plat button { display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px 7px 8px; border-radius: 10px; border: 1px solid transparent; background: none; cursor: pointer; color: var(--text-muted); font: 600 14px var(--font-sans); white-space: nowrap; }
+.ka-plat button.on { background: var(--accent-soft); border-color: rgba(255,98,1,.45); color: var(--text-strong); }
 .ka-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-subtle); overflow-x: auto; }
 .ka-tab { display: inline-flex; align-items: center; gap: 8px; padding: 11px 16px; border: 0; background: none; cursor: pointer; color: var(--text-muted);
   font: 600 14px var(--font-sans); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
@@ -265,7 +268,14 @@ const readCols = () => { try { const v = JSON.parse(localStorage.getItem(COLS_KE
 
 const STATUS_PILL = { ACTIVE: ['on', 'Ativo'], PAUSED: ['off', 'Pausado'], CAMPAIGN_PAUSED: ['off', 'Campanha pausada'], ADSET_PAUSED: ['off', 'Conjunto pausado'],
   PENDING_REVIEW: ['mid', 'Em análise'], IN_PROCESS: ['mid', 'Processando'], WITH_ISSUES: ['mid', 'Com problema'], DISAPPROVED: ['off', 'Reprovado'], PENDING_BILLING_INFO: ['mid', 'Pagamento pendente'] };
-const LEVEL_LABEL = { campaign: 'Campanha', adset: 'Conjunto', ad: 'Anúncio' };
+const PLATFORMS = {
+  meta: { id: 'meta', name: 'Facebook Ads', api: (...a) => KoblyApi.metaAds(...a), where: 'no Facebook', hide: [], conv: 'Vendas (Meta)',
+    level: { campaign: 'Campanha', adset: 'Conjunto', ad: 'Anúncio' }, plural: { campaign: 'campanhas', adset: 'conjuntos', ad: 'anúncios' }, tabs: { campaign: 'Campanhas', adset: 'Conjuntos', ad: 'Anúncios' },
+    utmWhere: 'nos Parâmetros de URL dos anúncios', utm: 'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}' },
+  google: { id: 'google', name: 'Google Ads', api: (...a) => KoblyApi.googleAds(...a), where: 'no Google Ads', hide: ['conversas', 'custo_por_conversa', 'reach'], conv: 'Conversões (Google)',
+    level: { campaign: 'Campanha', adset: 'Grupo de anúncios', ad: 'Anúncio' }, plural: { campaign: 'campanhas', adset: 'grupos de anúncios', ad: 'anúncios' }, tabs: { campaign: 'Campanhas', adset: 'Grupos de anúncios', ad: 'Anúncios' },
+    utmWhere: 'no Modelo de acompanhamento da conta do Google Ads (Configurações da conta → Opções de URL)', utm: '{lpurl}?utm_source=google&utm_campaign={campaignid}&utm_medium={adgroupid}&utm_content={creative}&utm_term={keyword}' },
+};
 
 function Kpi({ label, value, sub, color, neg }) {
   return <div className="ka-kpi" style={{ '--c': color }}><div className="l">{label}</div><div className={`v${neg ? ' neg' : ''}`}>{value}</div>{sub && <div className="s">{sub}</div>}</div>;
@@ -315,29 +325,29 @@ function Chart({ serie, fonte, cur }) {
   );
 }
 
-function Dashboard({ orgId, conta, preset, tick, onSettings }) {
+function Dashboard({ P, orgId, conta, preset, tick, onSettings }) {
   const [st, setSt] = useState({ loading: true });
   const [fonte, setFonte] = useState('sistema');
   useEffect(() => {
     let on = true;
-    KoblyApi.metaAds('dashboard', { id: conta, date_preset: preset, force: tick.force }, orgId).then((r) => { if (on) setSt(r.error ? { error: r.error } : { d: r }); });
+    P.api('dashboard', { id: conta, date_preset: preset, force: tick.force }, orgId).then((r) => { if (on) setSt(r.error ? { error: r.error } : { d: r }); });
     return () => { on = false; };
-  }, [orgId, conta, preset, tick]);
+  }, [P, orgId, conta, preset, tick]);
   if (st.error) return <ErrorState message={st.error} />;
   if (!st.d) return <SkeletonTable rows={4} />;
   const d = st.d, cur = d.currency, m = fonte === 'meta' ? d.meta_ads : d.sistema;
   return (
     <div className="ka">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{fonte === 'meta' ? 'Vendas e faturamento que a Meta informa (estimativa do pixel).' : 'Vendas que a Kobly rastreou pela UTM: checkout aprovado + recuperadas pelo fluxo.'}</div>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{fonte === 'meta' ? `Vendas e faturamento que o ${P.name} informa (estimativa dele).` : 'Vendas que a Kobly rastreou pela UTM: checkout aprovado + recuperadas pelo fluxo.'}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button size="sm" variant="ghost" iconLeft="settings" onClick={onSettings}>Taxas e despesas</Button>
-          <div className="ka-seg"><button className={fonte === 'sistema' ? 'on' : ''} onClick={() => setFonte('sistema')}>Kobly (rastreado)</button><button className={fonte === 'meta' ? 'on' : ''} onClick={() => setFonte('meta')}>Meta Ads</button></div>
+          <div className="ka-seg"><button className={fonte === 'sistema' ? 'on' : ''} onClick={() => setFonte('sistema')}>Kobly (rastreado)</button><button className={fonte === 'meta' ? 'on' : ''} onClick={() => setFonte('meta')}>{P.name}</button></div>
         </div>
       </div>
       <div className="ka-kpis">
         <Kpi label="Faturamento" value={money(m.faturamento, cur)} color="#22c55e" />
-        <Kpi label="Gasto Meta Ads" value={money(m.gasto, cur)} color="#ff6201" />
+        <Kpi label={`Gasto ${P.name}`} value={money(m.gasto, cur)} color="#ff6201" />
         <Kpi label="Lucro" value={money(m.lucro, cur)} color={m.lucro < 0 ? '#f87171' : '#22c55e'} neg={m.lucro < 0} sub={m.despesas ? `já descontados ${money(m.despesas, cur)} de taxas` : null} />
         <Kpi label="Ticket médio" value={money(m.ticket_medio, cur)} color="#f39200" />
         <Kpi label="Margem de lucro" value={pct(m.margem)} color={m.margem != null && m.margem < 0 ? '#f87171' : '#22c55e'} neg={m.margem != null && m.margem < 0} />
@@ -346,7 +356,7 @@ function Dashboard({ orgId, conta, preset, tick, onSettings }) {
         <Kpi label="Vendas" value={int(m.vendas)} color="#22c55e" />
         <Kpi label="Taxa de conversão" value={pct(m.taxa_conversao)} color="#ffb485" />
         <Kpi label="Custo por venda" value={money(m.cpa, cur)} color="#f39200" />
-        <Kpi label="Custo por conversa" value={money(m.custo_por_conversa, cur)} color="#ff9452" sub={`${int(d.meta.conversas)} conversas iniciadas`} />
+        {P.id === 'meta' && <Kpi label="Custo por conversa" value={money(m.custo_por_conversa, cur)} color="#ff9452" sub={`${int(d.meta.conversas)} conversas iniciadas`} />}
         {fonte === 'sistema' && <Kpi label="Recuperadas pela Kobly" value={money(d.sistema.receita_recuperada, cur)} color="#ff6201" sub={`${int(d.sistema.recuperadas)} venda(s) pelo fluxo`} />}
       </div>
       <div className="ka-card" style={{ padding: 18 }}>
@@ -365,13 +375,13 @@ function Dashboard({ orgId, conta, preset, tick, onSettings }) {
   );
 }
 
-function Accounts({ orgId, preset, tick, canEdit, onDisconnect, onOpen }) {
+function Accounts({ P, orgId, preset, tick, canEdit, onDisconnect, onOpen }) {
   const [st, setSt] = useState({ loading: true });
   useEffect(() => {
     let on = true;
-    KoblyApi.metaAds('accounts_overview', { date_preset: preset, force: tick.force }, orgId).then((r) => { if (on) setSt(r.error ? { error: r.error } : { list: r.accounts }); });
+    P.api('accounts_overview', { date_preset: preset, force: tick.force }, orgId).then((r) => { if (on) setSt(r.error ? { error: r.error } : { list: r.accounts }); });
     return () => { on = false; };
-  }, [orgId, preset, tick]);
+  }, [P, orgId, preset, tick]);
   if (st.error) return <ErrorState message={st.error} />;
   if (!st.list) return <SkeletonTable rows={3} />;
   return (
@@ -396,7 +406,7 @@ function Accounts({ orgId, preset, tick, canEdit, onDisconnect, onOpen }) {
   );
 }
 
-function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, onDrill, onClearParent }) {
+function Entities({ P, orgId, level, conta, preset, tick, canEdit, notify, parent, onDrill, onClearParent }) {
   const [st, setSt] = useState({ loading: true });
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('any');
@@ -404,29 +414,30 @@ function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, 
   const [picking, setPicking] = useState(null);
   const [busy, setBusy] = useState({});
   const [budget, setBudget] = useState(null); // { item, value }
-  const load = useCallback((force) => KoblyApi.metaAds('entities', { level, id: conta, date_preset: preset, force }, orgId).then((r) => setSt(r.error ? { error: r.error } : { items: r.items })), [orgId, level, conta, preset]);
+  const load = useCallback((force) => P.api('entities', { level, id: conta, date_preset: preset, force }, orgId).then((r) => setSt(r.error ? { error: r.error } : { items: r.items })), [P, orgId, level, conta, preset]);
   useEffect(() => { setSt({ loading: true }); load(tick.force); }, [load, tick]);
 
   async function toggle(it) {
     const next = it.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     setBusy((b) => ({ ...b, [it.id]: true }));
-    const r = await KoblyApi.metaAds('set_status', { id: it.account_id, object_id: it.id, status: next }, orgId);
+    const r = await P.api('set_status', { id: it.account_id, level, object_id: it.id, parent_id: it.adset_id, status: next }, orgId);
     setBusy((b) => ({ ...b, [it.id]: false }));
     if (r.error) { notify('danger', r.error); return; }
     setSt((s) => ({ items: s.items.map((x) => (x.id === it.id ? { ...x, status: next, effective_status: next } : x)) }));
     const fem = level === 'campaign';
-    notify('success', `${LEVEL_LABEL[level]} "${it.name}" ${next === 'ACTIVE' ? (fem ? 'ativada' : 'ativado') : (fem ? 'pausada' : 'pausado')}.`);
+    notify('success', `${P.level[level]} "${it.name}" ${next === 'ACTIVE' ? (fem ? 'ativada' : 'ativado') : (fem ? 'pausada' : 'pausado')}.`);
   }
   async function saveBudget() {
     const it = budget.item;
     setBudget((b) => ({ ...b, saving: true }));
-    const r = await KoblyApi.metaAds('set_budget', { id: it.account_id, object_id: it.id, value: budget.value }, orgId);
+    const r = await P.api('set_budget', { id: it.account_id, level, object_id: it.id, value: budget.value }, orgId);
     if (r.error) { setBudget((b) => ({ ...b, saving: false })); notify('danger', r.error); return; }
-    setBudget(null); notify('success', 'Orçamento atualizado no Facebook.'); load(true);
+    setBudget(null); notify('success', `Orçamento atualizado ${P.where}.`); load(true);
   }
 
   if (st.error) return <ErrorState message={st.error} onRetry={() => load(true)} />;
-  const shown = COLS.filter((c) => cols.includes(c.key) && (!c.levels || c.levels.includes(level)));
+  const shown = COLS.filter((c) => cols.includes(c.key) && !P.hide.includes(c.key) && (!c.levels || c.levels.includes(level) && (P.id === 'meta' || c.key !== 'budget' || level === 'campaign')))
+    .map((c) => (c.key === 'compras_meta' ? { ...c, label: P.conv } : c));
   const items = (st.items || []).filter((it) => (!parent || (level === 'adset' ? it.campaign_id === parent.id : parent.type === 'campaign' ? it.campaign_id === parent.id : it.adset_id === parent.id))
     && (!q || it.name.toLowerCase().includes(q.toLowerCase()))
     && (status === 'any' || (status === 'active' ? it.effective_status === 'ACTIVE' : it.effective_status !== 'ACTIVE'))
@@ -441,7 +452,7 @@ function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, 
   const cell = (c, it) => {
     if (c.key === 'budget') {
       const b = it.daily_budget || it.lifetime_budget;
-      if (!b) return <span style={{ color: 'var(--text-subtle)' }}>{level === 'adset' ? 'na campanha' : 'nos conjuntos'}</span>;
+      if (!b) return <span style={{ color: 'var(--text-subtle)' }}>{level === 'adset' ? 'na campanha' : P.id === 'google' ? '—' : 'nos conjuntos'}</span>;
       return <span className="ka-bud">{money(b / it.budget_unit, it.currency)}<small style={{ color: 'var(--text-subtle)' }}>{it.daily_budget ? '/dia' : ' total'}</small>
         {canEdit && <button aria-label="Editar orçamento" onClick={() => setBudget({ item: it, value: String(b / it.budget_unit) })}><Icon name="pencil" size={13} /></button>}</span>;
     }
@@ -452,7 +463,7 @@ function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, 
   return (
     <div className="ka">
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <Input label={`Buscar ${LEVEL_LABEL[level].toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filtrar por nome" style={{ minWidth: 220 }} />
+        <Input label={`Buscar ${P.level[level].toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filtrar por nome" style={{ minWidth: 220 }} />
         <Select label="Situação" value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: 180 }}
           options={[{ value: 'any', label: 'Qualquer' }, { value: 'active', label: 'Ativos' }, { value: 'paused', label: 'Pausados' }, { value: 'spend', label: 'Com gasto no período' }]} />
         <Button variant="secondary" iconLeft="columns" onClick={() => setPicking(cols)}>Colunas</Button>
@@ -461,7 +472,7 @@ function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, 
       {!st.items ? <SkeletonTable rows={5} /> : (
         <div className="ka-card ka-tablewrap">
           <table className="ka-table">
-            <thead><tr>{canEdit && <th className="l" style={{ width: 60 }}>On/Off</th>}<th className="l">{LEVEL_LABEL[level]}</th>{shown.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
+            <thead><tr>{canEdit && <th className="l" style={{ width: 60 }}>On/Off</th>}<th className="l">{P.level[level]}</th>{shown.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
             <tbody>
               {items.length === 0 && <tr><td colSpan={shown.length + 2} className="l"><EmptyState compact icon="target" title="Nada por aqui" message="Troque o período, a conta ou o filtro de situação." /></td></tr>}
               {items.map((it) => {
@@ -479,7 +490,7 @@ function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, 
                 );
               })}
             </tbody>
-            {items.length > 1 && <tfoot><tr>{canEdit && <td />}<td className="l">{items.length} {LEVEL_LABEL[level].toLowerCase()}s</td>
+            {items.length > 1 && <tfoot><tr>{canEdit && <td />}<td className="l">{items.length} {P.plural[level]}</td>
               {shown.map((c) => <td key={c.key}>{c.key === 'budget' ? '' : c.money ? money(tot[c.key], cur) : c.fmt ? c.fmt(tot[c.key]) : tot[c.key]}</td>)}</tr></tfoot>}
           </table>
         </div>
@@ -489,15 +500,15 @@ function Entities({ orgId, level, conta, preset, tick, canEdit, notify, parent, 
         {picking && <div className="ka-cols">
           {[...new Set(COLS.map((c) => c.group))].map((g) => (
             <React.Fragment key={g}><h5>{g}</h5>
-              {COLS.filter((c) => c.group === g).map((c) => (
+              {COLS.filter((c) => c.group === g && !P.hide.includes(c.key)).map((c) => (
                 <label key={c.key}><input type="checkbox" checked={picking.includes(c.key)} style={{ accentColor: 'var(--accent)' }}
-                  onChange={() => setPicking((p) => (p.includes(c.key) ? p.filter((k) => k !== c.key) : [...p, c.key]))} />{c.label}</label>
+                  onChange={() => setPicking((p) => (p.includes(c.key) ? p.filter((k) => k !== c.key) : [...p, c.key]))} />{c.key === 'compras_meta' ? P.conv : c.label}</label>
               ))}
             </React.Fragment>
           ))}
         </div>}
       </Modal>
-      <Modal open={!!budget} onClose={() => !(budget && budget.saving) && setBudget(null)} title="Editar orçamento" subtitle={budget ? `${LEVEL_LABEL[level]} "${budget.item.name}" — muda direto no Facebook.` : ''}
+      <Modal open={!!budget} onClose={() => !(budget && budget.saving) && setBudget(null)} title="Editar orçamento" subtitle={budget ? `${P.level[level]} "${budget.item.name}" — muda direto ${P.where}.` : ''}
         footer={<><Button variant="ghost" onClick={() => setBudget(null)}>Cancelar</Button><Button variant="primary" loading={!!(budget && budget.saving)} onClick={saveBudget}>Salvar orçamento</Button></>}>
         {budget && <Input label={budget.item.daily_budget ? 'Orçamento diário' : 'Orçamento total'} value={budget.value} inputMode="decimal" autoFocus
           onChange={(e) => setBudget((b) => ({ ...b, value: e.target.value }))} hint={`Em ${budget.item.currency || 'BRL'}. Ex.: 50 ou 75,50.`} />}
@@ -531,9 +542,120 @@ function SettingsModal({ open, orgId, notify, onClose }) {
   );
 }
 
+const GOOGLE_STEPS = [
+  ['Clique em "Conectar com Google"', 'Abre uma janelinha do Google. Entre com o e-mail que tem acesso às suas contas do Google Ads.'],
+  ['Autorize a Kobly', 'O Google pergunta se a Kobly pode ver e gerenciar suas campanhas. A Kobly só liga, pausa ou muda orçamento quando você clica.'],
+  ['Escolha as contas', 'Aparecem suas contas (inclusive as de dentro de uma conta de administrador/MCC). Marque as que quer acompanhar.'],
+  ['Marque as campanhas (recomendado)', 'No Google Ads, em Configurações da conta → Opções de URL → Modelo de acompanhamento, cole o modelo que aparece no fim desta página.'],
+];
+
+function GoogleConnect({ orgId, notify, onDone }) {
+  const [on, setOn] = useState(null);
+  const [pending, setPending] = useState(null);
+  const [pick, setPick] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const popup = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    KoblyApi.googleAds('oauth_status', {}, orgId).then((r) => { if (alive) setOn(!!(r && r.enabled)); });
+    return () => { alive = false; };
+  }, [orgId]);
+  const loadPending = useCallback(async () => {
+    setBusy(true);
+    const r = await KoblyApi.googleAds('oauth_accounts', {}, orgId);
+    setBusy(false);
+    if (r.error) { notify('danger', r.error); return; }
+    setPending(r.accounts); setPick(r.accounts.map((a) => a.customer_id));
+    if (!r.accounts.length) notify('warning', 'Este login do Google não tem nenhuma conta do Google Ads.');
+  }, [orgId, notify]);
+  useEffect(() => {
+    function onMsg(e) {
+      if (!e.data || e.data.kobly !== 'google-oauth' || e.source !== popup.current) return;
+      setBusy(false); popup.current = null;
+      if (e.data.ok) loadPending(); else notify('warning', e.data.message);
+    }
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [loadPending, notify]);
+  async function start() {
+    const w = window.open('', 'kobly-google', 'width=520,height=680');
+    if (!w) { notify('warning', 'O navegador bloqueou a janelinha. Libere pop-ups para a Kobly e tente de novo.'); return; }
+    w.document.title = 'Conectando ao Google…';
+    popup.current = w; setBusy(true);
+    const r = await KoblyApi.googleAds('oauth_start', {}, orgId);
+    if (r.error) { w.close(); popup.current = null; setBusy(false); notify('danger', r.error); return; }
+    w.location.href = r.url;
+    const t = setInterval(() => { if (w.closed) { clearInterval(t); if (popup.current === w) { popup.current = null; setBusy(false); } } }, 700);
+  }
+  async function connect() {
+    setBusy(true);
+    const r = await KoblyApi.googleAds('oauth_connect', { customer_ids: pick }, orgId);
+    setBusy(false);
+    if (r.error) { notify('danger', r.error); return; }
+    notify('success', r.accounts.length > 1 ? `${r.accounts.length} contas do Google Ads conectadas.` : `Conta "${r.accounts[0].name}" conectada.`);
+    setPending(null); onDone();
+  }
+  const fmtId = (id) => String(id).replace(/(\d{3})(\d{3})(\d+)/, '$1-$2-$3');
+  return (
+    <Card>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <GoogleAdsLogo size={48} />
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>Conecte o Google Ads</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Em um clique. Veja gasto, vendas e lucro de cada campanha e pause ou mude o orçamento daqui.</div>
+          </div>
+          {on && !pending && (
+            <button type="button" onClick={start} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderRadius: 12, border: '1px solid #dadce0', cursor: busy ? 'wait' : 'pointer',
+              background: '#fff', color: '#1f1f1f', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-sans)', opacity: busy ? 0.7 : 1 }}>
+              <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" /><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" /><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" /><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" /></svg>
+              {busy ? 'Aguardando o Google…' : 'Conectar com Google'}
+            </button>
+          )}
+        </div>
+        {on === false && <Banner tone="info">O Google Ads está sendo ativado na Kobly (falta o Google aprovar o acesso). Assim que estiver pronto, o botão "Conectar com Google" aparece aqui.</Banner>}
+        {pending && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>Marque as contas do Google Ads que a Kobly vai acompanhar:</div>
+            {pending.map((a) => {
+              const sel = pick.includes(a.customer_id);
+              return (
+                <label key={a.customer_id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${sel ? 'var(--accent)' : 'var(--border-subtle)'}`, background: sel ? 'var(--accent-soft)' : 'transparent' }}>
+                  <input type="checkbox" checked={sel} onChange={() => setPick((p) => (sel ? p.filter((x) => x !== a.customer_id) : [...p, a.customer_id]))} style={{ accentColor: 'var(--accent)', width: 16, height: 16 }} />
+                  <span style={{ flex: 1, color: 'var(--text-strong)', fontWeight: 'var(--fw-semibold)' }}>{a.name}{a.test ? ' (teste)' : ''}</span>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{fmtId(a.customer_id)} · {a.currency}{a.via ? ` · via ${a.via}` : ''}</span>
+                </label>
+              );
+            })}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="primary" iconLeft="plug" disabled={busy || !pick.length} onClick={connect}>{pick.length > 1 ? `Conectar ${pick.length} contas` : 'Conectar conta'}</Button>
+              <Button variant="ghost" onClick={() => setPending(null)}>Cancelar</Button>
+            </div>
+          </div>
+        )}
+        {!pending && (
+          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            {GOOGLE_STEPS.map(([t, d], i) => (
+              <div key={t} style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+                <span style={{ flex: 'none', width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#1b0d02', background: 'linear-gradient(135deg, #f39200, #ff6201)' }}>{i + 1}</span>
+                <div><div style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{t}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.5 }}>{d}</div></div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+const PLATFORM_KEY = 'kobly:ads-platform';
+
 function KoblyMetaAds() {
   const store = useKobly();
   const { orgId, picker, canEdit } = useTargetOrg();
+  const [platform, setPlatform] = useState(() => { try { return localStorage.getItem(PLATFORM_KEY) === 'google' ? 'google' : 'meta'; } catch { return 'meta'; } });
+  const P = PLATFORMS[platform];
   const [accs, setAccs] = useState({ loading: true, list: [], error: null });
   const [tab, setTab] = useState('dashboard');
   const [conta, setConta] = useState('all');
@@ -547,10 +669,10 @@ function KoblyMetaAds() {
 
   const loadAccs = useCallback(async () => {
     if (!orgId) { setAccs({ loading: false, list: [], error: null }); return; }
-    const r = await KoblyApi.metaAds('accounts', {}, orgId);
+    const r = await P.api('accounts', {}, orgId);
     setAccs({ loading: false, list: r.accounts || [], error: r.error });
-  }, [orgId]);
-  useEffect(() => { loadAccs(); }, [loadAccs]);
+  }, [orgId, P]);
+  useEffect(() => { setAccs((a) => ({ ...a, loading: true })); loadAccs(); }, [loadAccs]);
   const refresh = (force) => { setTick((t) => ({ n: t.n + 1, force })); setUpdated(new Date()); };
   // atualiza sozinho a cada minuto enquanto a aba está aberta
   useEffect(() => {
@@ -558,28 +680,39 @@ function KoblyMetaAds() {
     const t = setInterval(() => { if (document.visibilityState === 'visible') refresh(false); }, 60_000);
     return () => clearInterval(t);
   }, [accs.list.length]);
+  function choose(p) {
+    if (p === platform) return;
+    setPlatform(p); setConta('all'); setParent(null); setAdding(false); setTab('dashboard');
+    try { localStorage.setItem(PLATFORM_KEY, p); } catch { /* ok */ }
+  }
 
   async function disconnect() {
-    const r = await KoblyApi.metaAds('disconnect', { id: drop.id }, orgId);
+    const r = await P.api('disconnect', { id: drop.id }, orgId);
     if (r.error) { store.notify('danger', r.error); return; }
     store.notify('success', `Conta "${drop.name}" desconectada.`);
     setDrop(null); setConta('all'); loadAccs(); refresh(true);
   }
   const drill = (level, it) => {
     if (level === 'campaign') { setParent({ type: 'campaign', id: it.id, name: it.name, label: 'Campanha' }); setTab('adset'); }
-    else { setParent({ type: 'adset', id: it.id, name: it.name, label: 'Conjunto' }); setTab('ad'); }
+    else { setParent({ type: 'adset', id: it.id, name: it.name, label: P.level.adset }); setTab('ad'); }
   };
-  const TABS = [['dashboard', 'Dashboard', 'layout-dashboard'], ['accounts', 'Contas', 'folder'], ['campaign', 'Campanhas', 'megaphone'], ['adset', 'Conjuntos', 'layout-grid'], ['ad', 'Anúncios', 'smartphone']];
+  const TABS = [['dashboard', 'Dashboard', 'layout-dashboard'], ['accounts', 'Contas', 'folder'], ['campaign', P.tabs.campaign, 'megaphone'], ['adset', P.tabs.adset, 'layout-grid'], ['ad', P.tabs.ad, 'smartphone']];
+  const Conn = platform === 'google' ? GoogleConnect : Connect;
 
   return (
     <div className="ka">
       <style>{CSS}</style>
       <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId && accs.list.length > 0 ? <Button variant="secondary" iconLeft="plus" onClick={() => setAdding((v) => !v)}>Conectar outra conta</Button> : null}>
-        Suas campanhas do Facebook e Instagram com as vendas que a Kobly rastreou: lucro, ROAS e custo por venda de verdade. Ligue, pause e mude o orçamento daqui.
+        Suas campanhas com as vendas que a Kobly rastreou: lucro, ROAS e custo por venda de verdade. Ligue, pause e mude o orçamento daqui.
       </PageHeader>
+      <div className="ka-plat" role="tablist" aria-label="Rede de anúncios">
+        {[['meta', 'Facebook Ads', <MetaLogo key="m" size={26} />], ['google', 'Google Ads', <GoogleAdsLogo key="g" size={26} />]].map(([id, label, logo]) => (
+          <button key={id} type="button" role="tab" aria-selected={platform === id} className={platform === id ? 'on' : ''} onClick={() => choose(id)}>{logo}{label}</button>
+        ))}
+      </div>
       {picker}
       {!orgId ? <EmptyState icon="users" title="Selecione uma conta" message="Escolha a conta do cliente acima." /> : accs.loading ? <SkeletonTable rows={3} /> : (<>
-        {(accs.list.length === 0 || adding) && canEdit && <Connect orgId={orgId} notify={store.notify} onDone={() => { setAdding(false); loadAccs(); refresh(true); }} />}
+        {(accs.list.length === 0 || adding) && canEdit && <Conn orgId={orgId} notify={store.notify} onDone={() => { setAdding(false); loadAccs(); refresh(true); }} />}
         {accs.list.length === 0 && !canEdit && <EmptyState icon="target" title="Nenhuma conta de anúncios conectada" message="Peça a um administrador para conectar." />}
         {accs.list.length > 0 && (<>
           <div className="ka-tabs" role="tablist">
@@ -587,23 +720,23 @@ function KoblyMetaAds() {
           </div>
           <div className="ka-bar">
             {tab !== 'accounts' && <Select label="Conta de anúncios" value={conta} onChange={(e) => setConta(e.target.value)} style={{ minWidth: 240 }}
-              options={[{ value: 'all', label: 'Todas as contas' }, ...accs.list.map((a) => ({ value: a.id, label: `${a.name || a.ad_account_id}` }))]} />}
+              options={[{ value: 'all', label: 'Todas as contas' }, ...accs.list.map((a) => ({ value: a.id, label: `${a.name || a.ad_account_id || a.customer_id}` }))]} />}
             <Select label="Período" value={preset} onChange={(e) => setPreset(e.target.value)} style={{ width: 190 }} options={PERIODS.map(([value, label]) => ({ value, label }))} />
             <Button variant="secondary" iconLeft="refresh-cw" onClick={() => refresh(true)}>Atualizar</Button>
             <span className="ka-upd" title="A tela busca os números de novo sozinha a cada 1 minuto."><i />Atualiza sozinho · {updated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
           {accs.list.some((a) => a.status === 'error') && <Banner tone="danger">{accs.list.find((a) => a.status === 'error').last_error}</Banner>}
-          {tab === 'dashboard' && <Dashboard orgId={orgId} conta={conta} preset={preset} tick={tick} onSettings={() => setSettings(true)} />}
-          {tab === 'accounts' && <Accounts orgId={orgId} preset={preset} tick={tick} canEdit={canEdit} onDisconnect={setDrop} onOpen={(id) => { setConta(id); setTab('campaign'); }} />}
-          {['campaign', 'adset', 'ad'].includes(tab) && <Entities key={tab} orgId={orgId} level={tab} conta={conta} preset={preset} tick={tick} canEdit={canEdit} notify={store.notify}
+          {tab === 'dashboard' && <Dashboard key={platform} P={P} orgId={orgId} conta={conta} preset={preset} tick={tick} onSettings={() => setSettings(true)} />}
+          {tab === 'accounts' && <Accounts key={platform} P={P} orgId={orgId} preset={preset} tick={tick} canEdit={canEdit} onDisconnect={setDrop} onOpen={(id) => { setConta(id); setTab('campaign'); }} />}
+          {['campaign', 'adset', 'ad'].includes(tab) && <Entities key={`${platform}:${tab}`} P={P} orgId={orgId} level={tab} conta={conta} preset={preset} tick={tick} canEdit={canEdit} notify={store.notify}
             parent={tab === 'campaign' ? null : parent} onDrill={drill} onClearParent={() => setParent(null)} />}
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', lineHeight: 1.6 }}>
-            Para a Kobly saber de qual anúncio veio cada venda, use nos Parâmetros de URL dos anúncios:<br />
-            <code style={{ color: 'var(--text-muted)' }}>{'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}'}</code>
+            Para a Kobly saber de qual anúncio veio cada venda, use {P.utmWhere}:<br />
+            <code style={{ color: 'var(--text-muted)', wordBreak: 'break-all' }}>{P.utm}</code>
           </div>
         </>)}
       </>)}
-      <Modal open={!!drop} onClose={() => setDrop(null)} title="Desconectar conta de anúncios?" subtitle={drop ? `"${drop.name}" sai da Kobly. As campanhas continuam rodando normalmente no Facebook.` : ''}
+      <Modal open={!!drop} onClose={() => setDrop(null)} title="Desconectar conta de anúncios?" subtitle={drop ? `"${drop.name}" sai da Kobly. As campanhas continuam rodando normalmente ${P.where}.` : ''}
         footer={<><Button variant="ghost" onClick={() => setDrop(null)}>Cancelar</Button><Button variant="danger" iconLeft="unplug" onClick={disconnect}>Desconectar</Button></>} />
       <SettingsModal open={settings} orgId={orgId} notify={store.notify} onClose={(saved) => { setSettings(false); if (saved) refresh(false); }} />
     </div>

@@ -81,6 +81,7 @@ export function createFunctions(ctx) {
     'ai-keys': () => orgUserRoute('aiKeys', 'ai-keys'),
     'meta-ads': () => orgUserRoute('metaAds', 'meta-ads'),
     voice: () => orgUserRoute('voice', 'voice'),
+    'google-ads': () => orgUserRoute('googleAds', 'google-ads'),
     'platforms': () => orgUserRoute('platforms', 'platforms'),
     'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
     'bulk-send': () => orgUserRoute('bulk', 'bulk-send'),

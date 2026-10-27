@@ -70,6 +70,59 @@ export function profitOf({ faturamento, gasto, vendas, leads, conversas }, s) {
   };
 }
 
+// ---- comum ao Facebook e ao Google: taxas, vendas rastreadas e casamento pela UTM ----
+
+export async function adsSettings(pool, orgId) {
+  const r = (await pool.query(`select imposto_pct, taxa_gateway_pct, custo_produto_pct, custo_por_venda from public.ads_settings where organization_id = $1`, [orgId])).rows[0];
+  return r ? Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Number(v) || 0])) : { imposto_pct: 0, taxa_gateway_pct: 0, custo_produto_pct: 0, custo_por_venda: 0 };
+}
+
+// Vendas e leads rastreados pela Kobly no período, com as UTMs do lead
+export async function koblyFacts(pool, orgId, per) {
+  const p = [orgId, per.since.toISOString(), per.until ? per.until.toISOString() : null];
+  const { rows } = await pool.query(`
+    with ev as (
+      select e.lead_id, count(*)::int as aprovadas, coalesce(sum(e.valor_produto), 0)::float as receita, min(e.created_at) as quando
+        from public.webhook_events e where e.organization_id = $1 and e.tipo_evento = 'Compra Aprovada' and e.lead_id is not null
+         and e.created_at >= $2 and ($3::timestamptz is null or e.created_at < $3) group by e.lead_id),
+    fs as (
+      select s.lead_id, count(*)::int as recuperadas, coalesce(sum(s.amount), 0)::float as receita, min(s.created_at) as quando
+        from public.flow_sales s where s.organization_id = $1 and s.lead_id is not null
+         and s.created_at >= $2 and ($3::timestamptz is null or s.created_at < $3) group by s.lead_id)
+    select l.id, l.utm->>'utm_source' as utm_source, l.utm->>'utm_campaign' as utm_campaign, l.utm->>'utm_medium' as utm_medium, l.utm->>'utm_content' as utm_content,
+           (l.created_at >= $2 and ($3::timestamptz is null or l.created_at < $3)) as lead_novo,
+           coalesce(ev.aprovadas, 0) as aprovadas, coalesce(ev.receita, 0) as receita_checkout,
+           coalesce(fs.recuperadas, 0) as recuperadas, coalesce(fs.receita, 0) as receita_recuperada,
+           least(ev.quando, fs.quando) as venda_em
+      from public.leads l left join ev on ev.lead_id = l.id left join fs on fs.lead_id = l.id
+     where l.organization_id = $1 and l.utm is not null and (l.utm ? 'utm_campaign' or l.utm ? 'utm_medium' or l.utm ? 'utm_content')
+       and (ev.lead_id is not null or fs.lead_id is not null or (l.created_at >= $2 and ($3::timestamptz is null or l.created_at < $3)))`, p);
+  return rows;
+}
+
+// utm_source que claramente é da outra rede não casa (lead do Google não entra numa campanha do Facebook de mesmo nome)
+const FROM_META = /^(fb|facebook|ig|instagram|meta|an|msg)\b/i;
+const FROM_GOOGLE = /^(google|gads|adwords|youtube|yt)\b/i;
+export const sourceOk = (src, platform) => { const s = String(src || '').trim(); return !s || (platform === 'google' ? !FROM_META.test(s) : !FROM_GOOGLE.test(s)); };
+
+// soma por anúncio/conjunto/campanha: casa a UTM do lead com o nome ou o ID
+export function attribute(items, facts, utmField, platform = 'meta') {
+  const byKey = new Map();
+  for (const it of items) for (const k of [String(it.id), String(it.name || '').trim().toLowerCase()]) if (k) byKey.set(k, it);
+  const out = new Map(items.map((it) => [it.id, { leads: 0, vendas: 0, faturamento: 0, recuperadas: 0, receita_recuperada: 0 }]));
+  for (const f of facts) {
+    if (!sourceOk(f.utm_source, platform)) continue;
+    const it = utmKeys(f[utmField]).map((k) => byKey.get(k)).find(Boolean);
+    if (!it) continue;
+    const o = out.get(it.id);
+    if (f.lead_novo) o.leads += 1;
+    o.vendas += f.aprovadas + f.recuperadas;
+    o.faturamento += f.receita_checkout + f.receita_recuperada;
+    o.recuperadas += f.recuperadas; o.receita_recuperada += f.receita_recuperada;
+  }
+  return out;
+}
+
 export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Date() }) {
   const cache = new Map();
   const fail = (msg) => { throw new AuthError(422, 'validation_failed', msg); };
@@ -83,53 +136,12 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
   }
   const dropCache = (accId) => { for (const k of cache.keys()) if (k.includes(accId)) cache.delete(k); };
 
-  async function settings(orgId) {
-    const r = (await pool.query(`select imposto_pct, taxa_gateway_pct, custo_produto_pct, custo_por_venda from public.ads_settings where organization_id = $1`, [orgId])).rows[0];
-    return r ? Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Number(v) || 0])) : { imposto_pct: 0, taxa_gateway_pct: 0, custo_produto_pct: 0, custo_por_venda: 0 };
-  }
+  const settings = (orgId) => adsSettings(pool, orgId);
+  const koblyFactsOf = (orgId, per) => koblyFacts(pool, orgId, per);
   async function accountsOf(orgId, id) {
     if (id && id !== 'all') return [await own(orgId, id)];
     const { rows } = await pool.query(`select * from public.meta_ads_accounts where organization_id = $1 order by created_at`, [orgId]);
     return rows;
-  }
-
-  // Vendas e leads rastreados pela Kobly no período, com as UTMs do lead
-  async function koblyFacts(orgId, per) {
-    const p = [orgId, per.since.toISOString(), per.until ? per.until.toISOString() : null];
-    const { rows } = await pool.query(`
-      with ev as (
-        select e.lead_id, count(*)::int as aprovadas, coalesce(sum(e.valor_produto), 0)::float as receita, min(e.created_at) as quando
-          from public.webhook_events e where e.organization_id = $1 and e.tipo_evento = 'Compra Aprovada' and e.lead_id is not null
-           and e.created_at >= $2 and ($3::timestamptz is null or e.created_at < $3) group by e.lead_id),
-      fs as (
-        select s.lead_id, count(*)::int as recuperadas, coalesce(sum(s.amount), 0)::float as receita, min(s.created_at) as quando
-          from public.flow_sales s where s.organization_id = $1 and s.lead_id is not null
-           and s.created_at >= $2 and ($3::timestamptz is null or s.created_at < $3) group by s.lead_id)
-      select l.id, l.utm->>'utm_campaign' as utm_campaign, l.utm->>'utm_medium' as utm_medium, l.utm->>'utm_content' as utm_content,
-             (l.created_at >= $2 and ($3::timestamptz is null or l.created_at < $3)) as lead_novo,
-             coalesce(ev.aprovadas, 0) as aprovadas, coalesce(ev.receita, 0) as receita_checkout,
-             coalesce(fs.recuperadas, 0) as recuperadas, coalesce(fs.receita, 0) as receita_recuperada,
-             least(ev.quando, fs.quando) as venda_em
-        from public.leads l left join ev on ev.lead_id = l.id left join fs on fs.lead_id = l.id
-       where l.organization_id = $1 and l.utm is not null and (l.utm ? 'utm_campaign' or l.utm ? 'utm_medium' or l.utm ? 'utm_content')
-         and (ev.lead_id is not null or fs.lead_id is not null or (l.created_at >= $2 and ($3::timestamptz is null or l.created_at < $3)))`, p);
-    return rows;
-  }
-  // soma por anúncio/conjunto/campanha: casa a UTM do lead com o nome ou o ID
-  function attribute(items, facts, utmField) {
-    const byKey = new Map();
-    for (const it of items) for (const k of [String(it.id), String(it.name || '').trim().toLowerCase()]) if (k) byKey.set(k, it);
-    const out = new Map(items.map((it) => [it.id, { leads: 0, vendas: 0, faturamento: 0, recuperadas: 0, receita_recuperada: 0 }]));
-    for (const f of facts) {
-      const it = utmKeys(f[utmField]).map((k) => byKey.get(k)).find(Boolean);
-      if (!it) continue;
-      const o = out.get(it.id);
-      if (f.lead_novo) o.leads += 1;
-      o.vendas += f.aprovadas + f.recuperadas;
-      o.faturamento += f.receita_checkout + f.receita_recuperada;
-      o.recuperadas += f.recuperadas; o.receita_recuperada += f.receita_recuperada;
-    }
-    return out;
   }
 
   // lista de campanhas / conjuntos / anúncios de uma conta, com as métricas do período
@@ -182,7 +194,7 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
         const accs = await accountsOf(orgId, body.id);
         const lists = await Promise.all(accs.map((a) => listLevel(a, level, preset, !!body.force)));
         const items = lists.flat();
-        const facts = await koblyFacts(orgId, periodOf(preset, now()));
+        const facts = await koblyFactsOf(orgId, periodOf(preset, now()));
         const att = attribute(items, facts, LEVELS[level].utm);
         const s = await settings(orgId);
         return {
@@ -197,7 +209,7 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
       case 'accounts_overview': {
         const preset = presetOf(body);
         const accs = await accountsOf(orgId, 'all');
-        const facts = await koblyFacts(orgId, periodOf(preset, now()));
+        const facts = await koblyFactsOf(orgId, periodOf(preset, now()));
         const s = await settings(orgId);
         const out = [];
         for (const a of accs) {
@@ -221,7 +233,7 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
         const preset = presetOf(body);
         const accs = await accountsOf(orgId, body.id || 'all');
         const per = periodOf(preset, now());
-        const facts = await koblyFacts(orgId, per);
+        const facts = await koblyFactsOf(orgId, per);
         const s = await settings(orgId);
         let meta = metaMetrics(null);
         const porDia = new Map();
@@ -244,7 +256,7 @@ export function createAdsManager({ pool, graph, own, tokenOf, now = () => new Da
         let vendas = 0, faturamento = 0, leads = 0, recuperadas = 0, receitaRec = 0;
         for (const k of att.values()) { vendas += k.vendas; faturamento += k.faturamento; leads += k.leads; recuperadas += k.recuperadas; receitaRec += k.receita_recuperada; }
         for (const f of facts) {
-          if (!f.venda_em || !utmKeys(f.utm_campaign).some((k) => byKey.has(k))) continue;
+          if (!f.venda_em || !sourceOk(f.utm_source, 'meta') || !utmKeys(f.utm_campaign).some((k) => byKey.has(k))) continue;
           const d = new Date(f.venda_em); const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           const x = porDia.get(dia) || { dia, gasto: 0, vendas_meta: 0, faturamento_meta: 0, vendas: 0, faturamento: 0 };
           x.vendas += f.aprovadas + f.recuperadas; x.faturamento += f.receita_checkout + f.receita_recuperada;

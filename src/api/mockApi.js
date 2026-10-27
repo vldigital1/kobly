@@ -1165,6 +1165,7 @@ export const KoblyApi = {
   async aiKeys(action, extra = {}, empresaId = null) { return this.serviceCall('ai-keys', action, extra, empresaId); },
   async metaAds(action, extra = {}, empresaId = null) { return this.serviceCall('meta-ads', action, extra, empresaId); },
   async voice(action, extra = {}, empresaId = null) { return this.serviceCall('voice', action, extra, empresaId); },
+  async googleAds(action, extra = {}, empresaId = null) { return this.serviceCall('google-ads', action, extra, empresaId); },
   // Plataformas de venda (Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt): conexão e URL de cada uma.
   async platforms(action, extra = {}, empresaId = null) { return this.serviceCall('platforms', action, extra, empresaId); },
   // WhatsApp por QR Code (Uazapi): criar instância, QR Code, status, desconectar, excluir.

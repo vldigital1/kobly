@@ -353,7 +353,7 @@ const NAV = {
   disparos:      { id: 'disparos',      icon: 'send',             label: 'Disparo em massa',     section: 'Operações' },
   integracoes:   { id: 'integracoes',   icon: 'plug',             label: 'Integrações',          section: 'Operações' },
   produtos:      { id: 'produtos',      icon: 'package',          label: 'Produtos',             section: 'Operações' },
-  anuncios:      { id: 'anuncios',      icon: 'target',           label: 'Facebook Ads',         section: 'Operações' },
+  anuncios:      { id: 'anuncios',      icon: 'target',           label: 'Anúncios',             section: 'Operações' },
   relatorios:    { id: 'relatorios',    icon: 'chart-column',     label: 'Relatórios',           section: 'Operações' },
   configuracoes: { id: 'configuracoes', icon: 'settings',         label: 'Configurações',        section: 'Gestão' },
   planos:        { id: 'planos',        icon: 'credit-card',      label: 'Planos & cobrança',    section: 'Gestão' },
@@ -412,7 +412,7 @@ const roleDefFor = (role, teamRole) => (role === 'Cliente' && teamRole === 'aten
 
 // Títulos de rota (topbar)
 const routeTitle = {
-  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Facebook Ads', servidores: 'Servidores WhatsApp', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
+  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Anúncios', servidores: 'Servidores WhatsApp', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
   disparos: 'Disparo em massa',
   leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança',
   seguranca: 'Segurança', chamados: 'Chamados', ajuda: 'Central de ajuda', perfil: 'Perfil',

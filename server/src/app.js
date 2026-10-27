@@ -20,6 +20,7 @@ import { createFlowAdmin } from './flows/admin.js';
 import { createAiKeys } from './ai/router.js';
 import { createMetaAds } from './ads/meta.js';
 import { createVoice } from './voice/elevenlabs.js';
+import { createGoogleAds } from './ads/google.js';
 import { createPayments } from './payments/service.js';
 import { createXpag } from './payments/xpag.js';
 import { createMercadoPago, createWoovi, createPushinPay, createSyncPay } from './payments/pix_br.js';
@@ -120,8 +121,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const platforms = createPlatforms({ pool, secretKey: secretKeyBuf, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const metaAds = createMetaAds({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase,
     appId: config.metaAdsAppId, appSecret: config.metaAdsAppSecret, configId: config.metaAdsConfigId, publicBaseUrl: config.publicBaseUrl, siteUrl: config.siteUrl });
+  const googleAds = createGoogleAds({ pool, secretKey: secretKeyBuf, fetchImpl, clientId: config.googleAdsClientId, clientSecret: config.googleAdsClientSecret,
+    developerToken: config.googleAdsDeveloperToken, loginCustomerId: config.googleAdsLoginCustomerId, apiVersion: config.googleAdsApiVersion,
+    publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl });
   const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, voice, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -244,6 +248,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         }
       }
       // Volta do login "Conectar com Facebook" (Facebook Ads): o "state" assinado diz de qual empresa é.
+      if (path === '/oauth/google/callback' && req.method === 'GET') {
+        const html = await googleAds.oauthCallback(Object.fromEntries(url.searchParams));
+        res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Referrer-Policy', 'no-referrer'); return res.end(html);
+      }
       if (path === '/oauth/meta/callback' && req.method === 'GET') {
         const html = await metaAds.oauthCallback(Object.fromEntries(url.searchParams));
         res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Cache-Control', 'no-store');
