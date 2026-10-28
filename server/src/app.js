@@ -122,7 +122,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier });
   whatsapp.setInboundHandler(flows.onInbound);
   const bulk = createBulk({ pool, whatsapp: waRouted, email: flowEmail, flows });
-  const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }) });
+  const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }), siteUrl: config.siteUrl });
   const mcp = createMcp({ pool, flowAdmin });
   const postback = createPostback({ pool, flows });
   const invites = createInvites({ pool, auth, mailer });
@@ -236,6 +236,9 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
           return send(res, st, st === 200 ? { ok: true, ...counts } : { code: 'rejected' });
         }
       }
+      // Prévia pública de fluxo compartilhado (app.koblay.io/?fluxo=código)
+      const fsh = /^\/flow-share\/([0-9a-f-]{36})$/i.exec(path);
+      if (fsh && req.method === 'GET') { const r = await flowAdmin.publicPreview(fsh[1]); return send(res, 200, r); }
       // Instagram Direct e Messenger: verificação (GET) e mensagens (POST, assinadas com o segredo do app)
       if (path === '/webhooks/meta-messaging') {
         if (req.method === 'GET') { const v = metaChannels.verify(Object.fromEntries(url.searchParams)); res.statusCode = v.status; res.setHeader('Content-Type', 'text/plain'); return res.end(v.body); }
@@ -299,7 +302,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       }
       const fm = /^\/functions\/v1\/([a-z0-9-]+)$/.exec(path);
       // foto do perfil do WhatsApp vai em base64 na rota uazapi: limite maior só ali
-      if (fm) return await functions.handle(fm[1], req, res, { readJson: (r) => readJson(r, fm[1] === 'uazapi' || fm[1] === 'bulk-send' || fm[1] === 'flow-graph' ? 3 * 1024 * 1024 : MAX_BODY), readBody, send, bearer, clientIp });
+      if (fm) return await functions.handle(fm[1], req, res, { readJson: (r) => readJson(r, fm[1] === 'uazapi' || fm[1] === 'bulk-send' ? 2 * 1024 * 1024 : MAX_BODY), readBody, send, bearer, clientIp });
       const handler = routes[`${req.method} ${path}`];
       if (!handler) return send(res, 404, { code: 'not_found', message: 'Not found' });
       const body = req.method === 'POST' ? await readJson(req) : {};

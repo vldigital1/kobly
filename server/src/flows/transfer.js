@@ -1,4 +1,6 @@
-// Baixar e importar fluxo entre contas da Kobly (arquivo .kobly.json).
+// Compartilhar fluxo entre contas da Kobly por CÓDIGO (como no ZapData e na Leona): share gera o código do fluxo,
+// a prévia pública mostra o desenho e importar pelo código copia a versão mais nova para a outra conta.
+// Por baixo, o pacote é montado na hora (exportFlow) e aplicado na conta de destino (importFlow).
 // Exportar: o grafo da versão publicada (ou do rascunho mais novo) + o que ele usa e que outra conta não tem:
 // etiquetas (pelo nome), e-mails (assunto e corpo), agentes de IA (objetivo, conhecimento, tom) e os modelos do
 // WhatsApp (nome, idioma e texto — a outra conta precisa ter o modelo aprovado com o mesmo nome).
@@ -27,7 +29,44 @@ function tagIds(graph) {
   return [...ids].filter((x) => UUID.test(x));
 }
 
-export function createFlowTransfer({ pool }) {
+export function createFlowTransfer({ pool, siteUrl = '' }) {
+  const linkOf = (code) => `${String(siteUrl || 'https://app.koblay.io').replace(/\/$/, '')}/?fluxo=${code}`;
+  async function shareOf(code) {
+    if (!UUID.test(String(code || '').trim())) throw new AuthError(422, 'bad_code', 'Código inválido. Confira se copiou o código inteiro.');
+    const s = (await pool.query(`select s.code, s.organization_id, s.campaign_id, o.nome as conta from public.flow_shares s join public.organizations o on o.id = s.organization_id where s.code = $1 and s.active`, [String(code).trim()])).rows[0];
+    if (!s) throw new AuthError(404, 'code_not_found', 'Esse código não existe ou foi desativado por quem compartilhou.');
+    return s;
+  }
+  // código do fluxo (o mesmo enquanto não pedir um novo)
+  async function share(orgId, userId, campaignId, renew = false) {
+    if (!UUID.test(String(campaignId || ''))) throw new AuthError(422, 'validation_failed', 'Informe o fluxo.');
+    const ok = (await pool.query(`select 1 from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id join public.flow_graph_versions v on v.flow_id = f.id where c.id = $1 and c.organization_id = $2 limit 1`, [campaignId, orgId])).rowCount;
+    if (!ok) throw new AuthError(404, 'not_found', 'Salve o fluxo no editor antes de compartilhar.');
+    if (renew) await pool.query(`update public.flow_shares set active = false where campaign_id = $1 and organization_id = $2 and active`, [campaignId, orgId]);
+    let s = (await pool.query(`select code from public.flow_shares where campaign_id = $1 and organization_id = $2 and active`, [campaignId, orgId])).rows[0];
+    if (!s) s = (await pool.query(`insert into public.flow_shares (organization_id, campaign_id, created_by) values ($1,$2,$3) returning code`, [orgId, campaignId, userId || null])).rows[0];
+    return { code: s.code, link: linkOf(s.code) };
+  }
+  // prévia (pública): desenho do fluxo e os nomes do que ele usa — sem e-mails inteiros, chaves ou contas
+  async function preview(code) {
+    const s = await shareOf(code);
+    const pkg = await exportFlow(s.organization_id, s.campaign_id);
+    const graph = JSON.parse(JSON.stringify(pkg.graph));
+    walk(graph, (k, v, obj) => { if (OWN_FIELDS[k] && v) obj[k] = null; });
+    const r = pkg.resources;
+    return { code: s.code, link: linkOf(s.code), nome: pkg.name, conta: s.conta, blocos: (graph.nodes || []).length, graph,
+      lookups: { tags: Object.entries(r.tags).map(([id, t]) => ({ id, nome: t.nome })), templates: Object.entries(r.templates).map(([id, t]) => ({ id, name: t.name })),
+        emails: Object.entries(r.emails).map(([id, e]) => ({ id, assunto: e.assunto, titulo: e.titulo })), agents: Object.entries(r.agents).map(([id, a]) => ({ id, name: a.name })) },
+      inclui: { etiquetas: Object.keys(r.tags).length, emails: Object.keys(r.emails).length, agentes: Object.keys(r.agents).length, modelos: Object.keys(r.templates).length } };
+  }
+  // importar pelo código: monta o pacote da versão mais nova e aplica nesta conta
+  async function importByCode(orgId, userId, code, nome) {
+    const s = await shareOf(code);
+    const pkg = await exportFlow(s.organization_id, s.campaign_id);
+    const r = await importFlow(orgId, userId, pkg, nome);
+    await pool.query(`update public.flow_shares set imports = imports + 1 where code = $1`, [s.code]);
+    return r;
+  }
   async function exportFlow(orgId, campaignId, version = null) {
     if (!UUID.test(String(campaignId || ''))) throw new AuthError(422, 'validation_failed', 'Informe o fluxo.');
     const c = (await pool.query(`select c.id, c.nome from public.campaigns c where c.id = $1 and c.organization_id = $2`, [campaignId, orgId])).rows[0];
@@ -113,5 +152,5 @@ export function createFlowTransfer({ pool }) {
       return { campaign_id: c.id, nome: name, pendencias, criados: { etiquetas: tagMap.size, emails: emailMap.size, agentes: agentMap.size } };
     } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }
   }
-  return { exportFlow, importFlow };
+  return { exportFlow, importFlow, share, preview, importByCode };
 }

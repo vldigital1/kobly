@@ -1,6 +1,6 @@
 // Afiliados: virar afiliado, clique no link, cadastro pelo link (com fluxo de boas-vindas), comissão recorrente a cada
 // pagamento de plano (10% padrão ou a comissão do afiliado), carência, saque por Pix e o painel do Administrador.
-// Fluxo: baixar e importar em outra conta (etiquetas pelo nome, e-mail copiado, conta de pagamento em branco).
+// Fluxo: compartilhar por código, prévia e importar em outra conta (etiquetas pelo nome, e-mail copiado, conta de pagamento em branco).
 // KOBLY_TEST_DATABASE_URL=postgres://... node --test test/affiliates.integration.test.js   (sem a variável, é ignorado)
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -103,7 +103,7 @@ test('comissão recorrente: 10% de cada pagamento, carência, cancelamento e com
   await assert.rejects(aff.handle(A.ana, { action: 'update', code: 'novo-codigo' }), /não muda/);
 });
 
-test('fluxo: baixar e importar em outra conta', { skip }, async () => {
+test('fluxo: código para compartilhar, prévia e importar em outra conta', { skip }, async () => {
   const tr = createFlowTransfer({ pool });
   const o1 = (await pool.query(`insert into public.organizations (nome) values ('Origem ${stamp}') returning id`)).rows[0].id;
   const o2 = (await pool.query(`insert into public.organizations (nome) values ('Destino ${stamp}') returning id`)).rows[0].id;
@@ -118,11 +118,22 @@ test('fluxo: baixar e importar em outra conta', { skip }, async () => {
     { ref: 'c', type: 'payment', data: { integration_id: randomUUID(), currency: 'BRL', method: 'PIX' } },
   ] };
   await pool.query(`insert into public.flow_graph_versions (organization_id, flow_id, version, graph, is_active) values ($1,$2,1,$3::jsonb,true)`, [o1, f, JSON.stringify(graph)]);
-  const file = await tr.exportFlow(o1, c);
-  assert.equal(file.format, 'kobly-flow'); assert.equal(file.name, 'Recuperação Pix');
-  assert.equal(file.resources.tags[tag].nome, 'Comprou'); assert.equal(file.resources.emails[em].assunto, 'Seu acesso');
-  await assert.rejects(tr.exportFlow(o2, c), /não encontrado/, 'outra empresa não baixa');
-  const r = await tr.importFlow(o2, null, JSON.parse(JSON.stringify(file)));
+  // código do fluxo: o mesmo até pedir um novo
+  const sh = await tr.share(o1, null, c);
+  assert.match(sh.code, /^[0-9a-f-]{36}$/); assert.equal(sh.link, `https://app.koblay.io/?fluxo=${sh.code}`);
+  assert.equal((await tr.share(o1, null, c)).code, sh.code);
+  await assert.rejects(tr.share(o2, null, c), /Salve o fluxo/, 'outra empresa não compartilha');
+  // prévia pública: desenho e nomes, sem a conta de pagamento
+  const pv = await tr.preview(sh.code);
+  assert.equal(pv.nome, 'Recuperação Pix'); assert.equal(pv.blocos, 3); assert.equal(pv.conta, `Origem ${stamp}`);
+  assert.deepEqual(pv.lookups.tags, [{ id: tag, nome: 'Comprou' }]); assert.equal(pv.lookups.emails[0].assunto, 'Seu acesso');
+  assert.equal(pv.graph.nodes[2].data.integration_id, null); assert.equal(pv.inclui.emails, 1);
+  // versão mais nova: mudou o fluxo depois do código, a importação já pega a nova
+  await pool.query(`update public.flow_graph_versions set is_active = false where flow_id = $1`, [f]);
+  graph.nodes[0].data.nota = 'v2';
+  await pool.query(`insert into public.flow_graph_versions (organization_id, flow_id, version, graph, is_active) values ($1,$2,2,$3::jsonb,true)`, [o1, f, JSON.stringify(graph)]);
+  await assert.rejects(tr.importByCode(o2, null, 'abc'), /inválido/);
+  const r = await tr.importByCode(o2, null, sh.code);
   assert.equal(r.nome, 'Recuperação Pix'); assert.equal(r.criados.emails, 1);
   assert.deepEqual(r.pendencias, ['Conta de pagamento: escolha a da sua conta nos blocos que usam.']);
   const g = (await pool.query(`select v.graph, v.is_draft, v.is_active from public.flow_graph_versions v join public.campaign_flows f on f.id = v.flow_id where f.campaign_id = $1`, [r.campaign_id])).rows[0];
@@ -132,5 +143,10 @@ test('fluxo: baixar e importar em outra conta', { skip }, async () => {
   assert.notEqual(newEmail, em);
   assert.equal((await pool.query(`select organization_id from public.emails where id = $1`, [newEmail])).rows[0].organization_id, o2);
   assert.equal(g.graph.nodes[2].data.integration_id, null);
-  await assert.rejects(tr.importFlow(o2, null, { format: 'outro' }), /não é um fluxo/);
+  assert.equal(g.graph.nodes[0].data.nota, 'v2', 'importou a versão mais nova');
+  assert.equal((await pool.query(`select imports from public.flow_shares where code = $1`, [sh.code])).rows[0].imports, 1);
+  // novo código desativa o antigo
+  const sh2 = await tr.share(o1, null, c, true);
+  assert.notEqual(sh2.code, sh.code);
+  await assert.rejects(tr.preview(sh.code), /desativado/);
 });

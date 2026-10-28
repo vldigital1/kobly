@@ -6,8 +6,8 @@ import { createFlowTransfer } from './transfer.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
-export function createFlowAdmin({ pool, copilot = null }) {
-  const transfer = createFlowTransfer({ pool });
+export function createFlowAdmin({ pool, copilot = null, siteUrl = '' }) {
+  const transfer = createFlowTransfer({ pool, siteUrl });
   async function flowOf(orgId, campaignId) {
     if (!UUID.test(String(campaignId || ''))) throw new AuthError(422, 'validation_failed', 'Informe a campanha.');
     const { rows } = await pool.query(`select f.id as flow_id, c.id as campaign_id from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
@@ -86,8 +86,9 @@ export function createFlowAdmin({ pool, copilot = null }) {
            group by c.id, f.id order by max(v.created_at) desc`, [orgId]);
         return { flows: rows };
       }
-      case 'export': return { file: await transfer.exportFlow(orgId, body.campaign_id, body.version || null) }; // baixar o fluxo (.kobly.json)
-      case 'import': { canEdit(ctx); return transfer.importFlow(orgId, user && user.id, body.file, body.nome); } // fluxo de outra conta vira rascunho aqui
+      case 'share': { canEdit(ctx); return transfer.share(orgId, user && user.id, body.campaign_id, body.renew === true); } // código + link de prévia
+      case 'share_preview': return transfer.preview(body.code); // o que vem no código, antes de importar
+      case 'import': { canEdit(ctx); return transfer.importByCode(orgId, user && user.id, body.code, body.nome); } // fluxo de outra conta vira rascunho aqui
       case 'validate': {
         const v = validateGraph(body.graph);
         return { ...v, warnings: [...v.warnings, ...(v.ok ? await refWarnings(orgId, body.graph) : [])] };
@@ -172,5 +173,5 @@ export function createFlowAdmin({ pool, copilot = null }) {
       default: throw new AuthError(400, 'bad_action', 'Ação desconhecida.');
     }
   }
-  return { handle };
+  return { publicPreview: (code) => transfer.preview(code), handle };
 }
