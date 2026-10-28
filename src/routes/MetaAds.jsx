@@ -375,7 +375,7 @@ function Dashboard({ P, orgId, conta, preset, tick, onSettings }) {
   );
 }
 
-function Accounts({ P, orgId, preset, tick, canEdit, onDisconnect, onOpen }) {
+function Accounts({ P, orgId, preset, tick, canEdit, connected, onDisconnect, onOpen }) {
   const [st, setSt] = useState({ loading: true });
   useEffect(() => {
     let on = true;
@@ -389,7 +389,8 @@ function Accounts({ P, orgId, preset, tick, canEdit, onDisconnect, onOpen }) {
       <table className="ka-table">
         <thead><tr><th className="l">Conta</th><th className="l">Situação</th><th>Gasto</th><th>Faturamento</th><th>Lucro</th><th>Vendas</th><th>CPA</th><th>ROAS</th><th>Campanhas ativas</th><th /></tr></thead>
         <tbody>
-          {st.list.map((a) => (
+          {/* a conta desconectada some na hora, sem esperar o Facebook responder de novo */}
+          {st.list.filter((a) => connected.has(a.id)).map((a) => (
             <tr key={a.id}>
               <td className="l"><div className="ka-name"><button onClick={() => onOpen(a.id)}>{a.name}</button><span>{a.ad_account_id} · {a.currency}</span></div></td>
               <td className="l">{a.erro ? <span className="ka-pill off" title={a.erro}>Erro ao ler</span> : <span className={`ka-pill ${a.ativa ? 'on' : 'off'}`}>{a.ativa ? 'Ativa' : 'Desativada'}</span>}</td>
@@ -666,6 +667,7 @@ function KoblyMetaAds() {
   const [conta, setConta] = useState('all');
   const [preset, setPreset] = useState('last_7d');
   const [tick, setTick] = useState({ n: 0, force: false });
+  const [dropping, setDropping] = useState(false);
   const [updated, setUpdated] = useState(new Date());
   const [adding, setAdding] = useState(false);
   const [drop, setDrop] = useState(null); // conta a desconectar
@@ -692,7 +694,10 @@ function KoblyMetaAds() {
   }
 
   async function disconnect() {
+    if (dropping) return;
+    setDropping(true);
     const r = await P.api('disconnect', { id: drop.id }, orgId);
+    setDropping(false);
     if (r.error) { store.notify('danger', r.error); return; }
     store.notify('success', `Conta "${drop.name}" desconectada.`);
     setDrop(null); setConta('all'); loadAccs(); refresh(true);
@@ -732,7 +737,7 @@ function KoblyMetaAds() {
           </div>
           {accs.list.some((a) => a.status === 'error') && <Banner tone="danger">{accs.list.find((a) => a.status === 'error').last_error}</Banner>}
           {tab === 'dashboard' && <Dashboard key={platform} P={P} orgId={orgId} conta={conta} preset={preset} tick={tick} onSettings={() => setSettings(true)} />}
-          {tab === 'accounts' && <Accounts key={platform} P={P} orgId={orgId} preset={preset} tick={tick} canEdit={canEdit} onDisconnect={setDrop} onOpen={(id) => { setConta(id); setTab('campaign'); }} />}
+          {tab === 'accounts' && <Accounts key={platform} P={P} orgId={orgId} preset={preset} tick={tick} canEdit={canEdit} connected={new Set(accs.list.map((a) => a.id))} onDisconnect={setDrop} onOpen={(id) => { setConta(id); setTab('campaign'); }} />}
           {['campaign', 'adset', 'ad'].includes(tab) && <Entities key={`${platform}:${tab}`} P={P} orgId={orgId} level={tab} conta={conta} preset={preset} tick={tick} canEdit={canEdit} notify={store.notify}
             parent={tab === 'campaign' ? null : parent} onDrill={drill} onClearParent={() => setParent(null)} />}
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', lineHeight: 1.6 }}>
@@ -742,7 +747,7 @@ function KoblyMetaAds() {
         </>)}
       </>)}
       <Modal open={!!drop} onClose={() => setDrop(null)} title="Desconectar conta de anúncios?" subtitle={drop ? `"${drop.name}" sai da Kobly. As campanhas continuam rodando normalmente ${P.where}.` : ''}
-        footer={<><Button variant="ghost" onClick={() => setDrop(null)}>Cancelar</Button><Button variant="danger" iconLeft="unplug" onClick={disconnect}>Desconectar</Button></>} />
+        footer={<><Button variant="ghost" onClick={() => setDrop(null)}>Cancelar</Button><Button variant="danger" iconLeft="unplug" disabled={dropping} onClick={disconnect}>Desconectar</Button></>} />
       <SettingsModal open={settings} orgId={orgId} notify={store.notify} onClose={(saved) => { setSettings(false); if (saved) refresh(false); }} />
     </div>
   );
