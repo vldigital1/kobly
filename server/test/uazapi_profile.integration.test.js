@@ -21,6 +21,7 @@ async function fakeFetch(url, init = {}) {
   const ok = (b) => ({ ok: true, status: 200, json: async () => b });
   if (u.pathname === '/instance/status') return ok({ instance: { status: 'connected', owner: '5547999990000', profileName: 'Loja Nova', profilePicUrl: 'https://pps.whatsapp.net/x.jpg', isBusiness: true } });
   if (u.pathname.startsWith('/profile/')) return ok({ success: true });
+  if (u.pathname === '/chat/find') return ok({ chats: [], pagination: { hasMore: false } }); // histórico ao conectar: nada a importar
   throw new Error('rede não esperada: ' + url);
 }
 

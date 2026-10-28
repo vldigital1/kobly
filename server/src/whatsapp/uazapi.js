@@ -9,7 +9,11 @@
 //   POST /send/text        (token)       { number, text }
 //   POST /profile/name     (token)       { name }   (até 25 caracteres)
 //   POST /profile/image    (token)       { image }  (JPEG 640x640: link, base64 ou "remove")
-// Aviso "messages": { EventType, token, message: { messageid, chatid, sender, senderName, fromMe, isGroup, messageType, text } }.
+//   POST /chat/find        (token)       { sort, limit, offset, wa_isGroup } → { chats: [{ wa_chatid, phone, name, wa_contactName, wa_isGroup }], pagination }
+//   POST /message/find     (token)       { chatid, limit, offset } → { messages: [...] } (mais recentes primeiro)
+// Aviso "messages": { EventType, token, chat, message: { messageid, chatid, sender, sender_pn, senderName, fromMe, isGroup, messageType, text, messageTimestamp (ms) } }.
+// Toda conversa do número aparece em Conversas: quem escreve e não é lead vira lead (utm_source = whatsapp) e o que a
+// empresa responde pelo celular entra como saída "celular". Ao conectar, puxa o histórico recente (HISTORY_*).
 // O aviso é aceito só se o "token" dele for o da instância daquela URL.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
@@ -18,9 +22,29 @@ import { OPT_OUT } from './service.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const STATUS = new Set(['disconnected', 'connecting', 'connected', 'hibernated']);
-const SAFE = 'id, label, status, phone, profile_name, profile_pic_url, is_business, last_seen_at, disconnect_reason, pause_flows_on_disconnect, last_error, connected_at, created_at';
+const SAFE = 'id, label, status, phone, profile_name, profile_pic_url, is_business, last_seen_at, disconnect_reason, pause_flows_on_disconnect, last_error, connected_at, created_at, history_status, history_count, history_at, history_error';
 const digits = (v) => String(v || '').split('@')[0].replace(/\D/g, '');
 const ENV = 'env'; // id do servidor do ambiente na lista de servidores
+const HISTORY_CHATS = 150, HISTORY_PER_CHAT = 40; // conversas mais recentes e mensagens de cada uma
+
+// telefone do contato da conversa (nunca o do próprio número): JID @s.whatsapp.net, o "phone" do chat ou o sender_pn
+// de quem mandou. Conversa só com @lid (sem telefone conhecido) fica de fora.
+export function contactPhone(m, chat) {
+  const pn = (j) => { const v = String(j || ''); return !v.includes('@') || /@s\.whatsapp\.net$/.test(v) ? digits(v) : ''; };
+  const c = chat || {};
+  const v = pn(m.chatid) || pn(c.wa_chatid) || digits(c.phone) || (!m.fromMe ? pn(m.sender_pn) || pn(m.sender) : '');
+  return v.length >= 10 ? v : '';
+}
+// texto para a lista: legenda/texto ou o tipo da mídia
+export function messageText(m) {
+  const t = String(m.text || '').trim();
+  if (t) return t.slice(0, 4096);
+  const k = String(m.messageType || '').toLowerCase();
+  for (const [w, label] of [['image', 'imagem'], ['audio', 'áudio'], ['ptt', 'áudio'], ['video', 'vídeo'], ['document', 'arquivo'], ['sticker', 'figurinha'], ['location', 'localização'], ['contact', 'contato']]) if (k.includes(w)) return `[${label}]`;
+  return '[mensagem]';
+}
+// messageTimestamp vem em milissegundos (alguns servidores mandam em segundos)
+const tsOf = (v) => { const n = Number(v); return n > 0 ? new Date(n < 1e12 ? n * 1000 : n) : new Date(); };
 
 // resposta do /instance/status (ou do /instance/connect) → { status, qrcode, paircode, phone, profileName, profilePicUrl, isBusiness, disconnectReason }
 export function parseUazapiStatus(r) {
@@ -91,6 +115,7 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
       connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end, last_error = null where id = $1`,
       [row.id, s.status, s.phone, s.profileName, s.profilePicUrl, s.isBusiness, s.disconnectReason]);
     await statusChanged(row, s.status);
+    if (s.status === 'connected') startHistory(row);
     return s;
   }
   // "Pausar fluxos ao desconectar": caiu e a empresa ficou sem WhatsApp conectado → pausa os fluxos ativos e guarda quais;
@@ -110,6 +135,66 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     }
   }
 
+  // lead do contato (mesma regra de telefone do descadastro: últimos 10 dígitos); cria se ainda não existir
+  async function leadFor(orgId, phone, name) {
+    const found = (await pool.query(`select id, nome from public.leads where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 order by updated_at desc limit 1`, [orgId, phone.slice(-10)])).rows[0];
+    const nome = String(name || '').trim().slice(0, 120) || null;
+    if (found) { if (!found.nome && nome) await pool.query(`update public.leads set nome = $2 where id = $1`, [found.id, nome]); return found.id; }
+    return (await pool.query(`insert into public.leads (organization_id, nome, telefone, utm) values ($1, $2, $3, '{"utm_source":"whatsapp"}'::jsonb) returning id`, [orgId, nome, phone])).rows[0].id;
+  }
+  // o que a empresa mandou pelo próprio celular (não passou pela Kobly)
+  async function saveFromPhone(row, leadId, phone, m) {
+    return (await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, channel, created_at)
+      select $1, $2, $3, 'celular', $4, $5, 'uazapi', $6 where not exists (select 1 from public.whatsapp_outbound_messages where organization_id = $1 and wa_message_id = $5)`,
+      [row.organization_id, leadId, phone, messageText(m), `uaz:${m.messageid}`, tsOf(m.messageTimestamp)])).rowCount;
+  }
+
+  // Histórico: as conversas mais recentes do número (sem grupos), sem disparar fluxo nem resposta automática.
+  const importing = new Set();
+  function startHistory(row) {
+    if (row.history_status || importing.has(row.id)) return; // uma vez por conexão; "Importar de novo" zera o status
+    importing.add(row.id);
+    importHistory(row).catch(() => {}).finally(() => importing.delete(row.id));
+  }
+  async function importHistory(row) {
+    const claimed = await pool.query(`update public.whatsapp_uazapi_instances set history_status = 'running', history_error = null where id = $1 and (history_status is null or history_status <> 'running') returning id`, [row.id]);
+    if (!claimed.rowCount) return;
+    let count = 0;
+    try {
+      const server = await serverOf(row), token = tokenOf(row);
+      const chats = [];
+      for (let offset = 0; chats.length < HISTORY_CHATS; offset += 50) {
+        const r = await call(server, '/chat/find', { method: 'POST', token, body: { operator: 'AND', sort: '-wa_lastMsgTimestamp', limit: 50, offset, wa_isGroup: false } });
+        const page = Array.isArray(r.chats) ? r.chats : [];
+        chats.push(...page.filter((c) => !c.wa_isGroup && !/@(g\.us|newsletter|broadcast)$/.test(String(c.wa_chatid || ''))));
+        if (!page.length || !(r.pagination && r.pagination.hasMore)) break;
+      }
+      for (const chat of chats.slice(0, HISTORY_CHATS)) {
+        const phone = contactPhone({}, chat);
+        if (!phone || phone === digits(row.phone)) continue;
+        const r = await call(server, '/message/find', { method: 'POST', token, body: { chatid: chat.wa_chatid, limit: HISTORY_PER_CHAT, offset: 0 } }).catch(() => ({}));
+        const msgs = (Array.isArray(r.messages) ? r.messages : []).filter((m) => m.messageid && !m.isGroup && !m.wasSentByApi);
+        if (!msgs.length) continue;
+        const leadId = await leadFor(row.organization_id, phone, chat.wa_contactName || chat.name || chat.wa_name || (msgs.find((m) => !m.fromMe) || {}).senderName);
+        let lastIn = null;
+        for (const m of msgs) {
+          if (m.fromMe) { count += await saveFromPhone(row, leadId, phone, m); continue; }
+          const at = tsOf(m.messageTimestamp);
+          const ins = await pool.query(`insert into public.whatsapp_inbound_messages (organization_id, instance_id, wa_message_id, from_phone, lead_id, msg_type, body, payload, received_at)
+            values ($1,$2,$3,$4,$5,'text',$6,$7::jsonb,$8) on conflict (wa_message_id) do nothing`,
+            [row.organization_id, row.id, `uaz:${m.messageid}`, phone, leadId, messageText(m), JSON.stringify({ history: true }), at]);
+          count += ins.rowCount;
+          if (!lastIn || at > lastIn) lastIn = at;
+        }
+        if (lastIn) await pool.query(`update public.leads set whatsapp_last_inbound_at = greatest(coalesce(whatsapp_last_inbound_at, $2), $2) where id = $1`, [leadId, lastIn]);
+        await pool.query(`update public.whatsapp_uazapi_instances set history_count = $2 where id = $1`, [row.id, count]);
+      }
+      await pool.query(`update public.whatsapp_uazapi_instances set history_status = 'done', history_count = $2, history_at = now() where id = $1`, [row.id, count]);
+    } catch (e) {
+      await pool.query(`update public.whatsapp_uazapi_instances set history_status = 'error', history_count = $2, history_error = $3, history_at = now() where id = $1`, [row.id, count, String(e.message || e).slice(0, 300)]);
+    }
+  }
+
   async function handle(ctx, user, body) {
     const orgId = ctx.orgId;
     const editor = () => { if (ctx.role === 'Suporte') throw new AuthError(403, 'forbidden', 'Seu perfil não pode alterar conexões.'); };
@@ -118,7 +203,9 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
       case 'list': { // + quantos fluxos publicados estão ligados (todos os números da empresa atendem os fluxos)
         const flows = (await pool.query(`select count(distinct c.id)::int as n from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
           join public.flow_graph_versions v on v.flow_id = f.id and v.is_active where c.organization_id = $1 and c.status_campanha = 'Ativa'`, [orgId])).rows[0].n;
-        return { configured: await configured(), flows_active: flows, instances: (await pool.query(`select ${SAFE} from public.whatsapp_uazapi_instances where organization_id = $1 order by created_at`, [orgId])).rows };
+        const instances = (await pool.query(`select ${SAFE} from public.whatsapp_uazapi_instances where organization_id = $1 order by created_at`, [orgId])).rows;
+        for (const i of instances) if (i.status === 'connected' && !i.history_status) { startHistory({ ...(await own(orgId, i.id)) }); i.history_status = 'running'; } // conectado antes desta versão
+        return { configured: await configured(), flows_active: flows, instances };
       }
       case 'create': { // escolhe o servidor com vaga, cria a instância, aponta o webhook para a Kobly e já pede o QR Code
         editor(); await need();
@@ -158,6 +245,15 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
         await pool.query(`update public.whatsapp_uazapi_instances set status = 'disconnected' where id = $1`, [row.id]);
         await statusChanged(row, 'disconnected');
         return { ok: true };
+      }
+      case 'import_history': { // puxa de novo as conversas recentes (roda em segundo plano)
+        editor();
+        const row = await own(orgId, body.id);
+        if (row.status !== 'connected') fail('Conecte o número antes de importar as conversas.');
+        if (row.history_status === 'running') return { ok: true, running: true };
+        await pool.query(`update public.whatsapp_uazapi_instances set history_status = null where id = $1`, [row.id]);
+        startHistory({ ...row, history_status: null });
+        return { ok: true, running: true };
       }
       case 'settings': { // opções da conexão na Kobly
         editor();
@@ -256,20 +352,23 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
         last_seen_at = case when $2 = 'connected' then now() else last_seen_at end, disconnect_reason = $4,
         connected_at = case when $2 = 'connected' and status <> 'connected' then now() else connected_at end where id = $1`, [row.id, s.status, s.phone, s.disconnectReason]);
       if (s.status) await statusChanged(row, s.status);
+      if (s.status === 'connected') startHistory(row);
       return { status: 200 };
     }
     if (p.EventType !== 'messages' || !p.message) return { status: 200 };
     const m = p.message;
-    if (m.fromMe || m.isGroup || m.wasSentByApi) return { status: 200 }; // só o que o lead manda, fora de grupos
-    const from = digits(m.sender || m.chatid);
-    if (!m.messageid || from.length < 8) return { status: 200 };
+    if (m.isGroup || m.wasSentByApi || !m.messageid) return { status: 200 }; // grupos ficam de fora; o que a Kobly mandou já está guardado
+    const from = contactPhone(m, p.chat);
+    if (!from || from === digits(row.phone)) return { status: 200 };
+    const leadId = await leadFor(row.organization_id, from, m.fromMe ? (p.chat && (p.chat.wa_contactName || p.chat.name)) : m.senderName);
+    if (m.fromMe) { await saveFromPhone(row, leadId, from, m); return { status: 200 }; } // a empresa respondeu pelo celular
     // "SAIR", "PARAR"...: o lead deixa de receber WhatsApp (mesma regra da API Oficial)
     if (OPT_OUT.test(String(m.text || '')) && from.length >= 10) {
       await pool.query(`update public.leads set whatsapp_opt_out = true where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 and not whatsapp_opt_out`, [row.organization_id, from.slice(-10)]);
     }
     if (!onInbound) return { status: 200 };
     await onInbound({ orgId: row.organization_id, accountId: null, instanceId: row.id,
-      message: { id: `uaz:${m.messageid}`, from, type: 'text', text: { body: String(m.text || '') }, timestamp: m.messageTimestamp },
+      message: { id: `uaz:${m.messageid}`, from, type: 'text', text: { body: messageText(m) }, timestamp: m.messageTimestamp },
       contacts: m.senderName ? [{ profile: { name: m.senderName }, wa_id: from }] : [] });
     return { status: 200 };
   }

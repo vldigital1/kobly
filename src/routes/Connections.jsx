@@ -249,6 +249,20 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, na
         </button>
       )}
 
+      {c.kind === 'qr' && c.status === 'connected' && c.history && (
+        <div className="kc-toggle" style={{ position: 'relative', zIndex: 1, cursor: 'default' }}>
+          <Icon name={c.history.status === 'running' ? 'loader' : c.history.status === 'error' ? 'alert-triangle' : 'messages-square'} size={16}
+            style={{ color: c.history.status === 'error' ? '#fb7185' : c.history.status === 'done' ? '#34d399' : 'var(--text-subtle)' }} />
+          <span style={{ flex: 1 }}>
+            {c.history.status === 'running' ? `Importando conversas do WhatsApp… ${c.history.count || 0} mensagens`
+              : c.history.status === 'done' ? `Conversas importadas: ${c.history.count || 0} mensagens`
+                : c.history.status === 'error' ? 'Não deu para importar as conversas agora.'
+                  : 'As conversas do WhatsApp vão aparecer em Conversas.'}
+          </span>
+          {c.history.status !== 'running' && <button type="button" className="kc-btn" onClick={() => onAct('uazapi', 'import_history', { id: c.key }, 'Importando as conversas recentes. Elas aparecem em Conversas em alguns minutos.')}><Icon name="refresh-cw" size={14} />{c.history.status ? 'Importar de novo' : 'Importar'}</button>}
+        </div>
+      )}
+
       {c.kind === 'qr' && (
         <div className="kc-toggle" style={{ position: 'relative', zIndex: 1 }} onClick={() => onPause(!c.pause)} title="Se este número cair e não houver outro WhatsApp conectado, os fluxos ativos pausam sozinhos; quando ele voltar, eles voltam a rodar.">
           <Icon name="pause-circle" size={16} style={{ color: c.pause ? '#34d399' : 'var(--text-subtle)' }} />
@@ -288,6 +302,13 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
     setSt({ loading: false, uaz: u.instances || [], uazOn: !!u.configured, flows: u.flows_active || 0, oficial: (o && o.account) || null, tg: t.channels || [], error: u.error || t.error || null });
   }, [empresaId]);
   useEffect(() => { load(); }, [load]);
+  // enquanto puxa o histórico do WhatsApp, atualiza o andamento
+  const importing = st.uaz.some((i) => i.history_status === 'running');
+  useEffect(() => {
+    if (!importing) return undefined;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [importing, load]);
 
   function start(kind) {
     if (kind.soon) { notify('info', `${kind.label} chega em breve.`); return; }
@@ -345,7 +366,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
 
   // todas as conexões no mesmo formato de cartão
   const all = [
-    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
+    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, history: { status: i.history_status, count: i.history_count, at: i.history_at, error: i.history_error }, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
     ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at }] : []),
     ...st.tg.map((c) => ({ key: c.id, kind: 'telegram', name: c.label, sub: 'Bot de alertas da equipe', chat: c.default_chat_id, status: 'connected', when: c.created_at })),
   ];

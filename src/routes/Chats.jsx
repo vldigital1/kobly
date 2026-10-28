@@ -16,6 +16,7 @@ const DE = {
   fluxo: { label: 'Fluxo', mine: true, icon: 'git-branch', color: '#ff9452' },
   agente: { label: 'IA', mine: true, icon: 'sparkles', color: '#f39200' },
   humano: { label: 'Equipe', mine: true, icon: 'user', color: '#25D366' },
+  celular: { label: 'Celular', mine: true, icon: 'smartphone', color: '#38bdf8' },
 };
 const FILTROS = [['todas', 'Todas', 'messages-square'], ['aguardando', 'Aguardando você', 'bell-ring'], ['fluxo', 'Em fluxo', 'git-branch'], ['humano', 'Com humano', 'hand']];
 const nomeOf = (c) => [c.nome, c.sobrenome].filter(Boolean).join(' ') || c.telefone || 'Lead';
