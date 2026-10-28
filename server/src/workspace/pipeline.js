@@ -46,7 +46,7 @@ export function createPipeline({ pool }) {
   const card = (r) => ({ id: r.id, nome: [r.nome, r.sobrenome].filter(Boolean).join(' ') || r.email || (r.telefone ? `+${r.telefone}` : 'Lead'), telefone: r.telefone, email: r.email,
     produto: r.produto, valor: r.valor_compra, etapa: r.etapa, manual: !!r.etapa_pipeline, ultima: r.ultima_atividade, em_fluxo: r.em_fluxo, humano: r.automation_paused, criado: r.created_at,
     avatar_url: r.avatar_url || null, tags: r.tags_json || [], ultima_msg: r.ultima_msg || null, origem: (r.utm && r.utm.utm_source) || null, ultimo_evento: r.ultimo_evento || null,
-    opt_out: !!r.whatsapp_opt_out });
+    opt_out: !!r.whatsapp_opt_out, canal: r.chat_channel || null, ig_username: r.ig_username || null });
   const canAct = (ctx) => { if (ctx.role === 'Suporte') throw new AuthError(403, 'forbidden', 'Seu perfil não pode alterar leads.'); };
   const stageFilter = (b, f) => (STAGES.includes(f.stage) ? ` and etapa = ${b.p(f.stage)}` : '');
 

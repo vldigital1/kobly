@@ -89,13 +89,13 @@ function Card({ l, s, drag, canEdit, avatar, onDrag, onDragEnd, onOpen, onChat, 
     <div className={`kp-card${drag ? ' drag' : ''}`} style={{ animationDelay: `${delay}ms` }} draggable={canEdit}
       onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDrag(); }} onDragEnd={onDragEnd} onClick={onOpen}>
       <div className="acts">
-        {l.telefone && <button type="button" title="Abrir conversa" onClick={(e) => { e.stopPropagation(); onChat(); }}><Icon name="message-circle" size={14} /></button>}
+        {(l.telefone || l.canal) && <button type="button" title="Abrir conversa" onClick={(e) => { e.stopPropagation(); onChat(); }}><Icon name="message-circle" size={14} /></button>}
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <LeadAvatar name={l.nome} src={avatar} size={40} dot={l.humano ? '#fbbf24' : l.em_fluxo ? '#ff9452' : null} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 30 }}>{l.nome}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.produto || fmtPhone(l.telefone) || l.email}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.produto || fmtPhone(l.telefone) || (l.ig_username ? `@${l.ig_username}` : l.canal === 'messenger' ? 'Messenger' : l.email)}</div>
         </div>
       </div>
       {msg && <div className="kp-msg">{de && <Icon name={de[0]} size={13} style={{ color: de[1], flex: 'none' }} />}{t && <Icon name={t[0]} size={13} style={{ flex: 'none' }} />}<span>{msg}</span></div>}

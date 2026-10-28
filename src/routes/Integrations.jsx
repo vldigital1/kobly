@@ -1089,7 +1089,7 @@ function BrandsList({ empresaId, onSaved }) {
 // Conteúdo de e-mail de campanha NÃO mora aqui — fica no FlowBuilder.
 // Menu vertical de Integrações (a ordem é a da tela). Conexões primeiro: sem WhatsApp nada funciona.
 const SECTIONS = [
-  { value: 'conexoes', label: 'Conexões', icon: 'smartphone', help: 'Todos os canais da conta: WhatsApp por QR Code, API Oficial da Meta e Telegram.' },
+  { value: 'conexoes', label: 'Conexões', icon: 'smartphone', help: 'Todos os canais da conta: WhatsApp por QR Code, API Oficial da Meta, Instagram, Messenger e Telegram.' },
   { value: 'gateways', label: 'Gateways de pagamento', icon: 'credit-card', help: 'Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt, XPag, Mercado Pago, PushinPay, SyncPay, Woovi e Zenith: cada um com a sua página de conexão.' },
   { value: 'trackeamento', label: 'Trackeamento', icon: 'chart-line', help: 'Pixels (Meta, TikTok e Google), UTMify e de onde vêm os leads.' },
   { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },

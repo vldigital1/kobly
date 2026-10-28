@@ -171,14 +171,15 @@ const KH_CSS = `
 .kh-scroll-btn { position: absolute; right: 22px; bottom: 80px; width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; background: #202c33; color: #aebac1; box-shadow: 0 2px 8px rgba(0,0,0,.4); z-index: 5; }
 `;
 
-function Avatar({ name, src, size = 49, online }) {
+function Avatar({ name, src, size = 49, online, channel }) {
   const [bad, setBad] = useState(false);
   const h = hue(name);
   const img = src && !bad;
   return (
     <div className="kh-av" style={{ width: size, height: size, fontSize: Math.round(size * 0.36), background: img ? '#2a3942' : `linear-gradient(135deg, hsl(${h} 55% 45%), hsl(${(h + 40) % 360} 60% 32%))` }}>
       {img ? <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} /> : ini(name)}
-      {online !== undefined && <span className="st" style={{ background: online ? '#25d366' : '#64748b' }} />}
+      {channel && channel !== 'whatsapp' ? <span style={{ position: 'absolute', right: -3, bottom: -3, borderRadius: 7, boxShadow: '0 0 0 2px #111b21', display: 'grid' }}><ChannelLogo kind={channel} size={Math.max(16, Math.round(size * 0.38))} /></span>
+        : online !== undefined && <span className="st" style={{ background: online ? '#25d366' : '#64748b' }} />}
     </div>
   );
 }
@@ -306,8 +307,9 @@ function LeadSide({ lead, flows, tags, canEdit, onToggleTag, onClose, onNotes, o
     <div className="kh-side">
       <div className="hd"><button type="button" className="kh-ic" onClick={onClose} aria-label="Fechar detalhes"><Icon name="x" size={20} /></button>Detalhes do contato</div>
       <div className="kh-card" style={{ alignItems: 'center', textAlign: 'center', paddingTop: 26 }}>
-        <Avatar name={nomeOf(lead)} src={lead.avatar_url} size={160} />
+        <Avatar name={nomeOf(lead)} src={lead.avatar_url} size={160} channel={lead.chat_channel} />
         <div style={{ fontSize: 22, color: '#e9edef', marginTop: 6 }}>{nomeOf(lead)}</div>
+        {lead.ig_username && <div style={{ fontSize: 15, color: '#8696a0' }}>@{lead.ig_username}</div>}
         {lead.telefone && <div style={{ fontSize: 15, color: '#8696a0' }}>{fmtPhone(lead.telefone)}
           <button type="button" className="kh-ic" style={{ width: 28, height: 28, display: 'inline-grid', verticalAlign: 'middle' }} title="Copiar número" onClick={() => navigator.clipboard && navigator.clipboard.writeText(lead.telefone)}><Icon name="copy" size={14} /></button></div>}
         {lead.valor_compra != null && <div style={{ color: '#34d399', fontWeight: 700 }}>{money(lead.valor_compra)}</div>}
@@ -477,7 +479,7 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
         <div className="kh-head">
           {onBack && <button type="button" className="kh-ic" onClick={onBack} aria-label="Voltar"><Icon name="arrow-left" size={20} /></button>}
           <button type="button" onClick={() => setSideOpen(!sideOpen)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 0, cursor: 'pointer', padding: 0, minWidth: 0, flex: 1, textAlign: 'left' }}>
-            <Avatar name={nomeOf(lead)} src={lead.avatar_url} size={42} />
+            <Avatar name={nomeOf(lead)} src={lead.avatar_url} size={42} channel={lead.chat_channel} />
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 16, color: '#e9edef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{nomeOf(lead)}</span>
@@ -485,11 +487,11 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
                 {!lead.automation_paused && st.flows[0] && <span className="kh-chip" style={{ color: '#ffb27d', background: 'rgba(255,98,1,.18)' }}><Icon name="git-branch" size={11} />{st.flows[0].campanha}</span>}
                 {(lead.tags || []).slice(0, 3).map((t) => <span key={t.id} className="kh-chip" style={{ color: '#bfdbfe', background: 'rgba(59,130,246,.2)' }}>{t.nome}</span>)}
               </div>
-              <div style={{ fontSize: 13, color: '#8696a0' }}>{fmtPhone(lead.telefone)}</div>
+              <div style={{ fontSize: 13, color: '#8696a0' }}>{lead.chat_channel === 'instagram' ? `Instagram${lead.ig_username ? ` · @${lead.ig_username}` : ''}` : lead.chat_channel === 'messenger' ? 'Messenger' : fmtPhone(lead.telefone)}</div>
             </div>
           </button>
           <div className="kh-acts">
-            {canEdit && <button type="button" className="kh-ic" title="Ligar (chamada muda)" onClick={ring}><Icon name="phone-call" size={19} /></button>}
+            {canEdit && lead.telefone && <button type="button" className="kh-ic" title="Ligar (chamada muda)" onClick={ring}><Icon name="phone-call" size={19} /></button>}
             {canEdit && <button type="button" className="kh-ic" title="Disparar fluxo" onClick={openFlows}><Icon name="play" size={19} /></button>}
             {canEdit && (lead.automation_paused
               ? <button type="button" className="kh-ic on" title="Devolver para a automação" onClick={() => pause(false)}><Icon name="bot" size={19} /></button>
@@ -524,7 +526,7 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
         </div>
         {!atBottom && <button type="button" className="kh-scroll-btn" aria-label="Ir para o fim" onClick={() => { endRef.current && endRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' }); setAtBottom(true); }}><Icon name="chevron-down" size={22} /></button>}
         {canEdit && (!lead.janela_aberta ? (
-          <div style={{ padding: '14px 18px', background: '#202c33', fontSize: 14, color: '#fbbf24' }}>A API Oficial da Meta só deixa responder em até 24 h depois da última mensagem do contato. Dispare um fluxo com modelo aprovado para reabrir a conversa.</div>
+          <div style={{ padding: '14px 18px', background: '#202c33', fontSize: 14, color: '#fbbf24' }}>{lead.chat_channel === 'instagram' || lead.chat_channel === 'messenger' ? `O ${lead.chat_channel === 'instagram' ? 'Instagram' : 'Messenger'} só deixa responder em até 24 h depois da última mensagem do contato. Quando ele escrever de novo, a conversa reabre.` : 'A API Oficial da Meta só deixa responder em até 24 h depois da última mensagem do contato. Dispare um fluxo com modelo aprovado para reabrir a conversa.'}</div>
         ) : (
           <div className="kh-compose">
             {sugest.length > 0 && <div className="kh-pop kh-quick">{sugest.map((q) => <button key={q.id} type="button" onClick={() => setText(q.body)}><b style={{ color: '#ff9452' }}>/{q.shortcut}</b> <span style={{ color: '#8696a0' }}>{q.body.slice(0, 100)}</span></button>)}</div>}
@@ -624,7 +626,7 @@ function KoblyChats() {
             const de = DE[c.ultima_de];
             return (
               <button key={c.lead_id} type="button" className={`kh-item${sel === c.lead_id ? ' on' : ''}`} onClick={() => setSel(c.lead_id)}>
-                <Avatar name={nomeOf(c)} src={c.avatar_url || avatars[c.lead_id]} />
+                <Avatar name={nomeOf(c)} src={c.avatar_url || avatars[c.lead_id]} channel={c.chat_channel} />
                 <div className="bd">
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                     <span className="kh-name">{nomeOf(c)}</span>

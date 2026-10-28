@@ -84,6 +84,7 @@ export function createFunctions(ctx) {
     'google-ads': () => orgUserRoute('googleAds', 'google-ads'),
     'platforms': () => orgUserRoute('platforms', 'platforms'),
     'uazapi': () => orgUserRoute('uazapi', 'uazapi'),
+    'meta-channels': () => orgUserRoute('metaChannels', 'meta-channels'),
     'bulk-send': () => orgUserRoute('bulk', 'bulk-send'),
     'dashboard': () => orgUserRoute('dashboard', 'dashboard'),
     'pipeline': () => orgUserRoute('pipeline', 'pipeline'),

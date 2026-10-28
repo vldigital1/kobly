@@ -17,7 +17,7 @@ export const STAGES = [
 export const stageOf = (k) => STAGES.find((s) => s.key === k) || STAGES[0];
 export const fmtPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); if (d.length === 13 && d.startsWith('55')) return `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`; if (d.length === 12 && d.startsWith('55')) return `+55 (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`; return d ? `+${d}` : ''; };
 export const money = (n) => (n == null || n === '' ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-export const ORIGEM = { whatsapp: ['message-circle', '#25D366', 'WhatsApp'], facebook: ['facebook', '#1877f2', 'Facebook'], fb: ['facebook', '#1877f2', 'Facebook'], instagram: ['instagram', '#e1306c', 'Instagram'], ig: ['instagram', '#e1306c', 'Instagram'], google: ['search', '#4285f4', 'Google'], tiktok: ['music-2', '#ff0050', 'TikTok'], _sem: ['circle-dashed', '#94a3b8', 'Sem origem'] };
+export const ORIGEM = { whatsapp: ['message-circle', '#25D366', 'WhatsApp'], facebook: ['facebook', '#1877f2', 'Facebook'], fb: ['facebook', '#1877f2', 'Facebook'], instagram: ['instagram', '#e1306c', 'Instagram'], messenger: ['message-circle', '#a033ff', 'Messenger'], ig: ['instagram', '#e1306c', 'Instagram'], google: ['search', '#4285f4', 'Google'], tiktok: ['music-2', '#ff0050', 'TikTok'], _sem: ['circle-dashed', '#94a3b8', 'Sem origem'] };
 export const origemOf = (o) => ORIGEM[String(o || '_sem').toLowerCase()] || ['link', '#ff9452', o];
 const TL = { evento: ['zap', '#f39200'], fluxo: ['git-branch', '#ff9452'], recebida: ['message-circle', '#25D366'], enviada: ['send', '#53bdeb'], criado: ['user-plus', '#a78bfa'] };
 const when = (iso) => { const d = new Date(iso); return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`; };
@@ -96,6 +96,7 @@ export function LeadSheet({ orgId, leadId, avatar, canEdit = true, tags = [], no
             <button type="button" className="ls-x" onClick={onClose} aria-label="Fechar"><Icon name="x" size={18} /></button>
             <LeadAvatar name={l.nome} src={avatar || l.avatar_url} size={104} ring={sg.c} />
             <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-strong)', marginTop: 6 }}>{l.nome}</div>
+            {l.ig_username && !l.telefone && <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>@{l.ig_username}</div>}
             {l.telefone && <div style={{ fontSize: 14, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>{fmtPhone(l.telefone)}
               <button type="button" className="ls-x" style={{ position: 'static', width: 26, height: 26 }} title="Copiar número" onClick={() => { navigator.clipboard && navigator.clipboard.writeText(l.telefone); notify('success', 'Número copiado.'); }}><Icon name="copy" size={13} /></button></div>}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 2 }}>
@@ -105,9 +106,9 @@ export function LeadSheet({ orgId, leadId, avatar, canEdit = true, tags = [], no
               {l.humano && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, color: '#fbbf24', background: 'rgba(251,191,36,.14)' }}><Icon name="hand" size={12} />Com humano</span>}
               {l.opt_out && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, color: '#fb7185', background: 'rgba(251,113,133,.14)' }}><Icon name="ban" size={12} />Pediu para sair</span>}
             </div>
-            {l.telefone && <div style={{ display: 'flex', gap: 8, marginTop: 10, width: '100%' }}>
+            {(l.telefone || l.canal) && <div style={{ display: 'flex', gap: 8, marginTop: 10, width: '100%' }}>
               <button type="button" className="ls-btn go" style={{ flex: 1 }} onClick={() => onOpenChat(l)}><Icon name="message-circle" size={16} />Abrir conversa</button>
-              <a className="ls-btn" href={`https://wa.me/${String(l.telefone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="Abrir no WhatsApp" style={{ textDecoration: 'none' }}><Icon name="external-link" size={16} /></a>
+              {l.telefone && <a className="ls-btn" href={`https://wa.me/${String(l.telefone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="Abrir no WhatsApp" style={{ textDecoration: 'none' }}><Icon name="external-link" size={16} /></a>}
             </div>}
           </div>
           <div className="ls-sec">

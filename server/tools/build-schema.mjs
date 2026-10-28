@@ -85,6 +85,9 @@ revoke all on public.meta_ads_oauth from kobly_authenticated, kobly_anon;
 revoke all on public.google_ads_accounts from kobly_authenticated, kobly_anon;
 grant select (id, organization_id, customer_id, login_customer_id, name, currency, status, last_error, last_sync_at, created_at, updated_at) on public.google_ads_accounts to kobly_authenticated;
 revoke all on public.google_ads_oauth from kobly_authenticated, kobly_anon;
+-- Instagram e Messenger (0093): token da página não legível; login pendente só pelo serviço.
+revoke all on public.meta_channels from kobly_authenticated, kobly_anon;
+revoke all on public.meta_channel_oauth from kobly_authenticated, kobly_anon;
 -- Taxas do gerenciador de anúncios (0089): escrita só pelo serviço.
 revoke all on public.ads_settings from kobly_authenticated, kobly_anon;
 grant select on public.ads_settings to kobly_authenticated;

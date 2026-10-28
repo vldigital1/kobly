@@ -33,6 +33,7 @@ import { createCopilot } from './flows/copilot.js';
 import { createMcp } from './mcp/server.js';
 import { createWorkspaceSettings } from './workspace/settings.js';
 import { createInbox } from './workspace/inbox.js';
+import { createMetaChannels, channelAddress } from './messaging/metaChannels.js';
 import { createTeam } from './workspace/team.js';
 import { createUtmify } from './tracking/utmify.js';
 import { createTracking, createProducts } from './tracking/service.js';
@@ -86,15 +87,21 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   let flows = null;
   const uazapi = createUazapi({ pool, secretKey: secretKeyBuf, base: config.uazapiBase, adminToken: config.uazapiAdminToken, envCapacity: config.uazapiCapacity || 300, publicBaseUrl: config.publicBaseUrl || '', fetchImpl,
     onInbound: (a) => flows.onInbound(a) });
+  // Instagram Direct e Messenger: endereço ig:<id> / fb:<id> no lugar do telefone
+  const metaChannels = createMetaChannels({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase, appId: config.metaAdsAppId, appSecret: config.metaAdsAppSecret,
+    configId: config.metaMsgConfigId, verifyToken: config.metaMsgVerifyToken, publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl, onInbound: (a) => flows.onInboundLead(a) });
+  const viaMeta = (a) => !!channelAddress(a && a.to);
   // Envio de texto: API oficial quando a empresa tem; senão o número conectado por QR Code.
   const officialConnected = async (orgId) => (await pool.query(`select 1 from public.whatsapp_accounts where organization_id = $1 and status = 'connected'`, [orgId])).rowCount > 0;
   const waRouted = {
     ...whatsapp,
     async sendTextTo(orgId, a) {
+      if (viaMeta(a)) return metaChannels.sendTextTo(orgId, a);
       try { return await whatsapp.sendTextTo(orgId, a); }
       catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendTextTo(orgId, a); throw e; }
     },
     async sendMediaTo(orgId, a) {
+      if (viaMeta(a)) return metaChannels.sendMediaTo(orgId, a);
       try { return await whatsapp.sendMediaTo(orgId, a); }
       catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendMediaTo(orgId, a); throw e; }
     },
@@ -105,7 +112,10 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     avatarOf: (orgId, phone) => uazapi.avatarOf(orgId, phone),
     ringCall: (orgId, phone) => uazapi.ringCall(orgId, phone),
     // sem a API oficial, o WhatsApp comum não tem janela de 24 h
-    freeTextAllowed: async (orgId) => !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
+    freeTextAllowed: async (orgId, to) => !channelAddress(to) && !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
+    sendTemplateTo: (orgId, a) => (viaMeta(a) ? Promise.reject(Object.assign(new Error('Instagram e Messenger não usam modelos do WhatsApp.'), { code: 'unsupported' })) : whatsapp.sendTemplateTo(orgId, a)),
+    sendInteractiveTo: (orgId, a) => (viaMeta(a) ? metaChannels.sendInteractiveTo(orgId, a) : whatsapp.sendInteractiveTo(orgId, a)),
+    typingFor: (orgId, a) => (viaMeta(a) || !whatsapp.typingFor ? Promise.resolve() : whatsapp.typingFor(orgId, a)),
   };
   const flowEmail = createFlowEmail({ pool, apiKey: config.resendApiKey, platformFrom: config.mailFrom, sendingDomain: config.resendSendingDomain, unsubSecret: config.unsubscribeSecret, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier });
@@ -129,7 +139,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     loginCustomerId: config.googleAdsLoginCustomerId, apiVersion: config.googleAdsApiVersion,
     publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl });
   const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
+  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -217,6 +227,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
           return send(res, st, st === 200 ? { ok: true, ...counts } : { code: 'rejected' });
         }
       }
+      // Instagram Direct e Messenger: verificação (GET) e mensagens (POST, assinadas com o segredo do app)
+      if (path === '/webhooks/meta-messaging') {
+        if (req.method === 'GET') { const v = metaChannels.verify(Object.fromEntries(url.searchParams)); res.statusCode = v.status; res.setHeader('Content-Type', 'text/plain'); return res.end(v.body); }
+        if (req.method === 'POST') { const r = await metaChannels.receiveWebhook(await readBody(req, 1024 * 1024), req.headers['x-hub-signature-256']); return send(res, r.status, { ok: r.status === 200 }); }
+      }
       // Aviso da Uazapi (WhatsApp por QR Code): a URL identifica a instância; o token no corpo prova a origem.
       const uz = /^\/webhooks\/uazapi\/([0-9a-f-]{36})$/.exec(path);
       if (uz && req.method === 'POST') {
@@ -258,7 +273,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         res.setHeader('Referrer-Policy', 'no-referrer'); return res.end(html);
       }
       if (path === '/oauth/meta/callback' && req.method === 'GET') {
-        const html = await metaAds.oauthCallback(Object.fromEntries(url.searchParams));
+        const q = Object.fromEntries(url.searchParams);
+        const html = metaChannels.ownsState(q.state) ? await metaChannels.oauthCallback(q) : await metaAds.oauthCallback(q);
         res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Cache-Control', 'no-store');
         res.setHeader('Referrer-Policy', 'no-referrer'); return res.end(html);
       }

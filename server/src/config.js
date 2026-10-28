@@ -29,6 +29,9 @@ export function loadConfig(env = process.env) {
     metaAdsAppSecret: env.META_ADS_APP_SECRET || '',
     // ID da configuração do Login do Facebook para Empresas (app do tipo empresa); sem ele usa a lista de permissões
     metaAdsConfigId: env.META_ADS_CONFIG_ID || '',
+    // Instagram Direct e Messenger (mesmo app do Facebook Ads): configuração do login e senha do webhook
+    metaMsgConfigId: env.META_MSG_CONFIG_ID || '',
+    metaMsgVerifyToken: env.META_MSG_VERIFY_TOKEN || '',
     metaGraphBase: env.META_GRAPH_BASE || 'https://graph.facebook.com/v21.0',
     // Marketing API (Facebook Ads): versão atual da documentação
     metaAdsGraphBase: env.META_ADS_GRAPH_BASE || 'https://graph.facebook.com/v26.0',

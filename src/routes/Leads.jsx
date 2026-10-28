@@ -190,7 +190,7 @@ function KoblyLeads() {
                 <LeadAvatar name={l.nome} src={photo(l)} size={42} dot={l.humano ? '#fbbf24' : l.em_fluxo ? '#ff9452' : null} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nome}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[fmtPhone(l.telefone), l.produto, l.valor != null && Number(l.valor) > 0 ? money(l.valor) : null].filter(Boolean).join(' · ') || l.email || '—'}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[fmtPhone(l.telefone) || (l.ig_username ? `@${l.ig_username}` : null), l.produto, l.valor != null && Number(l.valor) > 0 ? money(l.valor) : null].filter(Boolean).join(' · ') || l.email || '—'}</div>
                 </div>
               </div>
               <span><span className="kl-chip" style={{ color: sg.c, background: `color-mix(in srgb, ${sg.c} 15%, transparent)` }}><Icon name={sg.icon} size={11} />{sg.label}</span></span>
@@ -202,7 +202,7 @@ function KoblyLeads() {
               </div>
               <span><span className="kl-chip" style={{ color: og[1], background: `color-mix(in srgb, ${og[1]} 14%, transparent)` }}><Icon name={og[0]} size={11} />{og[2]}</span></span>
               <span className="hide-md" style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{rel(l.ultima || l.criado)}</span>
-              <span>{l.telefone && <button type="button" className="kl-go" title="Abrir conversa" onClick={(e) => { e.stopPropagation(); openChat(l); }}><Icon name="message-circle" size={16} /></button>}</span>
+              <span>{(l.telefone || l.canal) && <button type="button" className="kl-go" title="Abrir conversa" onClick={(e) => { e.stopPropagation(); openChat(l); }}><Icon name="message-circle" size={16} /></button>}</span>
             </div>
           );
         })}

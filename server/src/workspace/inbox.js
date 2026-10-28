@@ -6,6 +6,7 @@
 // Limpar e arquivar mexem só na tela da Kobly; nada é apagado no WhatsApp.
 import { AuthError } from '../auth.js';
 import { isWindowOpen } from '../flows/vars.js';
+import { addressOf } from '../messaging/metaChannels.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const MEDIA_TTL_MS = 40 * 3600 * 1000; // link da Uazapi vale 48 h
@@ -16,12 +17,13 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
   async function leadOf(orgId, leadId) {
     if (!UUID.test(String(leadId || ''))) throw new AuthError(422, 'validation_failed', 'Informe o lead.');
     const l = (await pool.query(`select id, nome, sobrenome, email, telefone, produto, whatsapp_last_inbound_at, whatsapp_opt_out, automation_paused,
-        avatar_url, chat_notes, chat_archived_at, chat_cleared_at
+        avatar_url, chat_notes, chat_archived_at, chat_cleared_at, ig_user_id, ig_username, fb_psid, chat_channel
       from public.leads where id = $1 and organization_id = $2`, [leadId, orgId])).rows[0];
     if (!l) throw new AuthError(404, 'not_found', 'Lead não encontrado.');
     return l;
   }
   const view = (l) => ({ ...l, janela_aberta: isWindowOpen(l.whatsapp_last_inbound_at, now()) });
+  const channelOf = (out) => (['uazapi', 'instagram', 'messenger'].includes(out.channel) ? out.channel : 'oficial');
   const kindOf = (k) => (['image', 'video', 'audio', 'document'].includes(k) ? k : 'document');
 
   async function handle(ctx, user, body) {
@@ -45,12 +47,12 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
             select v.lead_id, count(*)::int as n from vis v left join resp r on r.lead_id = v.lead_id
              where v.de = 'lead' and v.at > coalesce(r.at, '-infinity'::timestamptz) group by v.lead_id
           )
-          select l.id as lead_id, l.nome, l.sobrenome, l.telefone, l.whatsapp_last_inbound_at, l.automation_paused, l.valor_compra, l.avatar_url,
+          select l.id as lead_id, l.nome, l.sobrenome, l.telefone, l.whatsapp_last_inbound_at, l.automation_paused, l.valor_compra, l.avatar_url, l.chat_channel, l.ig_username,
                  u.body as ultima, u.tipo as ultima_tipo, u.at as ultima_em, u.de as ultima_de, coalesce(n.n, 0) as nao_lidas,
                  (l.chat_archived_at is not null and u.at <= l.chat_archived_at) as arquivada,
                  exists (select 1 from public.flow_executions e where e.lead_id = l.id and e.status in ('running','waiting')) as em_fluxo
             from ult u join public.leads l on l.id = u.lead_id left join unread n on n.lead_id = l.id
-           where ($2 = '' or l.nome ilike '%' || $2 || '%' or l.telefone ilike '%' || $2 || '%' or l.email ilike '%' || $2 || '%')
+           where ($2 = '' or l.nome ilike '%' || $2 || '%' or l.telefone ilike '%' || $2 || '%' or l.email ilike '%' || $2 || '%' or l.ig_username ilike '%' || $2 || '%')
              and (case when $3 = 'arquivadas' then l.chat_archived_at is not null and u.at <= l.chat_archived_at
                        else not (l.chat_archived_at is not null and u.at <= l.chat_archived_at) end)
              and ($3 in ('todas', 'arquivadas') or ($3 = 'aguardando' and u.de = 'lead') or ($3 = 'humano' and l.automation_paused)
@@ -70,7 +72,7 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
         const running = (await pool.query(`select e.id, e.status, e.current_ref, e.wait_kind, c.nome as campanha from public.flow_executions e join public.campaigns c on c.id = e.campaign_id
           where e.lead_id = $1 and e.organization_id = $2 and e.status in ('running','waiting')`, [lead.id, orgId])).rows;
         // WhatsApp por QR Code (sem API oficial): não há janela de 24 h
-        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId) : false;
+        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId, addressOf(lead)) : false;
         const extra = (await pool.query(`select l.valor_compra, l.link_recuperacao, l.created_at, l.utm,
             coalesce((select json_agg(json_build_object('id', t.id, 'nome', t.nome) order by t.nome) from public.lead_tags lt join public.tags t on t.id = lt.tag_id where lt.lead_id = l.id), '[]') as tags,
             coalesce((select json_agg(x order by x.em desc) from (select w.tipo_evento as tipo, w.produto, w.valor_produto as valor, w.created_at as em from public.webhook_events w where w.lead_id = l.id order by w.created_at desc limit 6) x), '[]') as eventos
@@ -113,13 +115,14 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
         if (!msg) throw new AuthError(422, 'empty_text', 'Escreva a mensagem.');
         if (msg.length > 4096) throw new AuthError(422, 'validation_failed', 'Mensagem até 4096 caracteres.');
         if (lead.whatsapp_opt_out) throw new AuthError(409, 'opt_out', 'Este lead pediu para não receber WhatsApp.');
-        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId) : false; // WhatsApp por QR Code: sem janela
+        const to = addressOf(lead);
+        if (!to) throw new AuthError(422, 'bad_phone', 'Lead sem telefone.');
+        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId, to) : false; // WhatsApp por QR Code: sem janela
         if (!livre && !isWindowOpen(lead.whatsapp_last_inbound_at, now())) throw new AuthError(409, 'window_closed', 'A janela de 24 h está fechada: o lead precisa mandar uma mensagem antes (ou use um modelo aprovado num fluxo).');
-        if (!lead.telefone) throw new AuthError(422, 'bad_phone', 'Lead sem telefone.');
-        const out = await whatsapp.sendTextTo(orgId, { to: lead.telefone, text: msg });
-        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, instance_id)
-          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
-          [orgId, lead.id, out.to || lead.telefone, msg, out.id || null, (user && user.id) || null, out.channel === 'uazapi' ? 'uazapi' : 'oficial', out.instanceId || null]);
+        const out = await whatsapp.sendTextTo(orgId, { to, text: msg });
+        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, instance_id, meta_channel_id)
+          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8,$9) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
+          [orgId, lead.id, out.to || to, msg, out.id || null, (user && user.id) || null, channelOf(out), out.instanceId || null, out.metaChannelId || null]);
         if (lead.chat_archived_at) await pool.query(`update public.leads set chat_archived_at = null where id = $1`, [lead.id]);
         return { ok: true, message: r.rows[0] };
       }
@@ -127,19 +130,20 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
         canAct(ctx);
         const lead = await leadOf(orgId, body.lead_id);
         if (lead.whatsapp_opt_out) throw new AuthError(409, 'opt_out', 'Este lead pediu para não receber WhatsApp.');
-        if (!lead.telefone) throw new AuthError(422, 'bad_phone', 'Lead sem telefone.');
+        const to = addressOf(lead);
+        if (!to) throw new AuthError(422, 'bad_phone', 'Lead sem telefone.');
         const kind = kindOf(body.kind);
         const url = String(body.url || '').trim();
         if (!/^https?:\/\/\S+$/i.test(url)) throw new AuthError(422, 'validation_failed', 'Arquivo inválido.');
         const caption = typeof body.caption === 'string' && kind !== 'audio' ? body.caption.trim().slice(0, 1024) : '';
-        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId) : false;
+        const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId, to) : false;
         if (!livre && !isWindowOpen(lead.whatsapp_last_inbound_at, now())) throw new AuthError(409, 'window_closed', 'A janela de 24 h está fechada: o lead precisa mandar uma mensagem antes.');
-        const out = await whatsapp.sendMediaTo(orgId, { to: lead.telefone, kind, url, caption: caption || undefined, filename: body.filename ? String(body.filename).slice(0, 120) : undefined });
+        const out = await whatsapp.sendMediaTo(orgId, { to, kind, url, caption: caption || undefined, filename: body.filename ? String(body.filename).slice(0, 120) : undefined });
         const label = { image: 'imagem', video: 'vídeo', audio: 'áudio', document: 'arquivo' }[kind];
-        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, msg_type, media_url, instance_id)
-          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8,$9,$10) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
-          [orgId, lead.id, out.to || lead.telefone, caption || (kind === 'document' ? String(body.filename || url.split('/').pop()) : `[${label}]`), out.id || null, (user && user.id) || null,
-            out.channel === 'uazapi' ? 'uazapi' : 'oficial', kind, url, out.instanceId || null]);
+        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, msg_type, media_url, instance_id, meta_channel_id)
+          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8,$9,$10,$11) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
+          [orgId, lead.id, out.to || to, caption || (kind === 'document' ? String(body.filename || url.split('/').pop()) : `[${label}]`), out.id || null, (user && user.id) || null,
+            channelOf(out), kind, url, out.instanceId || null, out.metaChannelId || null]);
         return { ok: true, message: r.rows[0] };
       }
       case 'tags': { // adicionar/remover etiquetas do lead pelo chat
@@ -185,7 +189,7 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
       case 'call': { // ligação muda pelo WhatsApp por QR Code
         canAct(ctx);
         const lead = await leadOf(orgId, body.lead_id);
-        if (!lead.telefone) throw new AuthError(422, 'bad_phone', 'Lead sem telefone.');
+        if (!lead.telefone) throw new AuthError(422, 'bad_phone', 'Ligação só funciona com contatos do WhatsApp.');
         if (!whatsapp.ringCall) throw new AuthError(409, 'not_connected', 'Ligação só funciona com o WhatsApp por QR Code conectado.');
         return whatsapp.ringCall(orgId, lead.telefone);
       }

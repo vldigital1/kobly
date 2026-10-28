@@ -153,6 +153,15 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     if (!lead) return true;
     await pool.query(`update public.whatsapp_inbound_messages set lead_id = $2 where id = $1`, [ins.rows[0].id, lead.id]);
     await pool.query(`update public.leads set whatsapp_last_inbound_at = now() where id = $1`, [lead.id]);
+    return resumeFor(lead, message, text);
+  }
+  // Instagram Direct / Messenger: a mensagem já foi guardada e ligada ao lead; só retoma o fluxo que esperava resposta
+  async function onInboundLead({ leadId, text }) {
+    const lead = (await pool.query(`select id, automation_paused from public.leads where id = $1`, [leadId])).rows[0];
+    if (!lead) return false;
+    return resumeFor(lead, { type: 'text', text: { body: text } }, String(text || '').slice(0, 4096));
+  }
+  async function resumeFor(lead, message, text) {
     if (lead.automation_paused) return true; // uma pessoa está atendendo no chat ao vivo
     const waiting = (await pool.query(`select id, variables from public.flow_executions where lead_id = $1 and status = 'waiting' and wait_kind = 'reply' and resume_exit is null`, [lead.id])).rows;
     let resumed = 0;
@@ -201,7 +210,9 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
 
   // ---- Contexto do lead ------------------------------------------------------
   async function contextFor(ex) {
-    const lead = (await pool.query(`select id, organization_id, nome, sobrenome, email, telefone, produto, valor_compra, link_recuperacao, whatsapp_opt_out, whatsapp_last_inbound_at, custom_fields from public.leads where id = $1`, [ex.lead_id])).rows[0] || null;
+    const lead = (await pool.query(`select id, organization_id, nome, sobrenome, email, telefone, produto, valor_compra, link_recuperacao, whatsapp_opt_out, whatsapp_last_inbound_at, custom_fields, ig_user_id, fb_psid from public.leads where id = $1`, [ex.lead_id])).rows[0] || null;
+    // para onde mandar: telefone (WhatsApp) ou ig:<id> / fb:<id> (Instagram Direct / Messenger)
+    if (lead) lead.dest = lead.telefone || (lead.ig_user_id ? `ig:${lead.ig_user_id}` : lead.fb_psid ? `fb:${lead.fb_psid}` : null);
     const globals = Object.fromEntries((await pool.query(`select key, value from public.global_variables where organization_id = $1`, [ex.organization_id])).rows.map((r) => [r.key, r.value]));
     const org = (await pool.query(`select timezone from public.organizations where id = $1`, [ex.organization_id])).rows[0] || {};
     const ev = ex.webhook_event_id ? (await pool.query(`select tipo_evento, checkout_url, produto, valor_produto from public.webhook_events where id = $1`, [ex.webhook_event_id])).rows[0] : null;
@@ -240,7 +251,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
       const out = await fn();
       await recordSend(ex, ctx, { ok: true, msgId: out.id });
       await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, campaign_id, to_phone, source, body, wa_message_id, channel) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [ex.organization_id, ex.lead_id, ex.campaign_id, out.to || ctx.lead.telefone, source, String(preview || '').slice(0, 4096), out.id || null, out.channel === 'uazapi' ? 'uazapi' : 'oficial']).catch((e) => console.error('[flows] conversa não registrada:', e.message));
+        [ex.organization_id, ex.lead_id, ex.campaign_id, out.to || ctx.lead.dest, source, String(preview || '').slice(0, 4096), out.id || null, ['uazapi', 'instagram', 'messenger'].includes(out.channel) ? out.channel : 'oficial']).catch((e) => console.error('[flows] conversa não registrada:', e.message));
       if (deleteOnTag && out.channel === 'uazapi' && out.id && out.instanceId) await scheduleDeletion(ex, deleteOnTag, out).catch((e) => console.error('[flows] apagar-ao-etiquetar não registrado:', e.message));
       return { exit: 'sent', detail: out.id };
     } catch (e) {
@@ -309,12 +320,13 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
   async function sendTemplate(ex, ctx, templateId, varsList) {
     const tpl = (await pool.query(`select id, name, components from public.whatsapp_templates where id::text = $1 and organization_id = $2`, [String(templateId), ex.organization_id])).rows[0];
     if (!tpl) return { exit: 'failed', detail: 'modelo do WhatsApp não encontrado' };
-    return send(ex, ctx, () => whatsapp.sendTemplateTo(ex.organization_id, { to: ctx.lead.telefone, template_id: tpl.id, variables: templateValues(varsList, ctx), button_suffix: buttonSuffix(tpl.components, ctx.ctaLink) }), `[modelo] ${tpl.name}`);
+    return send(ex, ctx, () => whatsapp.sendTemplateTo(ex.organization_id, { to: ctx.lead.dest, template_id: tpl.id, variables: templateValues(varsList, ctx), button_suffix: buttonSuffix(tpl.components, ctx.ctaLink) }), `[modelo] ${tpl.name}`);
   }
 
   // ---- Um bloco ---------------------------------------------------------------
   async function runNode(ex, node, ctx) {
     const d = node.data || {};
+    if (ctx.lead && ctx.lead.dest === undefined) ctx.lead.dest = ctx.lead.telefone || (ctx.lead.ig_user_id ? `ig:${ctx.lead.ig_user_id}` : ctx.lead.fb_psid ? `fb:${ctx.lead.fb_psid}` : null);
     switch (node.type) {
       case 'trigger': return { exit: 'default' };
       case 'delay': {
@@ -334,8 +346,8 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
       case 'send_media':
       case 'send_buttons': {
         if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };
-        if (!ctx.lead.telefone) return { exit: 'failed', detail: 'lead sem telefone' };
-        const livre = node.type === 'send_media' && whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id) : false;
+        if (!ctx.lead.dest) return { exit: 'failed', detail: 'lead sem telefone' };
+        const livre = node.type === 'send_media' && whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id, ctx.lead.dest) : false;
         if (!livre && !isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora)) {
           const fechada = node.type === 'send_media' && nextOf(node, 'window_closed') ? 'window_closed' : 'failed';
           return { exit: fechada, detail: 'janela de 24 h fechada (mídia e botões só com conversa aberta; use um modelo antes)' };
@@ -343,9 +355,9 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
         if (node.type === 'send_media') {
           const url = render(d.url, ctx).trim();
           if (!/^https:\/\/\S+$/i.test(url)) return { exit: 'failed', detail: `link da mídia inválido ou vazio${/\{\{/.test(d.url) ? ` (a variável ${d.url} não tem um link https)` : ''}` };
-          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.telefone, kind: d.kind, url, caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }), `[${d.kind || 'mídia'}] ${d.caption ? render(d.caption, ctx) : url}`, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null);
+          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.dest, kind: d.kind, url, caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }), `[${d.kind || 'mídia'}] ${d.caption ? render(d.caption, ctx) : url}`, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null);
         }
-        const r = await send(ex, ctx, () => whatsapp.sendInteractiveTo(ex.organization_id, { to: ctx.lead.telefone, interactive: buildInteractive(d, render(d.text, ctx)) }), render(d.text, ctx));
+        const r = await send(ex, ctx, () => whatsapp.sendInteractiveTo(ex.organization_id, { to: ctx.lead.dest, interactive: buildInteractive(d, render(d.text, ctx)) }), render(d.text, ctx));
         if (r.exit !== 'sent') return r;
         ctx.vars._wait_var = d.save_as || 'resposta';
         ctx.vars._wait_options = (d.options || []).map((o) => ({ id: o.id, title: o.title }));
@@ -372,7 +384,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
           if (d.opening) {
             if (!isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora)) return { exit: 'error', detail: 'janela de 24 h fechada: o agente só conversa depois que o lead escreve (use um modelo antes)' };
             const text = render(d.opening, ctx);
-            const s = await send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text }), text, 'agente');
+            const s = await send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.dest, text }), text, 'agente');
             if (s.retry) return s;
             if (s.exit !== 'sent') return { exit: 'error', detail: s.detail };
             st.h.push({ r: 'agent', t: text });
@@ -395,7 +407,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
           return { exit: 'error', detail: String(e.message).slice(0, 200) };
         }
         if (out.resposta) {
-          const s = await send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text: out.resposta }), out.resposta, 'agente');
+          const s = await send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.dest, text: out.resposta }), out.resposta, 'agente');
           if (s.retry) { st.h.pop(); ctx.vars[hk] = st; ctx.vars._agent_pending = true; return s; }
           if (s.exit !== 'sent') return { exit: 'error', detail: s.detail };
           st.h.push({ r: 'agent', t: out.resposta });
@@ -520,11 +532,11 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
       case 'send_template':
       case 'send_text': {
         if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };
-        if (!ctx.lead.telefone) return { exit: 'failed', detail: 'lead sem telefone' };
+        if (!ctx.lead.dest) return { exit: 'failed', detail: 'lead sem telefone' };
         if (node.type === 'send_template') return sendTemplate(ex, ctx, d.template_id, d.vars);
         // WhatsApp comum (QR Code, sem API oficial) não tem janela de 24 h
-        const aberta = isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora) || (whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id) : false);
-        if (aberta) { const text = render(d.text, ctx); return send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.telefone, text }), text, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null); }
+        const aberta = isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora) || (whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id, ctx.lead.dest) : false);
+        if (aberta) { const text = render(d.text, ctx); return send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.dest, text }), text, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null); }
         // Janela fechada: com modelo reserva, troca sozinho para o modelo aprovado (diferencial Kobly).
         if (d.fallback_template_id) { const r = await sendTemplate(ex, ctx, d.fallback_template_id, d.fallback_vars); return { ...r, detail: `janela fechada → modelo reserva${r.detail ? ': ' + r.detail : ''}` }; }
         return { exit: nextOf(node, 'window_closed') ? 'window_closed' : 'failed', detail: 'janela de 24 h fechada e sem modelo reserva' };
@@ -645,5 +657,5 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
   // Retomada rápida (resposta do lead / evento novo) sem esperar o próximo ciclo.
   function kick() { if (autoKick) setImmediate(() => { tick().catch((e) => console.error('[flows] tick:', e.message)); }); }
 
-  return { startForEvent, startForLead, onInbound, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
+  return { startForEvent, startForLead, onInbound, onInboundLead, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
 }

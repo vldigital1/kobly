@@ -9,15 +9,15 @@ import { useKobly } from '@/store/store.jsx';
 import { askConfirm } from '@/lib/confirm.jsx';
 
 // Kobly — Integrações → Conexões. Todos os canais da conta num lugar: WhatsApp comum (QR Code, pela Uazapi),
-// API oficial da Meta e bots do Telegram (alertas da equipe); Instagram e Messenger chegam depois.
+// API oficial da Meta, Instagram Direct e Messenger (página do Facebook, login com um clique) e bots do Telegram (alertas da equipe).
 // "Nova conexão" escolhe o tipo; o QR Code atualiza sozinho até o número conectar. KoblyConnections
 
 const KINDS = [
   { id: 'qr', label: 'WhatsApp', color: '#25D366', desc: 'Conecte lendo um QR Code. Funciona com qualquer número, comum ou Business.' },
   { id: 'oficial', label: 'WhatsApp API Oficial', color: '#1D9BF0', desc: 'Número verificado pela Meta, modelos aprovados e sem risco de bloqueio.' },
   { id: 'telegram', label: 'Telegram', color: '#2AABEE', desc: 'Bot que avisa sua equipe: venda aprovada, erro de pagamento, lead pedindo humano.' },
-  { id: 'instagram', label: 'Instagram', color: '#E1306C', desc: 'Atendimento e automações no Direct.', soon: true },
-  { id: 'messenger', label: 'Messenger', color: '#A033FF', desc: 'Atendimento nas páginas do Facebook.', soon: true },
+  { id: 'instagram', label: 'Instagram', color: '#E1306C', desc: 'Direct do Instagram no Chat ao vivo, com fluxos e IA.' },
+  { id: 'messenger', label: 'Messenger', color: '#A033FF', desc: 'Mensagens da página do Facebook no Chat ao vivo.' },
 ];
 const FILTERS = [['todos', 'Todos os canais'], ['qr', 'WhatsApp'], ['oficial', 'WhatsApp Oficial'], ['instagram', 'Instagram'], ['messenger', 'Messenger'], ['telegram', 'Telegram']];
 const STATUS = { connected: ['ok', 'Conectado'], connecting: ['wait', 'Aguardando QR Code'], disconnected: ['off', 'Desconectado'], hibernated: ['idle', 'Em espera'] };
@@ -241,7 +241,7 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, na
       </div>
       {c.reason && c.status !== 'connected' && <div style={{ fontSize: 'var(--text-xs)', color: '#fda4af', position: 'relative', zIndex: 1 }}>Última desconexão: {c.reason}</div>}
 
-      {(c.kind === 'qr' || c.kind === 'oficial') && (
+      {['qr', 'oficial', 'instagram', 'messenger'].includes(c.kind) && (
         <button type="button" className="kc-link" style={{ position: 'relative', zIndex: 1 }} onClick={() => navigate('fluxos')}>
           <Icon name="zap" size={16} style={{ color: '#ff9452' }} />
           <span style={{ flex: 1 }}><b style={{ color: 'var(--text-strong)' }}>{flowsActive}</b> fluxo{flowsActive === 1 ? '' : 's'} rodando com {c.status === 'connected' ? 'este número' : 'os números conectados'}</span>
@@ -276,6 +276,8 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, na
         {c.kind === 'qr' && c.status === 'connected' && <button type="button" className="kc-btn" onClick={() => onAct('uazapi', 'disconnect', { id: c.key }, 'Desconectado.', `Desconectar ${c.name}? Para voltar, será preciso ler o QR Code de novo.`)}><Icon name="unplug" size={15} />Desconectar</button>}
         {c.kind === 'qr' && <button type="button" className="kc-btn" onClick={onRename}><Icon name="pencil" size={15} />Editar</button>}
         {c.kind === 'qr' && <button type="button" className="kc-btn danger" onClick={() => onAct('uazapi', 'remove', { id: c.key }, 'Conexão excluída.', `Excluir ${c.name}? O número sai da Kobly.`)}><Icon name="trash-2" size={15} />Excluir</button>}
+        {(c.kind === 'instagram' || c.kind === 'messenger') && <button type="button" className="kc-btn" onClick={() => navigate('chats')}><Icon name="message-circle" size={15} />Ver conversas</button>}
+        {(c.kind === 'instagram' || c.kind === 'messenger') && <button type="button" className="kc-btn danger" onClick={() => onAct('metaChannels', 'remove', { id: c.key }, 'Canal desconectado.', `Desconectar ${c.name}? As conversas já recebidas continuam na Kobly.`)}><Icon name="unplug" size={15} />Desconectar</button>}
         {c.kind === 'oficial' && <button type="button" className="kc-btn" onClick={onManage}><Icon name="settings-2" size={15} />Gerenciar</button>}
         {c.kind === 'telegram' && <button type="button" className="kc-btn" onClick={() => onAct('notifyChannels', 'test', { id: c.key }, 'Mensagem de teste enviada no Telegram.')}><Icon name="send" size={15} />Testar</button>}
         {c.kind === 'telegram' && <button type="button" className="kc-btn danger" onClick={() => onAct('notifyChannels', 'delete', { id: c.key }, 'Bot removido.', `Remover o bot "${c.name}"?`)}><Icon name="trash-2" size={15} />Remover</button>}
@@ -284,9 +286,97 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, na
   );
 }
 
+// Instagram Direct e Messenger: login com Facebook numa janelinha, escolha das páginas e do que conectar.
+function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
+  const [st, setSt] = useState({ step: 'start', enabled: null, pages: [], user: null });
+  const [pick, setPick] = useState([]);
+  const [kinds, setKinds] = useState(() => new Set(['instagram', 'messenger']));
+  const [busy, setBusy] = useState(false);
+  const popup = useRef(null);
+  useEffect(() => { KoblyApi.metaChannels('oauth_status', {}, empresaId).then((r) => setSt((s) => ({ ...s, enabled: !!(r && r.enabled) }))); }, [empresaId]);
+  const loadPages = useCallback(async () => {
+    const r = await KoblyApi.metaChannels('oauth_pages', {}, empresaId);
+    if (r.error) { notify('danger', r.error); return; }
+    setSt((s) => ({ ...s, step: 'pages', pages: r.pages || [], user: r.user_name }));
+    setPick((r.pages || []).filter((p) => want !== 'instagram' || p.instagram).map((p) => p.id));
+  }, [empresaId, notify, want]);
+  useEffect(() => {
+    function onMsg(e) {
+      if (!e.data || e.data.kobly !== 'meta-msg' || e.source !== popup.current) return;
+      setBusy(false); popup.current = null;
+      if (e.data.ok) loadPages(); else notify('warning', e.data.message);
+    }
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [loadPages, notify]);
+  async function login() {
+    const w = window.open('', 'kobly-facebook-msg', 'width=600,height=720');
+    if (!w) { notify('warning', 'O navegador bloqueou a janelinha. Libere pop-ups para a Kobly e tente de novo.'); return; }
+    w.document.title = 'Conectando ao Facebook…';
+    popup.current = w; setBusy(true);
+    const r = await KoblyApi.metaChannels('oauth_start', {}, empresaId);
+    if (r.error) { w.close(); popup.current = null; setBusy(false); notify('danger', r.error); return; }
+    w.location.href = r.url;
+    const t = setInterval(() => { if (w.closed) { clearInterval(t); if (popup.current === w) { popup.current = null; setBusy(false); } } }, 700);
+  }
+  async function connect() {
+    setBusy(true);
+    const r = await KoblyApi.metaChannels('connect', { page_ids: pick, kinds: [...kinds] }, empresaId);
+    setBusy(false);
+    if (r.error) { notify('danger', r.error); return; }
+    const n = (r.channels || []).length;
+    notify('success', n ? `${n} canal${n > 1 ? 'is' : ''} conectado${n > 1 ? 's' : ''}. As mensagens novas já chegam no Chat ao vivo.` : 'Nada novo para conectar.');
+    onDone();
+  }
+  const toggle = (id) => setPick((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const toggleKind = (k) => setKinds((s) => { const n = new Set(s); if (n.has(k)) { if (n.size > 1) n.delete(k); } else n.add(k); return n; });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {st.step === 'start' && (<>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex' }}><ChannelLogo kind="instagram" size={46} /><span style={{ marginLeft: -10 }}><ChannelLogo kind="messenger" size={46} /></span></div>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Entre com o Facebook que administra a página da empresa. O Instagram precisa ser <b style={{ color: 'var(--text-strong)' }}>profissional</b> e estar ligado a essa página.</div>
+        </div>
+        <div className="kc-step"><i>1</i><span>Clique em <b>Conectar com Facebook</b> e entre com a sua conta.</span></div>
+        <div className="kc-step"><i>2</i><span>Marque a <b>página</b> e o <b>Instagram</b> da empresa e permita o acesso às mensagens.</span></div>
+        <div className="kc-step"><i>3</i><span>De volta aqui, escolha o que conectar. Pronto: as conversas chegam no Chat ao vivo.</span></div>
+        {st.enabled === false && <Banner tone="warning" title="Ainda não ativo neste servidor.">O administrador da Kobly precisa colocar as chaves do app do Facebook no servidor.</Banner>}
+        <Button variant="primary" iconLeft={busy ? 'loader-circle' : 'facebook'} disabled={busy || st.enabled === false} onClick={login}>{busy ? 'Esperando o Facebook…' : 'Conectar com Facebook'}</Button>
+      </>)}
+      {st.step === 'pages' && (<>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Entrou como <b style={{ color: 'var(--text-strong)' }}>{st.user || 'você'}</b>. Escolha as páginas:</div>
+        {!st.pages.length && <Banner tone="warning" title="Nenhuma página encontrada">Este Facebook não administra nenhuma página, ou você não marcou a página no login. Clique em Conectar de novo e marque a página da empresa.</Banner>}
+        {st.pages.map((p) => (
+          <label key={p.id} className="kc-toggle" style={{ cursor: 'pointer', alignItems: 'flex-start', border: pick.includes(p.id) ? '1px solid rgba(255,148,82,.6)' : undefined }}>
+            <input type="checkbox" checked={pick.includes(p.id)} onChange={() => toggle(p.id)} style={{ accentColor: '#ff6201', width: 18, height: 18, marginTop: 4 }} />
+            {p.picture ? <img src={p.picture} alt="" style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'cover' }} /> : <ChannelLogo kind="messenger" size={40} />}
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <b style={{ display: 'block', color: 'var(--text-strong)' }}>{p.name}</b>
+              <span style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 'var(--text-xs)', marginTop: 3 }}>
+                <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', color: 'var(--text-muted)' }}><ChannelLogo kind="messenger" size={16} />Messenger</span>
+                {p.instagram ? <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', color: 'var(--text-muted)' }}><ChannelLogo kind="instagram" size={16} />@{p.instagram.username}</span>
+                  : <span style={{ color: '#fbbf24' }}>Sem Instagram profissional ligado</span>}
+              </span>
+            </span>
+          </label>
+        ))}
+        {st.pages.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[['instagram', 'Instagram Direct'], ['messenger', 'Messenger']].map(([k, l]) => (
+            <button key={k} type="button" className={`kc-chip${kinds.has(k) ? ' on' : ''}`} onClick={() => toggleKind(k)}><ChannelLogo kind={k} size={20} />{l}{kinds.has(k) && <Icon name="check" size={13} />}</button>
+          ))}
+        </div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" onClick={login}>Entrar com outra conta</Button>
+          <Button variant="primary" iconLeft="plug" disabled={busy || !pick.length} onClick={connect}>{busy ? 'Conectando…' : 'Conectar'}</Button>
+        </div>
+      </>)}
+    </div>
+  );
+}
+
 function KoblyConnections({ empresaId, notify = () => {} }) {
   const store = useKobly();
-  const [st, setSt] = useState({ loading: true, uaz: [], uazOn: false, flows: 0, oficial: null, tg: [], error: null });
+  const [st, setSt] = useState({ loading: true, uaz: [], uazOn: false, flows: 0, oficial: null, tg: [], meta: [], error: null });
   const [filter, setFilter] = useState('todos');
   const [q, setQ] = useState('');
   const [picker, setPicker] = useState(false);
@@ -298,8 +388,9 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   const fileRef = useRef(null);
 
   const load = useCallback(async () => {
-    const [u, o, t] = await Promise.all([KoblyApi.uazapi('list', {}, empresaId), KoblyApi.whatsappAccount('status', {}, empresaId), KoblyApi.notifyChannels('list', {}, empresaId)]);
-    setSt({ loading: false, uaz: u.instances || [], uazOn: !!u.configured, flows: u.flows_active || 0, oficial: (o && o.account) || null, tg: t.channels || [], error: u.error || t.error || null });
+    const [u, o, t, m] = await Promise.all([KoblyApi.uazapi('list', {}, empresaId), KoblyApi.whatsappAccount('status', {}, empresaId), KoblyApi.notifyChannels('list', {}, empresaId),
+      KoblyApi.metaChannels('list', {}, empresaId).catch(() => ({}))]);
+    setSt({ loading: false, uaz: u.instances || [], uazOn: !!u.configured, flows: u.flows_active || 0, oficial: (o && o.account) || null, tg: t.channels || [], meta: (m && m.channels) || [], error: u.error || t.error || null });
   }, [empresaId]);
   useEffect(() => { load(); }, [load]);
   // enquanto puxa o histórico do WhatsApp, atualiza o andamento
@@ -313,6 +404,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   function start(kind) {
     if (kind.soon) { notify('info', `${kind.label} chega em breve.`); return; }
     setPicker(false);
+    if (kind.id === 'instagram' || kind.id === 'messenger') { setFlow({ kind: 'meta', want: kind.id }); return; }
     setForm({}); setFlow({ kind: kind.id, step: 'form' });
   }
   async function createQr() {
@@ -368,6 +460,8 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   const all = [
     ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, history: { status: i.history_status, count: i.history_count, at: i.history_at, error: i.history_error }, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
     ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at }] : []),
+    ...st.meta.map((c) => ({ key: c.id, kind: c.kind, name: c.kind === 'instagram' ? (c.username ? `@${c.username}` : c.name) : c.name, profile: c.kind === 'instagram' ? c.name : null,
+      sub: c.kind === 'instagram' ? 'Instagram Direct' : 'Messenger da página', pic: c.picture_url, status: c.status === 'connected' ? 'connected' : 'disconnected', when: c.created_at, reason: c.last_error })),
     ...st.tg.map((c) => ({ key: c.id, kind: 'telegram', name: c.label, sub: 'Bot de alertas da equipe', chat: c.default_chat_id, status: 'connected', when: c.created_at })),
   ];
   const cards = all.filter((c) => (filter === 'todos' || c.kind === filter) && (!q || `${c.name} ${c.profile || ''} ${c.phone || ''}`.toLowerCase().includes(q.toLowerCase())));
@@ -493,6 +587,10 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
             </>)}
           </div>
         )}
+      </Modal>
+
+      <Modal open={!!flow && flow.kind === 'meta'} onClose={() => setFlow(null)} title={flow && flow.want === 'messenger' ? 'Conectar Messenger' : 'Conectar Instagram'} subtitle="Conversas do Direct e da página do Facebook no Chat ao vivo." width={540}>
+        {flow && flow.kind === 'meta' && <MetaConnect empresaId={empresaId} want={flow.want} notify={notify} onClose={() => setFlow(null)} onDone={() => { setFlow(null); load(); }} />}
       </Modal>
 
       <Modal open={!!flow && flow.kind === 'telegram'} onClose={() => setFlow(null)} title="Telegram (bot de alertas)" width={480}
