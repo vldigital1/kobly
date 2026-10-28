@@ -100,6 +100,10 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     },
     // apagar para todos só existe no WhatsApp por QR Code (a API oficial da Meta não apaga)
     deleteMessage: (orgId, a) => uazapi.deleteMessage(orgId, a),
+    // mídia, foto do contato e ligação: só existem no WhatsApp por QR Code
+    mediaLink: (orgId, a) => uazapi.mediaLink(orgId, a),
+    avatarOf: (orgId, phone) => uazapi.avatarOf(orgId, phone),
+    ringCall: (orgId, phone) => uazapi.ringCall(orgId, phone),
     // sem a API oficial, o WhatsApp comum não tem janela de 24 h
     freeTextAllowed: async (orgId) => !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
   };
@@ -114,7 +118,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const storage = createStorage({ dir: config.storageDir || '/var/lib/kobly-storage', canAccessOrg: async (user, org) => { try { return (await whatsapp.resolveOrg(user, org)).role !== 'Suporte'; } catch { return false; } } });
   const unsub = createUnsubscribe({ pool, secret: config.unsubscribeSecret });
   const workspaceSettings = createWorkspaceSettings({ pool });
-  const inbox = createInbox({ pool, whatsapp: waRouted });
+  const inbox = createInbox({ pool, whatsapp: waRouted, flows });
   const team = createTeam({ pool, auth, mailer });
   const tracking = createTracking({ pool, utmify });
   const products = createProducts({ pool });

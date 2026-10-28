@@ -11,6 +11,9 @@
 //   POST /profile/image    (token)       { image }  (JPEG 640x640: link, base64 ou "remove")
 //   POST /chat/find        (token)       { sort, limit, offset, wa_isGroup } → { chats: [{ wa_chatid, phone, name, wa_contactName, wa_isGroup }], pagination }
 //   POST /message/find     (token)       { chatid, limit, offset } → { messages: [...] } (mais recentes primeiro)
+//   POST /message/download (token)       { id, generate_mp3 } → { fileURL, mimetype }  (link vale 2 dias)
+//   POST /chat/avatar      (token)       { number, preview } → { url }
+//   POST /call/make        (token)       { number, call_duration } → ligação (muda) só para chamar a atenção
 // Aviso "messages": { EventType, token, chat, message: { messageid, chatid, sender, sender_pn, senderName, fromMe, isGroup, messageType, text, messageTimestamp (ms) } }.
 // Toda conversa do número aparece em Conversas: quem escreve e não é lead vira lead (utm_source = whatsapp) e o que a
 // empresa responde pelo celular entra como saída "celular". Ao conectar, puxa o histórico recente (HISTORY_*).
@@ -43,6 +46,17 @@ export function messageText(m) {
   for (const [w, label] of [['image', 'imagem'], ['audio', 'áudio'], ['ptt', 'áudio'], ['video', 'vídeo'], ['document', 'arquivo'], ['sticker', 'figurinha'], ['location', 'localização'], ['contact', 'contato']]) if (k.includes(w)) return `[${label}]`;
   return '[mensagem]';
 }
+// tipo da mídia para o chat tocar/mostrar: image | audio | video | document | sticker | text
+export function mediaKind(m) {
+  const k = String((m && m.messageType) || '').toLowerCase();
+  if (k.includes('sticker')) return 'sticker';
+  if (k.includes('image')) return 'image';
+  if (k.includes('audio') || k.includes('ptt')) return 'audio';
+  if (k.includes('video')) return 'video';
+  if (k.includes('document')) return 'document';
+  return 'text';
+}
+const avatarOfChat = (c) => { const u = String((c && (c.imagePreview || c.image)) || ''); return /^https:\/\//.test(u) ? u.slice(0, 1000) : null; };
 // messageTimestamp vem em milissegundos (alguns servidores mandam em segundos)
 const tsOf = (v) => { const n = Number(v); return n > 0 ? new Date(n < 1e12 ? n * 1000 : n) : new Date(); };
 
@@ -136,6 +150,9 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
   }
 
   // lead do contato (mesma regra de telefone do descadastro: últimos 10 dígitos); cria se ainda não existir
+  async function saveAvatar(leadId, url) {
+    if (url) await pool.query(`update public.leads set avatar_url = $2, avatar_at = now() where id = $1`, [leadId, url]);
+  }
   async function leadFor(orgId, phone, name) {
     const found = (await pool.query(`select id, nome from public.leads where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 order by updated_at desc limit 1`, [orgId, phone.slice(-10)])).rows[0];
     const nome = String(name || '').trim().slice(0, 120) || null;
@@ -144,9 +161,9 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
   }
   // o que a empresa mandou pelo próprio celular (não passou pela Kobly)
   async function saveFromPhone(row, leadId, phone, m) {
-    return (await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, channel, created_at)
-      select $1, $2, $3, 'celular', $4, $5, 'uazapi', $6 where not exists (select 1 from public.whatsapp_outbound_messages where organization_id = $1 and wa_message_id = $5)`,
-      [row.organization_id, leadId, phone, messageText(m), `uaz:${m.messageid}`, tsOf(m.messageTimestamp)])).rowCount;
+    return (await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, channel, created_at, msg_type, instance_id)
+      select $1, $2, $3, 'celular', $4, $5, 'uazapi', $6, $7, $8 where not exists (select 1 from public.whatsapp_outbound_messages where organization_id = $1 and wa_message_id = $5)`,
+      [row.organization_id, leadId, phone, messageText(m), `uaz:${m.messageid}`, tsOf(m.messageTimestamp), mediaKind(m), row.id])).rowCount;
   }
 
   // Histórico: as conversas mais recentes do número (sem grupos), sem disparar fluxo nem resposta automática.
@@ -176,13 +193,14 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
         const msgs = (Array.isArray(r.messages) ? r.messages : []).filter((m) => m.messageid && !m.isGroup && !m.wasSentByApi);
         if (!msgs.length) continue;
         const leadId = await leadFor(row.organization_id, phone, chat.wa_contactName || chat.name || chat.wa_name || (msgs.find((m) => !m.fromMe) || {}).senderName);
+        await saveAvatar(leadId, avatarOfChat(chat));
         let lastIn = null;
         for (const m of msgs) {
           if (m.fromMe) { count += await saveFromPhone(row, leadId, phone, m); continue; }
           const at = tsOf(m.messageTimestamp);
           const ins = await pool.query(`insert into public.whatsapp_inbound_messages (organization_id, instance_id, wa_message_id, from_phone, lead_id, msg_type, body, payload, received_at)
-            values ($1,$2,$3,$4,$5,'text',$6,$7::jsonb,$8) on conflict (wa_message_id) do nothing`,
-            [row.organization_id, row.id, `uaz:${m.messageid}`, phone, leadId, messageText(m), JSON.stringify({ history: true }), at]);
+            values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9) on conflict (wa_message_id) do nothing`,
+            [row.organization_id, row.id, `uaz:${m.messageid}`, phone, leadId, mediaKind(m), messageText(m), JSON.stringify({ history: true, uaz_id: m.id || null }), at]);
           count += ins.rowCount;
           if (!lastIn || at > lastIn) lastIn = at;
         }
@@ -361,6 +379,7 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     const from = contactPhone(m, p.chat);
     if (!from || from === digits(row.phone)) return { status: 200 };
     const leadId = await leadFor(row.organization_id, from, m.fromMe ? (p.chat && (p.chat.wa_contactName || p.chat.name)) : m.senderName);
+    await saveAvatar(leadId, avatarOfChat(p.chat));
     if (m.fromMe) { await saveFromPhone(row, leadId, from, m); return { status: 200 }; } // a empresa respondeu pelo celular
     // "SAIR", "PARAR"...: o lead deixa de receber WhatsApp (mesma regra da API Oficial)
     if (OPT_OUT.test(String(m.text || '')) && from.length >= 10) {
@@ -370,6 +389,8 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     await onInbound({ orgId: row.organization_id, accountId: null, instanceId: row.id,
       message: { id: `uaz:${m.messageid}`, from, type: 'text', text: { body: messageText(m) }, timestamp: m.messageTimestamp },
       contacts: m.senderName ? [{ profile: { name: m.senderName }, wa_id: from }] : [] });
+    const kind = mediaKind(m);
+    if (kind !== 'text') await pool.query(`update public.whatsapp_inbound_messages set msg_type = $2 where wa_message_id = $1`, [`uaz:${m.messageid}`, kind]);
     return { status: 200 };
   }
 
@@ -405,5 +426,32 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     return { ok: true };
   }
   const hasConnected = async (orgId) => !!secretKey && !!(await connectedRow(orgId));
-  return { handle, handleServers, receiveWebhook, sendTextTo, sendMediaTo, deleteMessage, hasConnected, configured };
+  const rowFor = async (orgId, instanceId) => (instanceId ? await own(orgId, instanceId).catch(() => null) : null) || await connectedRow(orgId);
+  // link (2 dias) do arquivo de uma mensagem; áudio sai em mp3 para tocar em qualquer navegador
+  async function mediaLink(orgId, { instanceId, messageId }) {
+    const row = secretKey ? await rowFor(orgId, instanceId) : null;
+    if (!row) throw new AuthError(409, 'not_connected', 'Conecte o WhatsApp para abrir esta mídia.');
+    const server = await serverOf(row), token = tokenOf(row);
+    const id = String(messageId || '').replace(/^uaz:/, '');
+    let r;
+    try { r = await call(server, '/message/download', { method: 'POST', token, body: { id, generate_mp3: true } }); }
+    catch { r = await call(server, '/message/download', { method: 'POST', token, body: { id: `${digits(row.phone)}:${id}`, generate_mp3: true } }); }
+    if (!r.fileURL) throw new AuthError(404, 'media_gone', 'Esta mídia não está mais disponível no WhatsApp.');
+    return { url: r.fileURL, mimetype: r.mimetype || null };
+  }
+  // foto do contato (link temporário do WhatsApp; vazio quando a pessoa não tem foto ou esconde)
+  async function avatarOf(orgId, phone) {
+    const row = secretKey ? await connectedRow(orgId) : null;
+    if (!row) return null;
+    const r = await call(await serverOf(row), '/chat/avatar', { method: 'POST', token: tokenOf(row), body: { number: digits(phone), preview: true } }).catch(() => ({}));
+    return /^https:\/\//.test(String(r.url || '')) ? String(r.url).slice(0, 1000) : '';
+  }
+  // ligação muda: o telefone da pessoa toca por alguns segundos (chamar a atenção)
+  async function ringCall(orgId, phone) {
+    const row = secretKey ? await connectedRow(orgId) : null;
+    if (!row) throw new AuthError(409, 'not_connected', 'Ligação só funciona com o WhatsApp por QR Code conectado.');
+    await call(await serverOf(row), '/call/make', { method: 'POST', token: tokenOf(row), body: { number: digits(phone), call_duration: 20 } });
+    return { ok: true };
+  }
+  return { handle, handleServers, receiveWebhook, sendTextTo, sendMediaTo, deleteMessage, hasConnected, configured, mediaLink, avatarOf, ringCall };
 }

@@ -16,6 +16,7 @@ const stamp = Date.now();
 const T0 = 1_761_600_000_000; // ms
 let pool, uaz, inbox;
 const A = {};
+const calls = [];
 
 // servidor Uazapi de mentira: 2 conversas (uma com @lid sem telefone, que fica de fora) e um grupo
 async function fakeFetch(url, init = {}) {
@@ -34,11 +35,14 @@ async function fakeFetch(url, init = {}) {
     if (body.chatid !== '5547911112222@s.whatsapp.net') return ok({ messages: [] });
     return ok({ messages: [
       { messageid: `h3-${stamp}`, chatid: body.chatid, fromMe: true, text: 'Pode sim, te mando o link', messageTimestamp: T0 + 3000 },
-      { messageid: `h2-${stamp}`, chatid: body.chatid, fromMe: false, messageType: 'ImageMessage', text: '', messageTimestamp: T0 + 2000 },
+      { messageid: `h2-${stamp}`, chatid: body.chatid, fromMe: false, messageType: 'AudioMessage', text: '', messageTimestamp: T0 + 2000 },
       { messageid: `h1-${stamp}`, chatid: body.chatid, fromMe: false, senderName: 'Maria', text: 'Oi, ainda tem?', messageTimestamp: T0 + 1000 },
       { messageid: `h0-${stamp}`, chatid: body.chatid, fromMe: true, wasSentByApi: true, text: 'mensagem do fluxo', messageTimestamp: T0 },
     ] });
   }
+  if (u.pathname === '/message/download') return ok({ fileURL: `https://cdn.uaz.test/${body.id}.mp3`, mimetype: 'audio/mpeg' });
+  if (u.pathname === '/chat/avatar') return ok({ url: body.number === '5547911112222' ? 'https://pps.whatsapp.net/maria.jpg' : '' });
+  if (u.pathname === '/call/make') { calls.push(body.number); return ok({ response: 'ok' }); }
   throw new Error('rede não esperada: ' + url);
 }
 
@@ -46,7 +50,7 @@ before(async () => {
   if (skip) return;
   pool = new pg.Pool({ connectionString: URL_, max: 4 });
   uaz = createUazapi({ pool, secretKey: KEY, base: 'https://uaz.test', adminToken: 'adm-0000000', fetchImpl: fakeFetch, onInbound });
-  inbox = createInbox({ pool, whatsapp: { freeTextAllowed: async () => true } });
+  inbox = createInbox({ pool, whatsapp: { freeTextAllowed: async () => true, mediaLink: (o, x) => uaz.mediaLink(o, x), avatarOf: (o, p) => uaz.avatarOf(o, p), ringCall: (o, p) => uaz.ringCall(o, p) } });
   A.orgId = (await pool.query(`insert into public.organizations (nome) values ('Loja Histórico') returning id`)).rows[0].id;
   A.inst = (await pool.query(`insert into public.whatsapp_uazapi_instances (organization_id, label, instance_name, token_enc, status, phone) values ($1,'Vendas',$2,$3,'connected','5547999990000') returning id, webhook_public_id`,
     [A.orgId, `hist-${stamp}`, encrypt('tok-hist', KEY)])).rows[0];
@@ -104,7 +108,7 @@ test('histórico: importa as conversas recentes sem duplicar e sem o que a Kobly
   assert.equal(lead.nome, 'Maria Cliente');
   assert.equal(new Date(lead.whatsapp_last_inbound_at).getTime(), T0 + 2000);
   const m = await inbox.handle(ctx(), {}, { action: 'messages', lead_id: lead.id });
-  assert.deepEqual(m.messages.map((x) => [x.de, x.body]), [['lead', 'Oi, ainda tem?'], ['lead', '[imagem]'], ['celular', 'Pode sim, te mando o link']]);
+  assert.deepEqual(m.messages.map((x) => [x.de, x.body]), [['lead', 'Oi, ainda tem?'], ['lead', '[áudio]'], ['celular', 'Pode sim, te mando o link']]);
   // de novo: nada duplica
   await uaz.handle(ctx(), {}, { action: 'import_history', id: A.inst.id });
   assert.equal((await wait()).history_count, 0);
@@ -112,4 +116,33 @@ test('histórico: importa as conversas recentes sem duplicar e sem o que a Kobly
   // a lista da conexão mostra o andamento
   const inst = (await uaz.handle(ctx(), {}, { action: 'list' })).instances.find((i) => i.id === A.inst.id);
   assert.equal(inst.history_status, 'done');
+});
+
+test('chat: áudio toca pelo link, foto do contato, ligação, notas, limpar e arquivar', { skip }, async () => {
+  const lead = (await pool.query(`select id from public.leads where organization_id = $1 and telefone = '5547911112222'`, [A.orgId])).rows[0].id;
+  let m = await inbox.handle(ctx(), {}, { action: 'messages', lead_id: lead });
+  const audio = m.messages.find((x) => x.tipo === 'audio');
+  assert.ok(audio, 'áudio guardado com o tipo');
+  const r = await inbox.handle(ctx(), {}, { action: 'media', lead_id: lead, id: audio.id, de: 'lead' });
+  assert.equal(r.url, `https://cdn.uaz.test/h2-${stamp}.mp3`);
+  assert.equal((await inbox.handle(ctx(), {}, { action: 'media', lead_id: lead, id: audio.id, de: 'lead' })).url, r.url, 'segunda vez vem do banco');
+  const av = await inbox.handle(ctx(), {}, { action: 'avatars', lead_ids: [lead] });
+  assert.equal(av.avatars[lead], 'https://pps.whatsapp.net/maria.jpg');
+  assert.equal((await inbox.handle(ctx(), {}, { action: 'list' })).conversations.find((c) => c.lead_id === lead).avatar_url, 'https://pps.whatsapp.net/maria.jpg');
+  await inbox.handle(ctx(), {}, { action: 'call', lead_id: lead });
+  assert.deepEqual(calls, ['5547911112222']);
+  await inbox.handle(ctx(), {}, { action: 'notes', lead_id: lead, text: 'cliente quer boleto' });
+  assert.equal((await inbox.handle(ctx(), {}, { action: 'messages', lead_id: lead })).lead.chat_notes, 'cliente quer boleto');
+  // arquivar: sai de "Todas", vai para "Arquivadas"
+  await inbox.handle(ctx(), {}, { action: 'archive', lead_id: lead, archived: true });
+  assert.ok(!(await inbox.handle(ctx(), {}, { action: 'list' })).conversations.some((c) => c.lead_id === lead));
+  assert.ok((await inbox.handle(ctx(), {}, { action: 'list', filtro: 'arquivadas' })).conversations.some((c) => c.lead_id === lead));
+  await inbox.handle(ctx(), {}, { action: 'archive', lead_id: lead, archived: false });
+  // não lidas: o lead mandou 2 depois da última resposta? a última foi do celular, então 0
+  assert.equal((await inbox.handle(ctx(), {}, { action: 'list' })).conversations.find((c) => c.lead_id === lead).nao_lidas, 0);
+  // limpar: a conversa fica vazia na Kobly
+  await inbox.handle(ctx(), {}, { action: 'clear', lead_id: lead });
+  m = await inbox.handle(ctx(), {}, { action: 'messages', lead_id: lead });
+  assert.equal(m.messages.length, 0);
+  await assert.rejects(inbox.handle({ orgId: A.orgId, role: 'Suporte' }, {}, { action: 'clear', lead_id: lead }), /não pode/);
 });
