@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { KoblyApi } from '@/api/mockApi.js';
 import { Button, Input, Banner, Icon } from '@/ds';
 import { useKobly } from '@/store/store.jsx';
 
@@ -47,9 +48,32 @@ function PasswordField({ label, id, value, onChange, autoComplete, placeholder }
   );
 }
 
+// Link de afiliado (app.koblay.io/?ref=codigo): guarda o código por alguns dias neste navegador e abre o cadastro.
+const REF_KEY = 'kobly:ref';
+function readRef() {
+  try {
+    const q = new URLSearchParams(window.location.search).get('ref');
+    if (q && /^[a-z0-9-]{3,30}$/i.test(q)) { const v = { code: q.toLowerCase(), at: Date.now(), fresh: true }; localStorage.setItem(REF_KEY, JSON.stringify({ code: v.code, at: v.at })); return v; }
+    const s = JSON.parse(localStorage.getItem(REF_KEY) || 'null');
+    if (s && s.code && Date.now() - s.at < (s.days || 60) * 86400000) return s;
+  } catch { /* sem armazenamento */ }
+  return null;
+}
+
 export function KoblyAuthScreen({ mode = 'login' }) {
   const store = useKobly();
-  const [form, setForm] = useState(mode === 'recovery' ? 'recovery' : 'login'); // login | signup | reset | recovery
+  const [ref] = useState(() => (typeof window === 'undefined' ? null : readRef()));
+  const [refName, setRefName] = useState(null);
+  const [whatsapp, setWhatsapp] = useState('');
+  const [form, setForm] = useState(mode === 'recovery' ? 'recovery' : ref && ref.fresh ? 'signup' : 'login'); // login | signup | reset | recovery
+  useEffect(() => {
+    if (!ref || !ref.fresh) return;
+    KoblyApi.affiliateClick(ref.code, window.location.href).then((r) => {
+      if (r && r.ok && r.nome) setRefName(r.nome);
+      // validade do link definida pelo Administrador (Afiliados → Regras)
+      if (r && r.ok && r.cookie_days) { try { localStorage.setItem(REF_KEY, JSON.stringify({ code: ref.code, at: ref.at, days: r.cookie_days })); } catch { /* ok */ } }
+    }).catch(() => {});
+  }, [ref]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -71,7 +95,7 @@ export function KoblyAuthScreen({ mode = 'login' }) {
     e.preventDefault(); clear();
     if (password.length < 8) return setErr('A senha deve ter ao menos 8 caracteres.');
     setBusy(true);
-    const { error, needsConfirmation } = await store.signUp(email, password, nome);
+    const { error, needsConfirmation } = await store.signUp(email, password, nome, { ref: ref && ref.code, whatsapp });
     setBusy(false);
     if (error) return setErr(traduz(error));
     if (needsConfirmation) { go('login'); setInfo('Conta criada! Confirme seu e-mail para poder entrar.'); }
@@ -137,8 +161,12 @@ export function KoblyAuthScreen({ mode = 'login' }) {
 
             {form === 'signup' && (
               <form onSubmit={doSignup} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {ref && <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 12, background: 'rgba(255,98,1,.1)', border: '1px solid rgba(255,148,82,.35)', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>
+                  <Icon name="gift" size={18} style={{ color: '#ff9452', flex: 'none' }} /><span>{refName ? <>Você veio pela indicação de <b style={{ color: 'var(--text-strong)' }}>{refName}</b>. </> : 'Você veio por uma indicação. '}Crie sua conta e comece a recuperar vendas.</span>
+                </div>}
                 <Input label="Nome" icon="user" type="text" autoComplete="name" placeholder="Seu nome" value={nome} onChange={(e) => setNome(e.target.value)} />
                 <Input label="E-mail" icon="mail" type="email" autoComplete="email" placeholder="voce@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input label="WhatsApp (opcional)" icon="phone" type="tel" autoComplete="tel" placeholder="(11) 99999-9999" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
                 <PasswordField label="Senha" id="kbly-signup-senha" autoComplete="new-password" placeholder="mín. 8 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} />
                 <Button type="submit" variant="primary" loading={busy} disabled={!email || !password} iconLeft="user-plus" style={{ width: '100%', justifyContent: 'center' }}>{busy ? 'Criando…' : 'Criar conta'}</Button>
                 <div style={{ textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>

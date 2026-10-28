@@ -65,6 +65,12 @@ export function createFunctions(ctx) {
     if (!p || p.tipo_user_geral !== 'Administrador') throw new AuthError(403, 'forbidden', 'Só o Administrador da Kobly gerencia os servidores.');
     return io.send(res, 200, await fn(body));
   };
+  // Só o usuário logado (sem empresa-alvo): o programa de afiliados é da pessoa, não da empresa.
+  const userRoute = (fn) => async (req, res, io) => {
+    const body = await io.readJson(req);
+    const user = await ctx.auth.userFromAccessToken(bearerOf(req));
+    return io.send(res, 200, await fn(user, body));
+  };
   const handlers = {
     'whatsapp-account': () => whatsappAccount,
     'invite-client': () => inviteClient,
@@ -90,6 +96,8 @@ export function createFunctions(ctx) {
     'pipeline': () => orgUserRoute('pipeline', 'pipeline'),
     'admin-dashboard': () => platformAdminRoute((body) => ctx.dashboard.admin(body)),
     'uazapi-servers': () => platformAdminRoute((body) => ctx.uazapi.handleServers(body)),
+    'affiliates': () => userRoute((user, body) => ctx.affiliates.handle(user, body)),
+    'affiliates-admin': () => platformAdminRoute((body) => ctx.affiliates.admin(body)),
   };
   return {
     names: () => Object.keys(handlers),

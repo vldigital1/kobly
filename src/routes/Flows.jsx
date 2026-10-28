@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, DataTable, IconButton, Input, PageHeader, Select } from '@/ds';
 import { starterGraph } from '@/lib/flowGraph.js';
@@ -7,12 +7,15 @@ import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { fmtDateTime, useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
 import { askConfirm } from '@/lib/confirm.jsx';
+import { downloadText } from '@/lib/leadAvatar.jsx';
 
 // Editor do fluxo em grafo: carregado só quando aberto (traz o React Flow junto).
 const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.jsx').then((m) => ({ default: m.KoblyFlowGraphEditor })));
 
 // Kobly — Fluxos. Todos os fluxos (WhatsApp e e-mail) em grafo da conta (publicados e rascunhos),
-// quantos leads estão em cada um e atalho para criar um fluxo novo do zero. KoblyFlows
+// quantos leads estão em cada um e atalho para criar um fluxo novo do zero. Baixar um fluxo (.kobly.json) e importar
+// o arquivo em outra conta: vira rascunho com etiquetas, e-mails e agentes; o que é da conta (pagamento, Pixel) fica
+// na lista "falta configurar". KoblyFlows
 
 const OPEN_KEY = 'kobly:openflow';
 
@@ -61,6 +64,31 @@ function KoblyFlows() {
     store.notify('success', `Pronto! "${r.nome}" criado com ${r.textos} texto(s)${r.audios ? ` e ${r.audios} áudio(s)` : ''} traduzidos. Revise e publique.`);
     if (r.aviso) store.notify('warning', r.aviso);
   }
+  // ---- baixar e importar fluxo ------------------------------------------------------------
+  const fileRef = useRef(null);
+  const [imp, setImp] = useState(null); // { file, nome, running, result }
+  async function exportFlow(f) {
+    const r = await KoblyApi.flowGraph('export', { campaign_id: f.campaign_id }, orgId);
+    if (r.error) { store.notify('danger', r.error); return; }
+    const slug = String(f.nome || 'fluxo').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'fluxo';
+    downloadText(`${slug}.kobly.json`, JSON.stringify(r.file, null, 2), 'application/json;charset=utf-8');
+    store.notify('success', `Fluxo "${f.nome}" baixado. Mande o arquivo para quem quiser: a pessoa importa na conta dela em Fluxos → Importar.`);
+  }
+  async function pickFile(file) {
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) { store.notify('danger', 'Arquivo grande demais (máximo 3 MB).'); return; }
+    try {
+      const j = JSON.parse(await file.text());
+      if (!j || j.format !== 'kobly-flow' || !j.graph) throw new Error('formato');
+      setImp({ file: j, nome: j.name || 'Fluxo importado', running: false, result: null });
+    } catch { store.notify('danger', 'Esse arquivo não é um fluxo da Kobly (.kobly.json).'); }
+  }
+  async function runImport() {
+    setImp((x) => ({ ...x, running: true }));
+    const r = await KoblyApi.flowGraph('import', { file: imp.file, nome: imp.nome }, orgId);
+    if (r.error) { setImp((x) => ({ ...x, running: false })); store.notify('danger', r.error); return; }
+    setImp((x) => ({ ...x, running: false, result: r })); list.reload();
+  }
   async function toggleLegacy(c) {
     const status = c.status === 'Ativa' ? 'Pausada' : 'Ativa';
     await KoblyApi.setCampaignStatus(c.id, status);
@@ -95,7 +123,8 @@ function KoblyFlows() {
   const oldOnes = (legacy.data || []).filter((c) => !flowIds.has(c.id));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button> : null}>
+      <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
+      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><Button variant="secondary" iconLeft="upload" onClick={() => fileRef.current && fileRef.current.click()}>Importar fluxo</Button><Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button></div> : null}>
         Automações de WhatsApp e e-mail: gatilho do checkout, mensagens, e-mails, botões, IA, cobrança e venda, tudo num desenho só.
         Cada fluxo tem rascunhos e versões; só a versão publicada roda.
       </PageHeader>
@@ -127,6 +156,7 @@ function KoblyFlows() {
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                   {canEdit && <IconButton icon={r.status === 'Ativa' ? 'pause' : 'play'} size="sm" aria-label={r.status === 'Ativa' ? 'Pausar fluxo' : 'Ativar fluxo'} onClick={() => toggle(r)} />}
                   {canEdit && <IconButton icon="languages" size="sm" aria-label="Traduzir para outro idioma" onClick={() => openTranslate(r)} />}
+                  <IconButton icon="download" size="sm" aria-label="Baixar fluxo (para enviar a outra conta)" title="Baixar fluxo" onClick={() => exportFlow(r)} />
                   <IconButton icon="pencil" size="sm" aria-label="Abrir no editor" onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} />
                 </div>
               ) },
@@ -177,6 +207,31 @@ function KoblyFlows() {
             </div>
             {trad.voice && !trad.voice.connected && <Banner tone="info">Se o fluxo tiver áudios, conecte antes a ElevenLabs em Integrações → Voz (ElevenLabs). Fluxo só com texto traduz normalmente.</Banner>}
             {trad.running && <Banner tone="info">Isso pode levar um ou dois minutos se houver muitos áudios. Não feche esta janela.</Banner>}
+          </div>
+        )}
+      </Modal>
+      <Modal open={!!imp} onClose={() => !(imp && imp.running) && setImp(null)} title={imp && imp.result ? 'Fluxo importado' : 'Importar fluxo'} subtitle={imp && !imp.result ? 'Entra como rascunho: nada roda até você revisar e publicar.' : ''} width={540}
+        footer={imp && imp.result
+          ? <><Button variant="ghost" onClick={() => setImp(null)}>Fechar</Button><Button variant="primary" iconLeft="pencil" onClick={() => { const r = imp.result; setImp(null); openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId }); }}>Abrir no editor</Button></>
+          : <><Button variant="ghost" disabled={!!(imp && imp.running)} onClick={() => setImp(null)}>Cancelar</Button><Button variant="primary" iconLeft="upload" loading={!!(imp && imp.running)} disabled={!imp || imp.running || !String(imp.nome || '').trim()} onClick={runImport}>Importar</Button></>}>
+        {imp && !imp.result && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Input label="Nome do fluxo nesta conta" value={imp.nome} onChange={(e) => setImp({ ...imp, nome: e.target.value })} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Badge tone="info">{(imp.file.graph.nodes || []).length} blocos</Badge>
+              {Object.keys((imp.file.resources || {}).tags || {}).length > 0 && <Badge tone="neutral">{Object.keys(imp.file.resources.tags).length} etiqueta(s)</Badge>}
+              {Object.keys((imp.file.resources || {}).emails || {}).length > 0 && <Badge tone="neutral">{Object.keys(imp.file.resources.emails).length} e-mail(s)</Badge>}
+              {Object.keys((imp.file.resources || {}).agents || {}).length > 0 && <Badge tone="neutral">{Object.keys(imp.file.resources.agents).length} agente(s) de IA</Badge>}
+              {Object.keys((imp.file.resources || {}).templates || {}).length > 0 && <Badge tone="warning">{Object.keys(imp.file.resources.templates).length} modelo(s) do WhatsApp</Badge>}
+            </div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Etiquetas com o mesmo nome são reaproveitadas (as que faltam são criadas). E-mails e agentes de IA vêm junto. Conta de pagamento, Pixel e canal de alerta são de cada conta: você escolhe os seus depois.</div>
+          </div>
+        )}
+        {imp && imp.result && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Banner tone="success" title={`"${imp.result.nome}" criado como rascunho.`}>{imp.result.criados.etiquetas} etiqueta(s), {imp.result.criados.emails} e-mail(s) e {imp.result.criados.agentes} agente(s) prontos nesta conta.</Banner>
+            {imp.result.pendencias.length > 0 ? <Banner tone="warning" title="Falta configurar antes de publicar:"><ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{imp.result.pendencias.map((t, i) => <li key={i}>{t}</li>)}</ul></Banner>
+              : <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Nada pendente. Abra no editor, revise e publique.</div>}
           </div>
         )}
       </Modal>

@@ -284,7 +284,8 @@ export function createApiClient({ baseUrl, fetchImpl, storage, pollMs = 4000, no
       return { data: { user: r.json.user, session: r.json }, error: null };
     },
     async signUp({ email, password, options = {} }) {
-      const r = await post('/auth/signup', { email, password, nome: options.data && options.data.nome, redirect_to: options.emailRedirectTo });
+      const d = options.data || {};
+      const r = await post('/auth/signup', { email, password, nome: d.nome, ref: d.ref || undefined, whatsapp: d.whatsapp || undefined, redirect_to: options.emailRedirectTo });
       if (!r.ok) return { data: { user: null, session: null }, error: err((r.json && r.json.message) || 'Falha no cadastro', { status: r.status }) };
       if (r.json.session) { persist(r.json.session); emit('SIGNED_IN', r.json.session); }
       return { data: { user: r.json.user, session: r.json.session || null }, error: null };
@@ -334,6 +335,8 @@ export function createApiClient({ baseUrl, fetchImpl, storage, pollMs = 4000, no
   return {
     baseUrl,
     pollMs,
+    // clique no link de afiliado (público, sem login)
+    affiliateClick: (code, landing) => post('/affiliates/click', { code, landing }).then((r) => r.json || {}).catch(() => ({})),
     authed,
     auth,
     from: (table) => new QueryBuilder({ baseUrl, authed, pollMs }, table),

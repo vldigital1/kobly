@@ -65,7 +65,7 @@ export const KoblyApi = {
     if (!persona) return { error: 'Papel desconhecido: ' + role };
     return this.signIn(persona.email, DEMO_PASSWORD);
   },
-  async signUp(email, password, nome) {
+  async signUp(email, password, nome, extra = {}) {
     // EMAIL-3: emailRedirectTo garante que o link de confirmação volte para a
     // origem correta (dev: localhost:5173 / prod: domínio do app), e não para o
     // Site URL padrão do Supabase (que pode estar como localhost:3000). O domínio
@@ -73,7 +73,7 @@ export const KoblyApi = {
     const redirectTo = (typeof window !== 'undefined') ? window.location.origin : undefined;
     const { data, error } = await supabase.auth.signUp({
       email: (email || '').trim(), password,
-      options: { data: { nome: nome || '' }, ...(redirectTo ? { emailRedirectTo: redirectTo } : {}) },
+      options: { data: { nome: nome || '', ref: extra.ref || undefined, whatsapp: extra.whatsapp || undefined }, ...(redirectTo ? { emailRedirectTo: redirectTo } : {}) },
     });
     if (error) return { error: error.message };
     if (data && data.session) resetDb();
@@ -1146,6 +1146,10 @@ export const KoblyApi = {
     return { error: null, ...(data || {}) };
   },
   // ---- Fluxo em grafo (motor novo) — validar, salvar versão, desfazer, métricas ----
+  // Programa de afiliados: painel do afiliado (do usuário) e painel do Administrador
+  async affiliates(action, extra = {}) { return this.serviceCall('affiliates', action, extra); },
+  async affiliatesAdmin(action, extra = {}) { return this.serviceCall('affiliates-admin', action, extra); },
+  async affiliateClick(code, landing) { return supabase.affiliateClick ? supabase.affiliateClick(code, landing) : {}; },
   async flowGraph(action, extra = {}, empresaId = null) {
     return this.serviceCall('flow-graph', action, extra, empresaId);
   },

@@ -357,6 +357,7 @@ const NAV = {
   relatorios:    { id: 'relatorios',    icon: 'chart-column',     label: 'Relatórios',           section: 'Operações' },
   configuracoes: { id: 'configuracoes', icon: 'settings',         label: 'Configurações',        section: 'Gestão' },
   planos:        { id: 'planos',        icon: 'credit-card',      label: 'Planos & cobrança',    section: 'Gestão' },
+  afiliados:     { id: 'afiliados',     icon: 'handshake',        label: 'Afiliados',            section: 'Gestão' },
   servidores:    { id: 'servidores',    icon: 'server',           label: 'Servidores WhatsApp',  section: 'Gestão' },
   seguranca:     { id: 'seguranca',     icon: 'shield',           label: 'Segurança',            section: 'Gestão' },
   chamados:      { id: 'chamados',      icon: 'messages-square',  label: 'Chamados',             section: 'Gestão' },
@@ -369,14 +370,14 @@ const roles = {
   Cliente: {
     label: 'Cliente',
     descricao: 'Dono da conta — dashboard, pipeline, fluxos, leads, integrações.',
-    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'configuracoes', 'planos', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'configuracoes', 'planos', 'afiliados', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: false, createPlan: false, manageUsers: false, answerTickets: false },
   },
   Gestor: {
     label: 'Gestor',
     descricao: 'Agência — visão consolidada de várias contas.',
-    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'relatorios', 'configuracoes', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'relatorios', 'configuracoes', 'afiliados', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: true, createPlan: false, manageUsers: false, answerTickets: false },
   },
@@ -390,7 +391,7 @@ const roles = {
   Administrador: {
     label: 'Administrador',
     descricao: 'Plataforma — usuários, planos, segurança, auditoria.',
-    nav: ['painel', 'clientes', 'relatorios', 'planos', 'servidores', 'seguranca', 'chamados', 'perfil'],
+    nav: ['painel', 'clientes', 'relatorios', 'planos', 'afiliados', 'servidores', 'seguranca', 'chamados', 'perfil'],
     home: 'painel',
     can: { editCampaign: false, viewAllAccounts: true, createPlan: true, manageUsers: true, answerTickets: true },
   },
@@ -414,7 +415,7 @@ const roleDefFor = (role, teamRole) => (role === 'Cliente' && teamRole === 'aten
 const routeTitle = {
   painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Anúncios', servidores: 'Servidores WhatsApp', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
   disparos: 'Disparo em massa',
-  leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança',
+  leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança', afiliados: 'Afiliados',
   seguranca: 'Segurança', chamados: 'Chamados', ajuda: 'Central de ajuda', perfil: 'Perfil',
 };
 

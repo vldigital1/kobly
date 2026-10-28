@@ -34,6 +34,7 @@ const KoblyAgents = screen(() => import('@/routes/Agents.jsx'), 'KoblyAgents');
 const KoblySettings = screen(() => import('@/routes/Settings.jsx'), 'KoblySettings');
 const KoblyProducts = screen(() => import('@/routes/Products.jsx'), 'KoblyProducts');
 const KoblyMetaAds = screen(() => import('@/routes/MetaAds.jsx'), 'KoblyMetaAds');
+const KoblyAffiliates = screen(() => import('@/routes/Affiliates.jsx'), 'KoblyAffiliates');
 const KoblyServers = screen(() => import('@/routes/Servers.jsx'), 'KoblyServers');
 
 // Route id -> screen component.
@@ -53,6 +54,7 @@ const SCREENS = {
   integracoes: KoblyIntegrations,
   relatorios: KoblyReports,
   planos: KoblyPlans,
+  afiliados: KoblyAffiliates,
   seguranca: KoblySecurity,
   chamados: KoblyTickets,
   ajuda: KoblyHelp,

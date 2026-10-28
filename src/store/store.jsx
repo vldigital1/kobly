@@ -144,7 +144,7 @@ function KoblyStoreProvider({ children }) {
     // ações de autenticação (usadas pela tela de login e pelo perfil/topbar)
     signIn: (email, pw) => KoblyApi.signIn(email, pw),
     signInAsRole: (rk) => KoblyApi.signInAsRole(rk),
-    signUp: (email, pw, nome) => KoblyApi.signUp(email, pw, nome),
+    signUp: (email, pw, nome, extra) => KoblyApi.signUp(email, pw, nome, extra),
     resetPassword: (email) => KoblyApi.resetPassword(email),
     updatePassword: (pw) => KoblyApi.updatePassword(pw),
     signOut: () => { try { sessionStorage.removeItem('kbly_view'); } catch (_) {} KoblyApi.signOut(); },

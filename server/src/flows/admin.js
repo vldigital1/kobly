@@ -2,10 +2,12 @@
 // Toda escrita passa por aqui (o cliente só lê as tabelas do motor), sempre conferindo a empresa.
 import { AuthError } from '../auth.js';
 import { validateGraph } from './graph.js';
+import { createFlowTransfer } from './transfer.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
 export function createFlowAdmin({ pool, copilot = null }) {
+  const transfer = createFlowTransfer({ pool });
   async function flowOf(orgId, campaignId) {
     if (!UUID.test(String(campaignId || ''))) throw new AuthError(422, 'validation_failed', 'Informe a campanha.');
     const { rows } = await pool.query(`select f.id as flow_id, c.id as campaign_id from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
@@ -84,6 +86,8 @@ export function createFlowAdmin({ pool, copilot = null }) {
            group by c.id, f.id order by max(v.created_at) desc`, [orgId]);
         return { flows: rows };
       }
+      case 'export': return { file: await transfer.exportFlow(orgId, body.campaign_id, body.version || null) }; // baixar o fluxo (.kobly.json)
+      case 'import': { canEdit(ctx); return transfer.importFlow(orgId, user && user.id, body.file, body.nome); } // fluxo de outra conta vira rascunho aqui
       case 'validate': {
         const v = validateGraph(body.graph);
         return { ...v, warnings: [...v.warnings, ...(v.ok ? await refWarnings(orgId, body.graph) : [])] };

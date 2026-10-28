@@ -34,6 +34,7 @@ import { createMcp } from './mcp/server.js';
 import { createWorkspaceSettings } from './workspace/settings.js';
 import { createInbox } from './workspace/inbox.js';
 import { createMetaChannels, channelAddress } from './messaging/metaChannels.js';
+import { createAffiliates } from './affiliates/service.js';
 import { createTeam } from './workspace/team.js';
 import { createUtmify } from './tracking/utmify.js';
 import { createTracking, createProducts } from './tracking/service.js';
@@ -139,7 +140,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     loginCustomerId: config.googleAdsLoginCustomerId, apiVersion: config.googleAdsApiVersion,
     publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl });
   const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
-  const functions = createFunctions({ pool, config, auth, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
+  const affiliates = createAffiliates({ pool, secretKey: secretKeyBuf, flows, siteUrl: config.siteUrl });
+  const functions = createFunctions({ pool, config, auth, affiliates, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -172,7 +174,14 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     },
     'POST /auth/signup': async (req, res, body) => {
       if (!signupLimit(clientIp(req))) throw new AuthError(429, 'rate_limited', 'Muitas tentativas');
-      send(res, 200, await auth.signup(body.email, body.password, body.nome, body.redirect_to));
+      const r = await auth.signup(body.email, body.password, body.nome, body.redirect_to);
+      // cadastro pelo link de afiliado: guarda quem indicou e manda para o fluxo de boas-vindas
+      if (body.ref && r.user && r.user.id) await affiliates.onSignup({ userId: r.user.id, email: r.user.email, nome: body.nome, whatsapp: body.whatsapp, ref: body.ref }).catch((e) => console.error('[afiliados]', e.message));
+      send(res, 200, r);
+    },
+    'POST /affiliates/click': async (req, res, body) => {
+      if (!signupLimit(clientIp(req))) throw new AuthError(429, 'rate_limited', 'Muitas tentativas');
+      send(res, 200, await affiliates.click({ code: body.code, ip: clientIp(req), landing: body.landing }));
     },
     'POST /auth/refresh': async (req, res, body) => send(res, 200, await auth.refresh(body.refresh_token)),
     'POST /auth/logout': async (req, res, body) => { await auth.logout(body.refresh_token); send(res, 200, { ok: true }); },
@@ -290,7 +299,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       }
       const fm = /^\/functions\/v1\/([a-z0-9-]+)$/.exec(path);
       // foto do perfil do WhatsApp vai em base64 na rota uazapi: limite maior só ali
-      if (fm) return await functions.handle(fm[1], req, res, { readJson: (r) => readJson(r, fm[1] === 'uazapi' || fm[1] === 'bulk-send' ? 2 * 1024 * 1024 : MAX_BODY), readBody, send, bearer, clientIp });
+      if (fm) return await functions.handle(fm[1], req, res, { readJson: (r) => readJson(r, fm[1] === 'uazapi' || fm[1] === 'bulk-send' || fm[1] === 'flow-graph' ? 3 * 1024 * 1024 : MAX_BODY), readBody, send, bearer, clientIp });
       const handler = routes[`${req.method} ${path}`];
       if (!handler) return send(res, 404, { code: 'not_found', message: 'Not found' });
       const body = req.method === 'POST' ? await readJson(req) : {};
