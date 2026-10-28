@@ -117,9 +117,20 @@ export function createMetaAds({ pool, secretKey, fetchImpl = globalThis.fetch, g
     if (!r) throw new AuthError(410, 'meta_oauth_expired', 'O login com o Facebook expirou. Clique em "Conectar com Facebook" de novo.');
     return { token: decrypt(r.token_enc, secretKey), userName: r.user_name };
   };
+  const AD_FIELDS = 'name,account_id,currency,account_status';
   const listAccounts = async (token) => {
-    const j = await graph(token, '/me/adaccounts', { fields: 'name,account_id,currency,account_status', limit: '100' });
-    return (j.data || []).map((a) => ({ ad_account_id: a.account_id, name: a.name, currency: a.currency, active: a.account_status === 1 }));
+    const found = new Map();
+    const add = (a, via) => {
+      if (a && a.account_id && !found.has(a.account_id)) found.set(a.account_id, { ad_account_id: a.account_id, name: a.name, currency: a.currency, active: a.account_status === 1, via });
+    };
+    const j = await graph(token, '/me/adaccounts', { fields: AD_FIELDS, limit: '100' });
+    for (const a of j.data || []) add(a, null);
+    // business_management: contas do portfólio empresarial (próprias e de clientes da agência) que não vêm acima
+    const b = await graph(token, '/me/businesses', { fields: `name,owned_ad_accounts.limit(100){${AD_FIELDS}},client_ad_accounts.limit(100){${AD_FIELDS}}`, limit: '50' }).catch(() => ({}));
+    for (const biz of b.data || []) {
+      for (const k of ['owned_ad_accounts', 'client_ad_accounts']) for (const a of (biz[k] && biz[k].data) || []) add(a, biz.name || null);
+    }
+    return [...found.values()];
   };
 
   // GET /oauth/meta/callback — o Facebook volta aqui; a página avisa a janela da Kobly e fecha sozinha

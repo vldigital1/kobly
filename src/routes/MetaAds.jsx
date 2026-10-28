@@ -125,7 +125,7 @@ function Connect({ orgId, notify, onDone }) {
                 border: `1px solid ${pick.includes(a.ad_account_id) ? 'var(--accent)' : 'var(--border-subtle)'}`, background: pick.includes(a.ad_account_id) ? 'var(--accent-soft)' : 'transparent' }}>
                 <input type="checkbox" checked={pick.includes(a.ad_account_id)} onChange={() => toggle(a.ad_account_id)} style={{ accentColor: 'var(--accent)', width: 16, height: 16 }} />
                 <span style={{ flex: 1, color: 'var(--text-strong)', fontWeight: 'var(--fw-semibold)' }}>{a.name}</span>
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{a.ad_account_id} · {a.currency}{a.active ? '' : ' · inativa'}</span>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{a.ad_account_id} · {a.currency}{a.via ? ` · via ${a.via}` : ''}{a.active ? '' : ' · inativa'}</span>
               </label>
             ))}
             <div style={{ display: 'flex', gap: 8 }}>

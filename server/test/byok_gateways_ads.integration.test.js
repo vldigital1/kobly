@@ -48,6 +48,9 @@ async function fakeFetch(url, init = {}) {
     if (u.pathname.endsWith('/me') && auth === `Bearer EAAB-token-ads-${stamp}`) return ok({ name: 'Dona da Loja' });
     if (auth !== `Bearer EAAB-token-ads-${stamp}`) return no(400, { error: { code: 190, message: 'Invalid OAuth access token.' } });
     if (u.pathname.endsWith('/me/adaccounts')) return ok({ data: [{ account_id: '1234567890', name: 'Loja BR', currency: 'BRL', account_status: 1 }] });
+    if (u.pathname.endsWith('/me/businesses')) return ok({ data: [{ name: 'Agência X',
+      owned_ad_accounts: { data: [{ account_id: '1234567890', name: 'Loja BR', currency: 'BRL', account_status: 1 }] },
+      client_ad_accounts: { data: [{ account_id: '5550001112', name: 'Cliente da Agência', currency: 'BRL', account_status: 1 }] } }] });
     if (u.pathname.endsWith('/act_1234567890')) return ok({ name: 'Loja BR', currency: 'BRL', account_status: 1 });
     if (u.pathname.endsWith('/act_1234567890/insights')) {
       assert.equal(u.searchParams.get('level'), 'campaign');
@@ -152,7 +155,8 @@ test('Facebook Ads: conta conectada com o token cifrado e campanhas ao lado das 
   const token = `EAAB-token-ads-${stamp}`;
   assert.equal((await fn('meta-ads', { action: 'discover', access_token: 'EAAB-token-invalido-000000' }, A.token)).status, 400);
   const d = await fn('meta-ads', { action: 'discover', access_token: token }, A.token);
-  assert.deepEqual(d.accounts, [{ ad_account_id: '1234567890', name: 'Loja BR', currency: 'BRL', active: true }]);
+  assert.deepEqual(d.accounts, [{ ad_account_id: '1234567890', name: 'Loja BR', currency: 'BRL', active: true, via: null },
+    { ad_account_id: '5550001112', name: 'Cliente da Agência', currency: 'BRL', active: true, via: 'Agência X' }]);
   const c = await fn('meta-ads', { action: 'connect', access_token: token, ad_account_id: 'act_1234567890' }, A.token);
   assert.equal(c.status, 200, JSON.stringify(c));
   await assert.rejects(asUser(A.userId, `select token_enc from public.meta_ads_accounts`), /permission denied/);
@@ -196,6 +200,8 @@ test('Conectar com Facebook: janelinha de login, troca do código e escolha das 
   assert.equal((await fn('meta-ads', { action: 'oauth_accounts' }, A.token)).status, 410, 'outra empresa não usa o login');
   const ac = await fn('meta-ads', { action: 'oauth_accounts' }, B.token);
   assert.equal(ac.user_name, 'Dona da Loja'); assert.equal(ac.accounts[0].ad_account_id, '1234567890');
+  assert.deepEqual(ac.accounts.map((a) => a.ad_account_id), ['1234567890', '5550001112'], 'contas do portfólio entram sem repetir');
+  assert.equal(ac.accounts[1].via, 'Agência X');
   const c = await fn('meta-ads', { action: 'oauth_connect', ad_account_ids: ['1234567890'] }, B.token);
   assert.equal(c.status, 200, JSON.stringify(c)); assert.equal(c.accounts[0].name, 'Loja BR');
   assert.equal((await fn('meta-ads', { action: 'accounts' }, B.token)).accounts.length, 1);
