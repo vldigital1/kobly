@@ -9,8 +9,28 @@ const bearerOf = (req) => { const m = /^Bearer (.+)$/i.exec(req.headers.authoriz
 const ATENDENTE = { inbox: null, 'workspace-settings': ['get'], 'flow-graph': ['list', 'get', 'get_version', 'stats'], team: ['list'], pipeline: null };
 export const atendentePode = (fn, action) => Object.prototype.hasOwnProperty.call(ATENDENTE, fn) && (ATENDENTE[fn] === null || ATENDENTE[fn].includes(action));
 
+// Travas do plano (só com BILLING_ENFORCE ligado): recurso que o plano precisa ter e vagas de conexão.
+// Só as ações que criam ou ligam algo; ver e desligar continuam livres.
+const GATES = {
+  'whatsapp-account': { connect: { feature: 'canais', slots: 1 } },
+  'meta-channels': { oauth_start: { feature: 'canais' }, connect: { feature: 'canais', slots: (b) => (Array.isArray(b.page_ids) ? b.page_ids.length : 1) * (Array.isArray(b.kinds) && b.kinds.length ? b.kinds.length : 2) } },
+  'uazapi': { create: { slots: 1 } },
+  'ai-keys': { connect: { feature: 'ia' }, activate: { feature: 'ia' } },
+  voice: { connect: { feature: 'ia' }, tts: { feature: 'ia' }, translate_flow: { feature: 'ia' } },
+  'meta-ads': { oauth_start: { feature: 'anuncios' }, connect: { feature: 'anuncios' }, oauth_connect: { feature: 'anuncios' } },
+  'google-ads': { oauth_start: { feature: 'anuncios' }, oauth_connect: { feature: 'anuncios' } },
+  'bulk-send': { create: { feature: 'disparo' } },
+  'payment-integrations': { connect: { feature: 'cobranca' } },
+};
+
 export function createFunctions(ctx) {
   const wa = ctx.whatsapp;
+  async function gate(fnName, body, org) {
+    const g = ctx.billing && ctx.billing.enforce && GATES[fnName] && GATES[fnName][body.action];
+    if (!g) return;
+    if (g.feature) await ctx.billing.requireFeature(org.orgId, g.feature, org.role);
+    if (g.slots) await ctx.billing.requireSlots(org.orgId, typeof g.slots === 'function' ? g.slots(body) : g.slots, org.role);
+  }
   // Exige usuário logado e devolve o usuário + a empresa-alvo.
   async function authedOrg(req, body, fnName = null) {
     const user = await ctx.auth.userFromAccessToken(bearerOf(req));
@@ -21,6 +41,7 @@ export function createFunctions(ctx) {
   const whatsappAccount = async (req, res, io) => {
     const body = await io.readJson(req);
     const { org } = await authedOrg(req, body, 'whatsapp-account');
+    await gate('whatsapp-account', body, org);
     switch (body.action) {
       case 'status': return io.send(res, 200, await wa.status(org, { refresh: !!body.refresh }));
       case 'connect': return io.send(res, 200, await wa.connect(org, body));
@@ -48,6 +69,7 @@ export function createFunctions(ctx) {
     if (!ctx[svc]) throw new AuthError(503, 'unavailable', 'Recurso indisponível neste ambiente.');
     const body = await io.readJson(req);
     const { org } = await authedOrg(req, body, fnName);
+    await gate(fnName, body, org);
     return io.send(res, 200, await ctx[svc].handle(org, body));
   };
   // Serviços que também precisam do usuário (quem enviou, quem alterou).
@@ -55,6 +77,7 @@ export function createFunctions(ctx) {
     if (!ctx[svc]) throw new AuthError(503, 'unavailable', 'Recurso indisponível neste ambiente.');
     const body = await io.readJson(req);
     const { user, org } = await authedOrg(req, body, fnName);
+    await gate(fnName, body, org);
     return io.send(res, 200, await ctx[svc].handle(org, user, body));
   };
   // Infraestrutura da Kobly (ex.: servidores Uazapi): só o Administrador da plataforma, sem empresa-alvo.
@@ -98,6 +121,8 @@ export function createFunctions(ctx) {
     'uazapi-servers': () => platformAdminRoute((body) => ctx.uazapi.handleServers(body)),
     'affiliates': () => userRoute((user, body) => ctx.affiliates.handle(user, body)),
     'affiliates-admin': () => platformAdminRoute((body) => ctx.affiliates.admin(body)),
+    'billing': () => orgUserRoute('billing', 'billing'),
+    'billing-admin': () => platformAdminRoute((body) => ctx.billing.admin(body)),
   };
   return {
     names: () => Object.keys(handlers),

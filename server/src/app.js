@@ -35,6 +35,7 @@ import { createWorkspaceSettings } from './workspace/settings.js';
 import { createInbox } from './workspace/inbox.js';
 import { createMetaChannels, channelAddress } from './messaging/metaChannels.js';
 import { createAffiliates } from './affiliates/service.js';
+import { createBilling } from './billing/service.js';
 import { createTeam } from './workspace/team.js';
 import { createUtmify } from './tracking/utmify.js';
 import { createTracking, createProducts } from './tracking/service.js';
@@ -141,7 +142,9 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl });
   const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
   const affiliates = createAffiliates({ pool, secretKey: secretKeyBuf, flows, siteUrl: config.siteUrl });
-  const functions = createFunctions({ pool, config, auth, affiliates, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
+  const billing = createBilling({ pool, secretKey: secretKeyBuf, fetchImpl, apiKey: config.asaasApiKey, env: config.asaasEnv, webhookToken: config.asaasWebhookToken });
+  billing.enforce = !!config.billingEnforce;
+  const functions = createFunctions({ pool, config, auth, affiliates, billing, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -240,6 +243,10 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       const fsh = /^\/flow-share\/([0-9a-f-]{36})$/i.exec(path);
       if (fsh && req.method === 'GET') { const r = await flowAdmin.publicPreview(fsh[1]); return send(res, 200, r); }
       // Instagram Direct e Messenger: verificação (GET) e mensagens (POST, assinadas com o segredo do app)
+      if (path === '/webhooks/asaas' && req.method === 'POST') {
+        const r = await billing.receiveWebhook(await readBody(req, 512 * 1024), req.headers['asaas-access-token']);
+        return send(res, r.status, { ok: r.status === 200 });
+      }
       if (path === '/webhooks/meta-messaging') {
         if (req.method === 'GET') { const v = metaChannels.verify(Object.fromEntries(url.searchParams)); res.statusCode = v.status; res.setHeader('Content-Type', 'text/plain'); return res.end(v.body); }
         if (req.method === 'POST') { const r = await metaChannels.receiveWebhook(await readBody(req, 1024 * 1024), req.headers['x-hub-signature-256']); return send(res, r.status, { ok: r.status === 200 }); }

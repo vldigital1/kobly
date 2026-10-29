@@ -32,6 +32,10 @@ export function loadConfig(env = process.env) {
     // Instagram Direct e Messenger (mesmo app do Facebook Ads): configuração do login e senha do webhook
     metaMsgConfigId: env.META_MSG_CONFIG_ID || '',
     metaMsgVerifyToken: env.META_MSG_VERIFY_TOKEN || '',
+    asaasApiKey: env.ASAAS_API_KEY || '',
+    asaasEnv: env.ASAAS_ENV === 'production' ? 'production' : 'sandbox',
+    asaasWebhookToken: env.ASAAS_WEBHOOK_TOKEN || '',
+    billingEnforce: env.BILLING_ENFORCE === '1',
     metaGraphBase: env.META_GRAPH_BASE || 'https://graph.facebook.com/v21.0',
     // Marketing API (Facebook Ads): versão atual da documentação
     metaAdsGraphBase: env.META_ADS_GRAPH_BASE || 'https://graph.facebook.com/v26.0',

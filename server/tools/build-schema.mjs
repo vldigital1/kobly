@@ -92,6 +92,7 @@ revoke all on public.meta_channel_oauth from kobly_authenticated, kobly_anon;
 revoke all on public.flow_shares from kobly_authenticated, kobly_anon;
 -- Afiliados (0094): tudo só pelo serviço.
 revoke all on public.affiliate_settings, public.affiliates, public.affiliate_clicks, public.affiliate_referrals, public.affiliate_commissions, public.affiliate_payouts from kobly_authenticated, kobly_anon;
+revoke all on public.subscriptions, public.invoices from kobly_authenticated, kobly_anon;
 -- Taxas do gerenciador de anúncios (0089): escrita só pelo serviço.
 revoke all on public.ads_settings from kobly_authenticated, kobly_anon;
 grant select on public.ads_settings to kobly_authenticated;
