@@ -1149,6 +1149,7 @@ export const KoblyApi = {
   // Programa de afiliados: painel do afiliado (do usuário) e painel do Administrador
   async affiliates(action, extra = {}) { return this.serviceCall('affiliates', action, extra); },
   async affiliatesAdmin(action, extra = {}) { return this.serviceCall('affiliates-admin', action, extra); },
+  async flowSharePreview(code) { return supabase.flowSharePreview ? supabase.flowSharePreview(code) : {}; },
   async affiliateClick(code, landing) { return supabase.affiliateClick ? supabase.affiliateClick(code, landing) : {}; },
   async flowGraph(action, extra = {}, empresaId = null) {
     return this.serviceCall('flow-graph', action, extra, empresaId);

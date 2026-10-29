@@ -977,4 +977,23 @@ function Editor({ campaign, onBack, api, notify }) {
 function KoblyFlowGraphEditor({ campaign, onBack, api = defaultApi, notify = (tone, msg) => console.log(`[${tone}] ${msg}`) }) {
   return <ReactFlowProvider><Editor campaign={campaign} onBack={onBack} api={api} notify={notify} /></ReactFlowProvider>;
 }
-export { KoblyFlowGraphEditor };
+// Só para ver (prévia de fluxo compartilhado): o mesmo desenho do editor, sem editar.
+function FlowReadOnly({ graph, lookups = {} }) {
+  const { nodes, edges } = React.useMemo(() => toCanvas(graph || { nodes: [] }), [graph]);
+  return (
+    <LookupsCtx.Provider value={{ templates: [], tags: [], integrations: [], pixels: [], channels: [], agents: [], emails: [], metrics: null, ...lookups }}>
+      <style>{FLOW_CSS}</style>
+      <div className="kf-canvas" style={{ height: '100%', minHeight: 420 }}>
+        <ReactFlowProvider>
+          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} colorMode="dark" fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+            nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} edgesFocusable={false} proOptions={{ hideAttribution: true }}>
+            <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="rgba(255,255,255,.08)" />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </ReactFlowProvider>
+      </div>
+    </LookupsCtx.Provider>
+  );
+}
+
+export { KoblyFlowGraphEditor, FlowReadOnly };

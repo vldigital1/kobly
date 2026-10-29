@@ -336,6 +336,8 @@ export function createApiClient({ baseUrl, fetchImpl, storage, pollMs = 4000, no
     baseUrl,
     pollMs,
     // clique no link de afiliado (público, sem login)
+    // prévia pública de fluxo compartilhado (sem login)
+    flowSharePreview: (code) => f(`${baseUrl}/flow-share/${encodeURIComponent(code)}`).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
     affiliateClick: (code, landing) => post('/affiliates/click', { code, landing }).then((r) => r.json || {}).catch(() => ({})),
     authed,
     auth,

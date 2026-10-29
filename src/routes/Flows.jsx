@@ -1,21 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
-import { Badge, Banner, Button, Card, DataTable, IconButton, Input, PageHeader, Select } from '@/ds';
+import { Badge, Banner, Button, Card, DataTable, Icon, IconButton, Input, PageHeader, Select } from '@/ds';
 import { starterGraph } from '@/lib/flowGraph.js';
 import { useAsync } from '@/lib/hooks.jsx';
 import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { fmtDateTime, useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
 import { askConfirm } from '@/lib/confirm.jsx';
-import { downloadText } from '@/lib/leadAvatar.jsx';
 
 // Editor do fluxo em grafo: carregado só quando aberto (traz o React Flow junto).
 const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.jsx').then((m) => ({ default: m.KoblyFlowGraphEditor })));
 
 // Kobly — Fluxos. Todos os fluxos (WhatsApp e e-mail) em grafo da conta (publicados e rascunhos),
-// quantos leads estão em cada um e atalho para criar um fluxo novo do zero. Baixar um fluxo (.kobly.json) e importar
-// o arquivo em outra conta: vira rascunho com etiquetas, e-mails e agentes; o que é da conta (pagamento, Pixel) fica
-// na lista "falta configurar". KoblyFlows
+// quantos leads estão em cada um e atalho para criar um fluxo novo do zero. Compartilhar: cada fluxo tem um código e
+// um link de prévia; quem tem o código importa na conta dele (versão mais nova, como rascunho, com etiquetas, e-mails
+// e agentes; o que é da conta — pagamento, Pixel — fica na lista "falta configurar"). KoblyFlows
 
 const OPEN_KEY = 'kobly:openflow';
 
@@ -64,31 +63,38 @@ function KoblyFlows() {
     store.notify('success', `Pronto! "${r.nome}" criado com ${r.textos} texto(s)${r.audios ? ` e ${r.audios} áudio(s)` : ''} traduzidos. Revise e publique.`);
     if (r.aviso) store.notify('warning', r.aviso);
   }
-  // ---- baixar e importar fluxo ------------------------------------------------------------
-  const fileRef = useRef(null);
-  const [imp, setImp] = useState(null); // { file, nome, running, result }
-  async function exportFlow(f) {
-    const r = await KoblyApi.flowGraph('export', { campaign_id: f.campaign_id }, orgId);
-    if (r.error) { store.notify('danger', r.error); return; }
-    const slug = String(f.nome || 'fluxo').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'fluxo';
-    downloadText(`${slug}.kobly.json`, JSON.stringify(r.file, null, 2), 'application/json;charset=utf-8');
-    store.notify('success', `Fluxo "${f.nome}" baixado. Mande o arquivo para quem quiser: a pessoa importa na conta dela em Fluxos → Importar.`);
+  // ---- compartilhar por código (como no ZapData e na Leona) -------------------------------------
+  const [shr, setShr] = useState(null); // { flow, code, link, loading }
+  const [imp, setImp] = useState(null); // { code, preview, nome, loading, running, result }
+  async function openShare(f, renew = false) {
+    if (renew && !(await askConfirm('O código atual para de funcionar. Quem ainda não importou vai precisar do código novo.', { title: 'Gerar novo código?', confirmLabel: 'Gerar novo', danger: false }))) return;
+    setShr({ flow: f, loading: true });
+    const r = await KoblyApi.flowGraph('share', { campaign_id: f.campaign_id, renew }, orgId);
+    if (r.error) { setShr(null); store.notify('danger', r.error); return; }
+    setShr({ flow: f, code: r.code, link: r.link, loading: false });
+    if (renew) store.notify('success', 'Código novo gerado. O antigo não funciona mais.');
   }
-  async function pickFile(file) {
-    if (!file) return;
-    if (file.size > 3 * 1024 * 1024) { store.notify('danger', 'Arquivo grande demais (máximo 3 MB).'); return; }
-    try {
-      const j = JSON.parse(await file.text());
-      if (!j || j.format !== 'kobly-flow' || !j.graph) throw new Error('formato');
-      setImp({ file: j, nome: j.name || 'Fluxo importado', running: false, result: null });
-    } catch { store.notify('danger', 'Esse arquivo não é um fluxo da Kobly (.kobly.json).'); }
+  const copy = (text, msg) => { try { navigator.clipboard.writeText(text); store.notify('success', msg); } catch { store.notify('warning', 'Selecione e copie à mão.'); } };
+  async function checkCode(code) {
+    const c = String(code || '').trim();
+    setImp((x) => ({ ...x, code: c, preview: null, error: null }));
+    if (!/^[0-9a-f-]{36}$/i.test(c)) return;
+    setImp((x) => ({ ...x, loading: true }));
+    const r = await KoblyApi.flowGraph('share_preview', { code: c }, orgId);
+    setImp((x) => (x && x.code === c ? { ...x, loading: false, preview: r.error ? null : r, error: r.error || null, nome: r.error ? x.nome : (x.nome || r.nome) } : x));
   }
   async function runImport() {
     setImp((x) => ({ ...x, running: true }));
-    const r = await KoblyApi.flowGraph('import', { file: imp.file, nome: imp.nome }, orgId);
+    const r = await KoblyApi.flowGraph('import', { code: imp.code, nome: imp.nome }, orgId);
     if (r.error) { setImp((x) => ({ ...x, running: false })); store.notify('danger', r.error); return; }
     setImp((x) => ({ ...x, running: false, result: r })); list.reload();
   }
+  // veio do link de prévia ("Importar na minha conta"): abre a importação com o código
+  useEffect(() => {
+    if (!orgId) return;
+    let c = null; try { c = sessionStorage.getItem('kobly:import-flow'); if (c) sessionStorage.removeItem('kobly:import-flow'); } catch { /* ok */ }
+    if (c) { setImp({ code: '', nome: '' }); checkCode(c); }
+  }, [orgId]); // eslint-disable-line react-hooks/exhaustive-deps
   async function toggleLegacy(c) {
     const status = c.status === 'Ativa' ? 'Pausada' : 'Ativa';
     await KoblyApi.setCampaignStatus(c.id, status);
@@ -123,8 +129,7 @@ function KoblyFlows() {
   const oldOnes = (legacy.data || []).filter((c) => !flowIds.has(c.id));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
-      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><Button variant="secondary" iconLeft="upload" onClick={() => fileRef.current && fileRef.current.click()}>Importar fluxo</Button><Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button></div> : null}>
+      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><Button variant="secondary" iconLeft="download" onClick={() => setImp({ code: '', nome: '' })}>Importar fluxo</Button><Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button></div> : null}>
         Automações de WhatsApp e e-mail: gatilho do checkout, mensagens, e-mails, botões, IA, cobrança e venda, tudo num desenho só.
         Cada fluxo tem rascunhos e versões; só a versão publicada roda.
       </PageHeader>
@@ -156,7 +161,7 @@ function KoblyFlows() {
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                   {canEdit && <IconButton icon={r.status === 'Ativa' ? 'pause' : 'play'} size="sm" aria-label={r.status === 'Ativa' ? 'Pausar fluxo' : 'Ativar fluxo'} onClick={() => toggle(r)} />}
                   {canEdit && <IconButton icon="languages" size="sm" aria-label="Traduzir para outro idioma" onClick={() => openTranslate(r)} />}
-                  <IconButton icon="download" size="sm" aria-label="Baixar fluxo (para enviar a outra conta)" title="Baixar fluxo" onClick={() => exportFlow(r)} />
+                  <IconButton icon="share-2" size="sm" aria-label="Exportar fluxo (código para outra conta)" title="Exportar fluxo" onClick={() => openShare(r)} />
                   <IconButton icon="pencil" size="sm" aria-label="Abrir no editor" onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} />
                 </div>
               ) },
@@ -210,21 +215,52 @@ function KoblyFlows() {
           </div>
         )}
       </Modal>
-      <Modal open={!!imp} onClose={() => !(imp && imp.running) && setImp(null)} title={imp && imp.result ? 'Fluxo importado' : 'Importar fluxo'} subtitle={imp && !imp.result ? 'Entra como rascunho: nada roda até você revisar e publicar.' : ''} width={540}
+      <Modal open={!!shr} onClose={() => setShr(null)} title="Exportar fluxo" subtitle={shr ? `Use o código abaixo para compartilhar ou importar "${shr.flow.nome}" em outra conta.` : ''} width={560}
+        footer={<><Button variant="ghost" iconLeft="refresh-cw" disabled={!shr || shr.loading} onClick={() => openShare(shr.flow, true)}>Gerar novo código</Button><Button variant="secondary" onClick={() => setShr(null)}>Fechar</Button></>}>
+        {shr && (shr.loading ? <div style={{ color: 'var(--text-muted)' }}>Gerando código…</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input readOnly value={shr.code} onFocus={(e) => e.target.select()} aria-label="Código do fluxo"
+                style={{ flex: 1, minWidth: 0, padding: '12px 14px', borderRadius: 12, border: '2px solid #ff6201', background: 'rgba(0,0,0,.3)', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', fontSize: 14, outline: 'none' }} />
+              <IconButton icon="copy" aria-label="Copiar código" onClick={() => copy(shr.code, 'Código copiado!')} />
+            </div>
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>Ou compartilhe via link com prévia:</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input readOnly value={shr.link} onFocus={(e) => e.target.select()} aria-label="Link de prévia"
+                style={{ flex: 1, minWidth: 0, padding: '11px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(0,0,0,.3)', color: 'var(--text-body)', fontSize: 13.5, outline: 'none' }} />
+              <IconButton icon="link" aria-label="Copiar link" onClick={() => copy(shr.link, 'Link copiado!')} />
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', lineHeight: 1.5 }}>Quem importar recebe sempre a versão mais nova deste fluxo. Contas de pagamento, Pixel e chaves não vão junto.</div>
+          </div>
+        ))}
+      </Modal>
+      <Modal open={!!imp} onClose={() => !(imp && imp.running) && setImp(null)} title={imp && imp.result ? 'Fluxo importado' : 'Importar fluxo'} subtitle={imp && !imp.result ? 'Cole o código que você recebeu. O fluxo entra como rascunho: nada roda até você revisar e publicar.' : ''} width={560}
         footer={imp && imp.result
           ? <><Button variant="ghost" onClick={() => setImp(null)}>Fechar</Button><Button variant="primary" iconLeft="pencil" onClick={() => { const r = imp.result; setImp(null); openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId }); }}>Abrir no editor</Button></>
-          : <><Button variant="ghost" disabled={!!(imp && imp.running)} onClick={() => setImp(null)}>Cancelar</Button><Button variant="primary" iconLeft="upload" loading={!!(imp && imp.running)} disabled={!imp || imp.running || !String(imp.nome || '').trim()} onClick={runImport}>Importar</Button></>}>
+          : <><Button variant="ghost" disabled={!!(imp && imp.running)} onClick={() => setImp(null)}>Cancelar</Button><Button variant="primary" iconLeft="download" loading={!!(imp && imp.running)} disabled={!imp || imp.running || !imp.preview || !String(imp.nome || '').trim()} onClick={runImport}>Importar</Button></>}>
         {imp && !imp.result && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Input label="Nome do fluxo nesta conta" value={imp.nome} onChange={(e) => setImp({ ...imp, nome: e.target.value })} />
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Badge tone="info">{(imp.file.graph.nodes || []).length} blocos</Badge>
-              {Object.keys((imp.file.resources || {}).tags || {}).length > 0 && <Badge tone="neutral">{Object.keys(imp.file.resources.tags).length} etiqueta(s)</Badge>}
-              {Object.keys((imp.file.resources || {}).emails || {}).length > 0 && <Badge tone="neutral">{Object.keys(imp.file.resources.emails).length} e-mail(s)</Badge>}
-              {Object.keys((imp.file.resources || {}).agents || {}).length > 0 && <Badge tone="neutral">{Object.keys(imp.file.resources.agents).length} agente(s) de IA</Badge>}
-              {Object.keys((imp.file.resources || {}).templates || {}).length > 0 && <Badge tone="warning">{Object.keys(imp.file.resources.templates).length} modelo(s) do WhatsApp</Badge>}
-            </div>
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Etiquetas com o mesmo nome são reaproveitadas (as que faltam são criadas). E-mails e agentes de IA vêm junto. Conta de pagamento, Pixel e canal de alerta são de cada conta: você escolhe os seus depois.</div>
+            <Input label="Código do fluxo" value={imp.code || ''} autoFocus placeholder="ex.: e5b37179-8ab2-4b8b-88b8-05d048acad87" onChange={(e) => checkCode(e.target.value)} />
+            {imp.loading && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Procurando o fluxo…</div>}
+            {imp.error && <Banner tone="danger">{imp.error}</Banner>}
+            {imp.preview && (<>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 14, borderRadius: 14, background: 'rgba(255,98,1,.08)', border: '1px solid rgba(255,148,82,.3)' }}>
+                <span style={{ width: 42, height: 42, borderRadius: 12, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, #ff9452, #ff6201)', color: '#fff', flex: 'none' }}><Icon name="git-branch" size={20} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{imp.preview.nome}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Compartilhado por {imp.preview.conta}</div>
+                </div>
+                <a href={imp.preview.link} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--text-sm)', color: '#ff9452', whiteSpace: 'nowrap' }}>Ver prévia ↗</a>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Badge tone="info">{imp.preview.blocos} blocos</Badge>
+                {imp.preview.inclui.etiquetas > 0 && <Badge tone="neutral">{imp.preview.inclui.etiquetas} etiqueta(s)</Badge>}
+                {imp.preview.inclui.emails > 0 && <Badge tone="neutral">{imp.preview.inclui.emails} e-mail(s)</Badge>}
+                {imp.preview.inclui.agentes > 0 && <Badge tone="neutral">{imp.preview.inclui.agentes} agente(s) de IA</Badge>}
+                {imp.preview.inclui.modelos > 0 && <Badge tone="warning">{imp.preview.inclui.modelos} modelo(s) do WhatsApp</Badge>}
+              </div>
+              <Input label="Nome do fluxo nesta conta" value={imp.nome || ''} onChange={(e) => setImp({ ...imp, nome: e.target.value })} />
+            </>)}
           </div>
         )}
         {imp && imp.result && (
