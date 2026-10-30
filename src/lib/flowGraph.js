@@ -8,11 +8,11 @@ export const TIPOS_EVENTO = ['Abandono de carrinho', 'Pix Gerado', 'Boleto Gerad
 
 // group: seção da paleta. exits: [saída, rótulo]. dynamic: saídas que vêm dos dados (opções / saídas da IA).
 export const BLOCKS = {
-  trigger: { label: 'Gatilho', group: null, icon: 'play', tone: 'accent', hint: 'Evento de checkout que inicia o fluxo',
+  trigger: { label: 'Gatilho', group: null, icon: 'play', tone: 'accent', hint: 'O que inicia o fluxo: um evento do checkout ou uma mensagem no WhatsApp',
     exits: [['default', 'Próximo']], make: () => ({ events: ['Pix Gerado'] }) },
   send_template: { label: 'Modelo do WhatsApp', group: 'Mensagens', icon: 'file-text', tone: 'green', hint: 'Modelo aprovado pela Meta. Funciona mesmo com a janela de 24 h fechada.',
     exits: [['sent', 'Enviado']], make: () => ({ template_id: '', vars: [] }) },
-  send_text: { label: 'Texto', group: 'Mensagens', icon: 'message-circle', tone: 'green', hint: 'Mensagem de texto. Na API Oficial, escolha um modelo reserva para quando a janela de 24 h estiver fechada.',
+  send_text: { label: 'Texto', group: 'Mensagens', icon: 'message-circle', tone: 'green', hint: 'Mensagem de texto com variáveis, emojis, resposta e reação à mensagem do lead.',
     exits: [['sent', 'Enviado']], make: () => ({ text: 'Oi {{primeiro_nome}}!' }) },
   send_media: { label: 'Mídia', group: 'Mensagens', icon: 'image', tone: 'green', hint: 'Imagem, vídeo, áudio ou arquivo: envie do computador ou use um link.',
     exits: [['sent', 'Enviado']], make: (kind = 'image') => ({ kind, url: '', caption: '' }) },
@@ -57,6 +57,10 @@ export const BLOCKS = {
     exits: [['default', 'Próximo']], make: () => ({ add: [], remove: [] }) },
   set_var: { label: 'Definir variável', group: 'Ações', icon: 'pencil', tone: 'neutral', hint: 'Grava texto ou faz conta numa variável.',
     exits: [['default', 'Próximo']], make: () => ({ name: 'etapa', op: 'set', value: '1' }) },
+  goto_flow: { label: 'Conectar fluxo', group: 'Controle', icon: 'git-merge', tone: 'blue', hint: 'O lead sai deste fluxo e começa outro fluxo do início.',
+    exits: [], make: () => ({ campaign_id: '' }) },
+  webhook: { label: 'Webhook', group: 'Ações', icon: 'webhook', tone: 'neutral', hint: 'Manda os dados do lead para outro sistema (CRM, planilha, Make, Zapier) e guarda a resposta.',
+    exits: [['success', 'Sucesso'], ['error', 'Erro']], make: () => ({ url: '', method: 'POST', save_as: 'webhook' }) },
   end: { label: 'Fim', group: null, icon: 'flag', tone: 'neutral', hint: 'Encerra o fluxo para o lead.', exits: [], make: () => ({}) },
 };
 export const PALETTE_GROUPS = ['Mensagens', 'Controle', 'IA', 'Dinheiro', 'Ações'];
@@ -87,6 +91,7 @@ export function metaOf(type, d = {}) {
 // Cor da linha pela saída: falha/erro em vermelho, desvios em âmbar, o resto no tom da marca.
 export function edgeTone(exit) {
   if (['failed', 'error'].includes(exit)) return 'danger';
+  if (exit === 'success') return 'ok';
   if (['window_closed', 'timeout', 'other', 'missing', 'no', 'expiration'].includes(exit)) return 'warn';
   return 'ok';
 }
@@ -150,10 +155,24 @@ export function fromCanvas(nodes, edges, start = 'ini') {
 // Resumo de uma linha mostrado no cartão do bloco.
 export function summaryOf(type, d, lookups = {}) {
   switch (type) {
-    case 'trigger': return (d.events || []).join(', ') || 'Escolha o evento';
+    case 'trigger': {
+      if (d.source === 'message') {
+        if ((d.mode || 'any') === 'any') return 'Mensagem no WhatsApp: qualquer texto';
+        const kw = d.keywords || [];
+        const how = d.match === 'equals' ? 'igual a' : d.match === 'starts' ? 'começa com' : 'contém';
+        return kw.length ? `Mensagem ${how} "${kw[0]}"${kw.length > 1 ? ` +${kw.length - 1}` : ''}` : 'Adicione as palavras-chave';
+      }
+      return (d.events || []).join(', ') || 'Escolha o evento';
+    }
+    case 'goto_flow': return (lookups.flows || []).find((f) => f.campaign_id === d.campaign_id)?.nome ? `→ ${(lookups.flows || []).find((f) => f.campaign_id === d.campaign_id).nome}` : 'Escolha o fluxo';
+    case 'webhook': { try { return `${d.method || 'POST'} ${new URL(d.url).host}`; } catch { return 'Informe o link'; } }
     case 'send_template': return (lookups.templates || []).find((t) => t.id === d.template_id)?.name || 'Escolha o modelo';
     case 'send_text': return d.text || '';
-    case 'send_media': return d.url ? (d.filename || decodeURIComponent(d.url.split('/').pop() || '')) + (d.caption ? ` · ${d.caption}` : '') : 'Envie um arquivo ou cole um link';
+    case 'send_media': {
+      if (!d.url) return 'Envie um arquivo ou cole um link';
+      if (d.kind === 'document') return (d.filename || decodeURIComponent(d.url.split('/').pop() || '')) + (d.caption ? ` · ${d.caption}` : '');
+      return d.caption || ''; // imagem, vídeo e áudio aparecem no próprio bloco
+    }
     case 'send_buttons': return d.text || '';
     case 'send_email': { const e = (lookups.emails || []).find((x) => x.id === d.email_id); return e ? (e.assunto || e.titulo || 'E-mail') : 'Crie o e-mail deste bloco'; }
     case 'delay': {

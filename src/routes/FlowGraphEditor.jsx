@@ -6,6 +6,7 @@ import { useKobly } from '@/store/store.jsx';
 import { KoblyEmailEditor } from '@/routes/EmailEditor.jsx';
 import { Badge, Button, Icon, IconButton, Input, Select } from '@/ds';
 import { BLOCKS, MEDIA, PALETTE_GROUPS, TONES, TIPOS_EVENTO, PAYMENT_METHODS, CURRENCY_LABEL, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf, paletteItems, metaOf, edgeTone } from '@/lib/flowGraph.js';
+import { SYSTEM_VARS, AD_VARS, GREETING_VARS, COUNTRIES, REACTION_SUGGESTIONS, EMOJIS, flowVarsOf } from '@/lib/flowVars.js';
 
 // Kobly — Editor visual do fluxo em grafo (motor novo). Blocos ligados por saídas nomeadas:
 // paleta → arrasta/clica para adicionar, liga uma saída a outro bloco, clica no bloco para editar (janela),
@@ -26,6 +27,7 @@ const defaultApi = {
   createEmail: (e) => KoblyApi.createEmail(e),
   updateEmail: (id, p) => KoblyApi.updateEmail(id, p),
   renameFlow: (id, nome) => KoblyApi.renameCampaign(id, nome),
+  createTag: (nome, orgId) => KoblyApi.createTag({ nome, organizationId: orgId }),
   listAiKeys: () => KoblyApi.aiKeys('list').then((r) => ({ keys: r.keys || [], platform: !!r.platform_fallback })),
 };
 
@@ -102,6 +104,57 @@ const FLOW_CSS = `
 .kf-name { font: inherit; font-weight: 700; font-size: 18px; color: var(--text-strong); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 4px 8px; outline: none; width: 100%; max-width: 520px; transition: border-color .15s, background .15s; }
 .kf-name:hover { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
 .kf-name:focus { border-color: #ff9452; background: rgba(255,255,255,.04); box-shadow: 0 0 0 3px rgba(255,98,1,.2); }
+.kf-varbtn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); }
+.kf-varbtn:hover { border-color: rgba(255,148,82,.5); color: var(--text-strong); }
+.kf-varpop { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; border-radius: 14px; display: flex; flex-direction: column; max-height: 360px; overflow: hidden; }
+.kf-varsearch { flex: 1; background: transparent; border: 0; outline: none; color: var(--text-strong); font: inherit; font-size: var(--text-sm); }
+.kf-varcats { width: 42%; flex: none; border-right: 1px solid rgba(255,255,255,.07); padding: 6px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.kf-varcats button { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-radius: 9px; border: 0; cursor: pointer; text-align: left; font-family: var(--font-sans); font-size: 12.5px; color: var(--text-muted); background: transparent; }
+.kf-varcats button:hover { background: rgba(255,255,255,.04); }
+.kf-varcats button.on { color: #fff; background: rgba(255,98,1,.22); }
+.kf-varcats small { font-size: 11px; color: var(--text-subtle); }
+.kf-varlist { flex: 1; min-width: 0; overflow-y: auto; padding: 4px; }
+.kf-varlist > button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 9px; border: 0; cursor: pointer; text-align: left; font-family: var(--font-sans); font-size: 13px; background: transparent; }
+.kf-varlist > button:hover { background: rgba(255,98,1,.12); }
+.kf-varlist code { font-family: var(--font-mono); font-size: 11.5px; color: #ffb485; }
+.kf-emo-btn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: var(--text-muted); cursor: pointer; display: grid; place-items: center; }
+.kf-emo-btn.sm { width: 28px; height: 28px; border: 0; background: transparent; }
+.kf-emo-btn:hover { color: #ffb485; }
+.kf-emojis { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 290px; padding: 8px; border-radius: 14px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.kf-emojis button { border: 0; background: transparent; cursor: pointer; font-size: 20px; padding: 4px 0; border-radius: 8px; }
+.kf-emojis button:hover { background: rgba(255,255,255,.08); }
+.kf-checks { display: flex; flex-direction: column; border-radius: 14px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02); }
+.kf-check { padding: 12px 14px; }
+.kf-check + .kf-check { border-top: 1px solid rgba(255,255,255,.06); }
+.kf-check input[type=checkbox] { appearance: none; width: 20px; height: 20px; flex: none; margin: 0; border-radius: 6px; border: 2px solid #ff7a1a; background: transparent; cursor: pointer; display: grid; place-items: center; }
+.kf-check input[type=checkbox]:checked { background: #ff6201; }
+.kf-check input[type=checkbox]:checked::after { content: ''; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.kf-react { width: 44px; height: 40px; border-radius: 11px; font-size: 20px; cursor: pointer; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); }
+.kf-react.on { border-color: #ff7a1a; background: rgba(255,98,1,.18); box-shadow: 0 0 14px rgba(255,98,1,.3); }
+.kf-cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kf-card2 { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; border-radius: 14px; cursor: pointer; font-family: var(--font-sans); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); color: var(--text-muted); font-size: 12px; }
+.kf-card2 b { color: var(--text-strong); font-size: 14px; }
+.kf-card2.on { border-color: #ff7a1a; background: rgba(255,98,1,.12); box-shadow: inset 0 0 0 1px rgba(255,122,26,.5); }
+.kf-kw { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 11px; border-radius: 999px; font-size: 12.5px; color: var(--text-strong); background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); }
+.kf-kw button { width: 18px; height: 18px; border-radius: 50%; border: 0; cursor: pointer; background: rgba(255,255,255,.1); color: var(--text-muted); line-height: 1; padding: 0; }
+.kf-rule { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.08); }
+.kf-rule-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-strong); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); }
+.kf-addrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.kf-addrow button { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 8px; border-radius: 11px; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text-strong); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); }
+.kf-addrow button:hover { border-color: rgba(255,148,82,.6); }
+.kf-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; min-width: 210px; padding: 6px; border-radius: 12px; display: flex; flex-direction: column; }
+.kf-menu button { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 9px; border: 0; cursor: pointer; text-align: left; font-family: var(--font-sans); font-size: 13px; color: var(--text-body); background: transparent; }
+.kf-menu button:hover { background: rgba(255,98,1,.14); }
+.kf-thumb { width: 100%; max-height: 150px; object-fit: cover; border-radius: 12px; border: 1px solid rgba(255,255,255,.08); display: block; background: #000; }
+.kf-vplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.3); pointer-events: none; }
+.kf-audio { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px 12px 12px 4px; background: #1f2c33; cursor: default; }
+.kf-audio .av { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #34d399, #059669); }
+.kf-audio .av i { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: #34d399; border: 2px solid #1f2c33; }
+.kf-audio .pl { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: #e9edef; background: transparent; }
+.kf-audio .wave { display: flex; align-items: center; gap: 2px; height: 24px; }
+.kf-audio .wave span { width: 3px; border-radius: 2px; background: #8696a0; flex: none; transition: opacity .1s; }
+.kf-audio .tm { font-size: 10.5px; color: #8696a0; margin-top: 2px; }
+.kf-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #ffb485; background: rgba(255,98,1,.12); border: 1px solid rgba(255,148,82,.25); }
 .kf-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5; pointer-events: none; padding: 7px 14px; border-radius: 999px; font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
 `;
 
@@ -111,6 +164,9 @@ function BlockNode({ id, data, selected }) {
   const b = metaOf(data.type, data.data || {});
   const color = TONES[b.tone] || TONES.neutral;
   const exits = exitsOf({ type: data.type, data: data.data });
+  const summary = summaryOf(data.type, data.data || {}, lookups);
+  const dd = data.data || {};
+  const textBadges = [dd.reply_last && 'responde o lead', dd.react_last && `reage ${dd.react_emoji || '👍'}`, dd.forwarded && 'encaminhado'].filter(Boolean);
   return (
     <div className={`kf-node${selected ? ' sel' : ''}`} style={{ '--tone': color }}>
       {!data.isStart && <Handle type="target" position={Position.Left} className="kf-h" style={{ '--hc': '#ff9452' }} />}
@@ -135,12 +191,13 @@ function BlockNode({ id, data, selected }) {
           )}
         </div>
       )}
-      <div style={{ padding: '0 12px 10px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minHeight: 16, lineHeight: 1.45 }}>
-        {summaryOf(data.type, data.data || {}, lookups)}
-      </div>
-      {data.type === 'send_media' && data.data && data.data.kind === 'image' && /^https?:\/\//.test(data.data.url || '') && (
-        <div style={{ padding: '0 12px 10px' }}><img src={data.data.url} alt="" style={{ width: '100%', maxHeight: 110, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', display: 'block' }} /></div>
+      {(summary || !(data.type === 'send_media' && data.data && data.data.url)) && (
+        <div style={{ padding: '0 12px 10px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minHeight: 16, lineHeight: 1.45 }}>
+          {summary}
+        </div>
       )}
+      {data.type === 'send_media' && <MediaPreview d={data.data} />}
+      {data.type === 'send_text' && textBadges.length > 0 && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: '0 12px 10px' }}>{textBadges.map((b) => <span key={b} className="kf-badge">{b}</span>)}</div>}
       {exits.length > 0 && (
         <div style={{ borderTop: '1px solid rgba(255,255,255,.06)', padding: '2px 0' }}>
           {exits.map(([k, label]) => {
@@ -366,7 +423,7 @@ function MediaFields({ d, set, upload, tts }) {
         <Input label="Link público (https)" value={d.url || ''} onChange={(e) => set({ url: e.target.value.trim(), tts_text: undefined })} placeholder="https://..." hint="O WhatsApp baixa o arquivo deste link. Também aceita uma variável, como {{pagamento_qr}}." />
       )}
       {err && <div style={{ color: '#fda4af', fontSize: 'var(--text-xs)' }}>{err}</div>}
-      {d.kind !== 'audio' && <TextArea label="Legenda (opcional)" value={d.caption} onChange={(v) => set({ caption: v })} rows={3} placeholder="Texto que vai junto com o arquivo" hint="Aceita {{variáveis}}." />}
+      {d.kind !== 'audio' && <RichText label="Legenda (opcional)" value={d.caption} onChange={(v) => set({ caption: v })} rows={3} placeholder="Texto que vai junto com o arquivo" />}
       {d.kind === 'document' && <Input label="Nome do arquivo para o lead" value={d.filename || ''} onChange={(e) => set({ filename: e.target.value || undefined })} placeholder="material.pdf" />}
     </div>
   );
@@ -433,6 +490,382 @@ function AiKeyNotice() {
   );
 }
 
+// ---- Variáveis, emojis e opções de envio ---------------------------------------------
+const VAR_CATS = [
+  { id: 'fluxo', label: 'Variáveis do Fluxo', icon: 'file-text' },
+  { id: 'sistema', label: 'Sistema', icon: 'sliders-horizontal' },
+  { id: 'saudacao', label: 'Saudação personalizada', icon: 'globe' },
+  { id: 'anuncio', label: 'Origem do anúncio', icon: 'megaphone' },
+];
+function VarPicker({ onPick }) {
+  const { flowVars = [] } = React.useContext(LookupsCtx);
+  const [open, setOpen] = useState(false);
+  const [cat, setCat] = useState('fluxo');
+  const [q, setQ] = useState('');
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const lists = { fluxo: flowVars, sistema: SYSTEM_VARS, saudacao: GREETING_VARS, anuncio: AD_VARS };
+  const term = q.trim().toLowerCase();
+  const items = term
+    ? Object.values(lists).flat().filter((v) => v.code.includes(term) || String(v.label || '').toLowerCase().includes(term))
+    : lists[cat];
+  return (
+    <div ref={box} style={{ position: 'relative' }}>
+      <button type="button" className="kf-varbtn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <Icon name="braces" size={15} /><span style={{ flex: 1, textAlign: 'left' }}>Clique para inserir variável…</span><Icon name={open ? 'chevron-up' : 'chevron-down'} size={15} />
+      </button>
+      {open && (
+        <div className="kf-varpop kf-glass" role="dialog" aria-label="Variáveis">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+            <Icon name="search" size={15} style={{ color: 'var(--text-subtle)' }} />
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar variável…" className="kf-varsearch" />
+          </div>
+          <div style={{ display: 'flex', minHeight: 0, flex: 1 }}>
+            {!term && (
+              <div className="kf-varcats">
+                {VAR_CATS.map((c) => (
+                  <button key={c.id} type="button" className={cat === c.id ? 'on' : ''} onClick={() => setCat(c.id)}>
+                    <Icon name={c.icon} size={14} /><span style={{ flex: 1 }}>{c.label}</span><small>{lists[c.id].length}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="kf-varlist">
+              {items.length === 0 && <div style={{ padding: 14, color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>{cat === 'fluxo' && !term ? 'Ainda não há variáveis neste fluxo. Elas aparecem quando você usa Aguardar resposta, Botões, Definir variável, IA, Cobrança ou Webhook.' : 'Nada encontrado.'}</div>}
+              {items.map((v) => (
+                <button key={v.code} type="button" onClick={() => { onPick(`{{${v.code}}}`); setOpen(false); setQ(''); }}>
+                  {v.label && <span style={{ color: 'var(--text-strong)' }}>{v.flag ? `${v.flag} ` : ''}{v.label}</span>}
+                  <code>{`{{${v.code}}}`}</code>
+                </button>
+              ))}
+              {cat === 'anuncio' && !term && <div style={{ padding: '6px 12px 12px', color: 'var(--text-subtle)', fontSize: 11, lineHeight: 1.5 }}>Preenchidas quando o lead chega por um anúncio Click-to-WhatsApp. Em contatos que chamaram direto, ficam vazias.</div>}
+              {cat === 'saudacao' && !term && <div style={{ padding: '6px 12px 12px', color: 'var(--text-subtle)', fontSize: 11, lineHeight: 1.5 }}>Vira "Bom dia", "Boa tarde" ou "Boa noite" (ou em espanhol / inglês) conforme a hora no país.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+function EmojiPicker({ onPick, small = false }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  return (
+    <span ref={box} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button type="button" className={small ? 'kf-emo-btn sm' : 'kf-emo-btn'} aria-label="Emojis" title="Emojis" onClick={() => setOpen((o) => !o)}><Icon name="smile" size={small ? 16 : 17} /></button>
+      {open && (
+        <div className="kf-emojis kf-glass">
+          {EMOJIS.map((e) => <button key={e} type="button" onClick={() => { onPick(e); setOpen(false); }}>{e}</button>)}
+        </div>
+      )}
+    </span>
+  );
+}
+// Caixa de texto com emoji e variáveis inseridos onde está o cursor
+function RichText({ label, value, onChange, rows = 5, placeholder, hint }) {
+  const ta = useRef(null);
+  const insert = (txt) => {
+    const el = ta.current; const v = value || '';
+    const a = el ? el.selectionStart : v.length, b = el ? el.selectionEnd : v.length;
+    onChange(v.slice(0, a) + txt + v.slice(b));
+    requestAnimationFrame(() => { if (el) { el.focus(); el.selectionStart = el.selectionEnd = a + txt.length; } });
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {label && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>{label}</span>}
+      <div style={{ position: 'relative' }}>
+        <textarea ref={ta} className="kf-ta" value={value ?? ''} rows={rows} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', paddingRight: 42 }} />
+        <span style={{ position: 'absolute', top: 8, right: 8 }}><EmojiPicker onPick={insert} small /></span>
+      </div>
+      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Variáveis disponíveis</span>
+      <VarPicker onPick={insert} />
+      {hint && <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>{hint}</span>}
+    </div>
+  );
+}
+function CheckRow({ label, hint, checked, onChange, children }) {
+  return (
+    <div className="kf-check">
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+        <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
+        <span style={{ flex: 1 }}>
+          <span style={{ display: 'block', color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{label}</span>
+          {hint && <span style={{ display: 'block', color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', marginTop: 3, lineHeight: 1.5 }}>{hint}</span>}
+        </span>
+      </label>
+      {checked && children && <div style={{ padding: '10px 0 2px 32px' }}>{children}</div>}
+    </div>
+  );
+}
+// Responder / reagir à última mensagem do lead, encaminhado, visualização única, gravação de voz, prévia de link
+function SendOptions({ d, set, kind }) {
+  const emoji = d.react_emoji || REACTION_SUGGESTIONS[0];
+  return (
+    <Section title="Opções de envio">
+      <div className="kf-checks">
+        {kind === 'audio' && <CheckRow label="Enviar como gravação de voz" hint="Chega como áudio gravado na hora (com o microfone), não como arquivo." checked={d.ptt !== false} onChange={(v) => set({ ptt: v })} />}
+        {kind === 'text' && <CheckRow label="Ativar preview de links" hint="Mostra a prévia (imagem e título) do primeiro link da mensagem." checked={d.link_preview !== false} onChange={(v) => set({ link_preview: v })} />}
+        <CheckRow label="Responder última mensagem do lead" hint="A mensagem sai como resposta (citando) à última mensagem que o lead mandou." checked={d.reply_last} onChange={(v) => set({ reply_last: v || undefined })} />
+        <CheckRow label="Reagir à última mensagem do lead" checked={d.react_last} onChange={(v) => set({ react_last: v || undefined, react_emoji: v ? emoji : undefined })}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>Emoji da reação</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {REACTION_SUGGESTIONS.map((e) => <button key={e} type="button" className={`kf-react${emoji === e ? ' on' : ''}`} onClick={() => set({ react_emoji: e })}>{e}</button>)}
+            {!REACTION_SUGGESTIONS.includes(emoji) && <button type="button" className="kf-react on">{emoji}</button>}
+            <EmojiPicker onPick={(e) => set({ react_emoji: e })} />
+          </div>
+        </CheckRow>
+        {kind !== 'text' ? <CheckRow label="Enviar como encaminhado" hint={`${kind === 'audio' ? 'O áudio' : kind === 'image' ? 'A imagem' : kind === 'video' ? 'O vídeo' : 'O arquivo'} aparece como "Encaminhado" no WhatsApp.`} checked={d.forwarded} onChange={(v) => set({ forwarded: v || undefined })} /> : null}
+        {kind === 'text' && <CheckRow label="Enviar como encaminhado" hint='A mensagem aparece como "Encaminhada" no WhatsApp.' checked={d.forwarded} onChange={(v) => set({ forwarded: v || undefined })} />}
+        {['image', 'video', 'audio'].includes(kind) && <CheckRow label="Enviar como visualização única" hint="A mídia só pode ser vista uma vez pelo lead." checked={d.view_once} onChange={(v) => set({ view_once: v || undefined })} />}
+      </div>
+      <div style={{ color: 'var(--text-subtle)', fontSize: 11, lineHeight: 1.5 }}>Encaminhado e visualização única funcionam no WhatsApp conectado por QR Code.</div>
+    </Section>
+  );
+}
+// Criar etiqueta sem sair do fluxo
+function NewTag({ onCreated }) {
+  const { createTag } = React.useContext(LookupsCtx);
+  const [nome, setNome] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  async function go() {
+    const n = nome.trim();
+    if (!n || !createTag) return;
+    setBusy(true); setErr(null);
+    const r = await createTag(n).catch((e) => ({ error: e.message || 'Não deu para criar.' }));
+    setBusy(false);
+    if (!r || r.error) { setErr((r && r.error) || 'Não deu para criar.'); return; }
+    setNome(''); onCreated && onCreated(r);
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input className="kf-ta" style={{ flex: 1, padding: '9px 12px' }} value={nome} maxLength={60} placeholder="Nome da nova etiqueta" onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } }} />
+        <Button size="sm" iconLeft="plus" loading={busy} disabled={!nome.trim() || busy} onClick={go}>Criar</Button>
+      </div>
+      {err && <span style={{ color: '#fda4af', fontSize: 'var(--text-xs)' }}>{err}</span>}
+    </div>
+  );
+}
+function TagSelect({ value, onChange, tags }) {
+  return <Select value={value || ''} onChange={(e) => onChange(e.target.value)} options={[{ value: '', label: 'Selecione uma etiqueta…' }, ...tags.map((t) => ({ value: t.id, label: `● ${t.nome}` }))]} />;
+}
+
+// ---- Gatilho: evento do checkout ou mensagem no WhatsApp -----------------------------------
+function TriggerFields({ d, set }) {
+  const src = d.source === 'message' ? 'message' : 'checkout';
+  const [kw, setKw] = useState('');
+  const add = () => {
+    const parts = kw.split(/\n/).map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return;
+    set({ keywords: [...new Set([...(d.keywords || []), ...parts])].slice(0, 50) }); setKw('');
+  };
+  return (<>
+    <Segmented value={src} onChange={(v) => set(v === 'message' ? { source: 'message', mode: d.mode || 'keywords', match: d.match || 'contains', keywords: d.keywords || [] } : { source: undefined, events: (d.events && d.events.length) ? d.events : ['Pix Gerado'] })}
+      options={[{ value: 'message', label: 'Mensagem no WhatsApp', icon: 'message-circle' }, { value: 'checkout', label: 'Evento do checkout', icon: 'shopping-cart' }]} />
+    {src === 'checkout' ? (<>
+      <Section title="Inicia quando chegar um destes eventos do checkout">
+        <Chips value={d.events || []} onChange={(events) => set({ events })} options={TIPOS_EVENTO.map((ev) => ({ value: ev, label: ev }))} />
+      </Section>
+      <Toggle label="Encerrar este fluxo se o lead comprar" hint="Para quem pagou não receber mais mensagens de recuperação." checked={d.stop_on_purchase ?? !(d.events || []).includes('Compra Aprovada')} onChange={(v) => set({ stop_on_purchase: v })} />
+    </>) : (<>
+      <Section title="O lead envia uma mensagem e a mensagem contém…">
+        <div className="kf-cards2">
+          {[['any', 'Qualquer texto', 'Começa na primeira mensagem do contato.'], ['keywords', 'Palavras específicas', 'Começa quando a mensagem tiver uma das palavras.']].map(([v, t, h]) => (
+            <button key={v} type="button" className={`kf-card2${(d.mode || 'keywords') === v ? ' on' : ''}`} onClick={() => set({ mode: v })}><b>{t}</b><span>{h}</span></button>
+          ))}
+        </div>
+      </Section>
+      {(d.mode || 'keywords') === 'keywords' && (<>
+        <Select label="Correspondência" value={d.match || 'contains'} onChange={(e) => set({ match: e.target.value })}
+          options={[{ value: 'contains', label: 'Contém' }, { value: 'equals', label: 'É igual a' }, { value: 'starts', label: 'Começa com' }]} />
+        <Section title="Palavras-chave">
+          {(d.keywords || []).length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(d.keywords || []).map((k) => (
+                <span key={k} className="kf-kw">{k}<button type="button" aria-label={`Remover ${k}`} onClick={() => set({ keywords: (d.keywords || []).filter((x) => x !== k) })}>×</button></span>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="kf-ta" style={{ flex: 1, padding: '9px 12px' }} value={kw} placeholder="Adicionar… (ex.: quero saber mais)" onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+            <IconButton icon="plus" aria-label="Adicionar palavra-chave" onClick={add} />
+          </div>
+          <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>Não diferencia maiúsculas nem acentos: "saber mas" também vale para "Saber MÁS". Coloque o texto que vai pronto no seu anúncio.</div>
+        </Section>
+      </>)}
+      <div className="kf-row" style={{ alignItems: 'flex-start' }}>
+        <Icon name="info" size={16} style={{ color: '#60a5fa', marginTop: 2 }} />
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.55 }}>Se o lead estiver respondendo outro fluxo (Aguardar resposta), a mensagem vai para esse fluxo e não inicia este. Contato novo vira lead sozinho.</div>
+      </div>
+    </>)}
+  </>);
+}
+
+// ---- Condição (como no ZapData): cartões de regra, E / OU, criar etiqueta ---------------------------
+const RULE_META = {
+  tag: ['tag', 'Tag'], var: ['braces', 'Variável'], country: ['globe', 'País'], purchased: ['shopping-bag', 'Comprou'],
+  window_open: ['message-square', 'Janela de 24 h aberta'], weekday: ['calendar', 'Dia da semana'], time_between: ['clock', 'Horário'],
+};
+function ConditionFields({ d, set, tags, addTag }) {
+  const { flowVars = [] } = React.useContext(LookupsCtx);
+  const rules = d.rules || [];
+  const [more, setMore] = useState(false);
+  const up = (i, patch) => set({ rules: rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const addRule = (r) => { set({ rules: [...rules, r] }); setMore(false); };
+  const varOptions = [...new Set([...flowVars.map((v) => v.code), ...SYSTEM_VARS.map((v) => v.code)])];
+  return (<>
+    <Select label="Combinar condições com" value={d.match || 'all'} onChange={(e) => set({ match: e.target.value })}
+      options={[{ value: 'all', label: 'E (todas devem ser verdadeiras)' }, { value: 'any', label: 'OU (pelo menos uma verdadeira)' }]} />
+    {rules.map((r, i) => {
+      const [icon, label] = RULE_META[r.kind] || ['circle', r.kind];
+      return (
+        <div key={i} className="kf-rule">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="kf-rule-chip"><Icon name={icon} size={13} />{label}</span>
+            {i > 0 && <span style={{ fontSize: 11, color: 'var(--text-subtle)', fontWeight: 700 }}>{d.match === 'any' ? 'OU' : 'E'}</span>}
+            <span style={{ flex: 1 }} />
+            <IconButton icon="trash-2" size="sm" aria-label="Remover condição" onClick={() => set({ rules: rules.filter((_, j) => j !== i) })} />
+          </div>
+          {r.kind === 'tag' && (<>
+            <Select label="Condição da tag" value={r.op || 'has'} onChange={(e) => up(i, { op: e.target.value })} options={[{ value: 'has', label: 'Contato TEM a tag' }, { value: 'not_has', label: 'Contato NÃO TEM a tag' }]} />
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>Nome da tag</div>
+            <TagSelect value={r.tag_id} onChange={(v) => up(i, { tag_id: v })} tags={tags} />
+          </>)}
+          {r.kind === 'var' && (<>
+            <Select label="Variável" value={varOptions.includes(r.name) ? r.name : ''} onChange={(e) => up(i, { name: e.target.value })} options={[{ value: '', label: r.name && !varOptions.includes(r.name) ? r.name : 'Escolha…' }, ...varOptions.map((v) => ({ value: v, label: `{{${v}}}` }))]} />
+            <Select label="Operador" value={r.op || 'eq'} onChange={(e) => up(i, { op: e.target.value })} options={VAR_OPS} />
+            {!['empty', 'not_empty'].includes(r.op) && <Input label="Valor" value={r.value ?? ''} onChange={(e) => up(i, { value: e.target.value })} />}
+          </>)}
+          {r.kind === 'country' && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {COUNTRIES.map((c) => { const on = (r.ddi || []).includes(c.ddi); return (
+                <button key={c.ddi} type="button" className={`kf-chip${on ? ' on' : ''}`} style={{ padding: '5px 10px', fontSize: 12 }} onClick={() => up(i, { ddi: on ? (r.ddi || []).filter((x) => x !== c.ddi) : [...(r.ddi || []), c.ddi] })}>{c.flag} {c.nome}</button>
+              ); })}
+            </div>
+          )}
+          {r.kind === 'weekday' && <DayPicker value={r.days || []} onChange={(days) => up(i, { days })} />}
+          {r.kind === 'time_between' && (<div style={{ display: 'flex', gap: 8 }}>
+            <Input label="De" type="time" value={r.from || '09:00'} onChange={(e) => up(i, { from: e.target.value })} />
+            <Input label="Até" type="time" value={r.to || '18:00'} onChange={(e) => up(i, { to: e.target.value })} />
+          </div>)}
+          {r.kind === 'purchased' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Verdadeiro se o lead comprou (checkout ou cobrança do fluxo) desde que entrou neste fluxo.</div>}
+          {r.kind === 'window_open' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Verdadeiro se o lead mandou mensagem nas últimas 24 h (API oficial).</div>}
+        </div>
+      );
+    })}
+    <NewTag onCreated={(t) => { addTag && addTag(t); const i = rules.findIndex((r) => r.kind === 'tag' && !r.tag_id); if (i >= 0) up(i, { tag_id: t.id }); else addRule({ kind: 'tag', op: 'has', tag_id: t.id }); }} />
+    <div className="kf-addrow">
+      <button type="button" onClick={() => addRule({ kind: 'var', name: varOptions[0] || 'resposta', op: 'contains', value: '' })}><Icon name="braces" size={14} />+ Variável</button>
+      <button type="button" onClick={() => addRule({ kind: 'tag', op: 'has', tag_id: '' })}><Icon name="tag" size={14} />+ Tag</button>
+      <button type="button" onClick={() => addRule({ kind: 'country', ddi: [] })}><Icon name="globe" size={14} />+ País</button>
+      <span style={{ position: 'relative' }}>
+        <button type="button" onClick={() => setMore((m) => !m)}><Icon name="plus" size={14} />Mais</button>
+        {more && (
+          <div className="kf-menu kf-glass">
+            <button type="button" onClick={() => addRule({ kind: 'purchased' })}><Icon name="shopping-bag" size={14} />Comprou</button>
+            <button type="button" onClick={() => addRule({ kind: 'window_open' })}><Icon name="message-square" size={14} />Janela de 24 h aberta</button>
+            <button type="button" onClick={() => addRule({ kind: 'weekday', days: [1, 2, 3, 4, 5] })}><Icon name="calendar" size={14} />Dia da semana</button>
+            <button type="button" onClick={() => addRule({ kind: 'time_between', from: '09:00', to: '18:00' })}><Icon name="clock" size={14} />Horário</button>
+          </div>
+        )}
+      </span>
+    </div>
+    <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>O fluxo segue pela saída "Sim" se as condições forem verdadeiras, ou "Não" caso contrário.</div>
+  </>);
+}
+
+// ---- Conectar fluxo e Webhook ------------------------------------------------------------
+function GotoFields({ d, set }) {
+  const { flows = [], campaignId } = React.useContext(LookupsCtx);
+  const opts = flows.filter((f) => f.campaign_id !== campaignId);
+  const cur = flows.find((f) => f.campaign_id === d.campaign_id);
+  return (<>
+    <Select label="Fluxo de destino" value={d.campaign_id || ''} onChange={(e) => set({ campaign_id: e.target.value })}
+      options={[{ value: '', label: opts.length ? 'Escolha o fluxo…' : 'Nenhum outro fluxo criado' }, ...opts.map((f) => ({ value: f.campaign_id, label: `${f.nome}${f.active_version ? '' : ' (não publicado)'}` }))]} />
+    {cur && !cur.active_version && <div style={{ color: 'var(--amber-600)', fontSize: 'var(--text-xs)' }}>Esse fluxo ainda não foi publicado: publique ele antes, senão o lead não entra.</div>}
+    <div className="kf-row" style={{ alignItems: 'flex-start' }}>
+      <Icon name="git-merge" size={16} style={{ color: '#60a5fa', marginTop: 2 }} />
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.55 }}>O lead sai deste fluxo e começa o fluxo escolhido do início, levando as variáveis que já tem (ex.: {'{{resposta}}'}).</div>
+    </div>
+  </>);
+}
+function WebhookFields({ d, set }) {
+  const [custom, setCustom] = useState(!!(d.body && String(d.body).trim()));
+  const p = d.save_as || 'webhook';
+  return (<>
+    <Input label="Link que vai receber os dados" value={d.url || ''} onChange={(e) => set({ url: e.target.value.trim() })} placeholder="https://hook.make.com/…" hint="Aceita {{variáveis}} no link." />
+    <Segmented value={d.method || 'POST'} onChange={(method) => set({ method })} options={['POST', 'GET', 'PUT', 'PATCH'].map((m) => ({ value: m, label: m }))} />
+    <Section title="Cabeçalhos (opcional)">
+      <ListEditor items={d.headers || []} max={10} addLabel="Adicionar cabeçalho" onChange={(headers) => set({ headers })}
+        make={() => ({ key: 'Authorization', value: '' })}
+        render={(h, upd) => (<div style={{ display: 'flex', gap: 6 }}>
+          <Input value={h.key} onChange={(e) => upd({ key: e.target.value.replace(/[^A-Za-z0-9-]/g, '') })} placeholder="Nome" />
+          <Input value={h.value} onChange={(e) => upd({ value: e.target.value })} placeholder="Valor" />
+        </div>)} />
+    </Section>
+    {(d.method || 'POST') !== 'GET' && (<>
+      <Toggle label="Corpo personalizado" hint={custom ? 'Escreva o JSON que o outro sistema espera, com {{variáveis}}.' : 'Desligado: vai um JSON pronto com nome, telefone, e-mail do lead, as variáveis do fluxo e o evento.'} checked={custom} onChange={(v) => { setCustom(v); if (!v) set({ body: undefined }); else set({ body: d.body || '{\n  "nome": "{{nome}}",\n  "telefone": "{{telefone}}",\n  "resposta": "{{resposta}}"\n}' }); }} />
+      {custom && <RichText value={d.body} onChange={(v) => set({ body: v })} rows={6} />}
+    </>)}
+    <Input label="Guardar a resposta como" value={p} onChange={(e) => set({ save_as: e.target.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || undefined })}
+      hint={`Depois use {{${p}_status}} (código HTTP), {{${p}_resposta}} (texto) e cada campo do JSON de resposta, ex.: {{${p}_id}}.`} />
+    <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>Sai por "Sucesso" quando o outro sistema responde 2xx; senão (ou sem resposta em 15 s), por "Erro".</div>
+  </>);
+}
+
+// ---- Prévia da mídia no canvas -----------------------------------------------------------
+const WAVE = [6, 10, 16, 9, 18, 22, 12, 8, 14, 20, 11, 7, 15, 19, 10, 6, 12, 17, 9, 13, 21, 14, 8, 11, 16, 7, 10, 13];
+function AudioBubble({ url, ptt }) {
+  const [dur, setDur] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  const [pos, setPos] = useState(0);
+  const ref = useRef(null);
+  const fmt = (s) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
+  const toggle = (e) => { e.stopPropagation(); const a = ref.current; if (!a) return; if (a.paused) { a.play().catch(() => {}); } else a.pause(); };
+  const pct = dur ? pos / dur : 0;
+  return (
+    <div className="kf-audio" onClick={(e) => e.stopPropagation()}>
+      <audio ref={ref} src={url} preload="metadata" onLoadedMetadata={(e) => setDur(e.currentTarget.duration)} onTimeUpdate={(e) => setPos(e.currentTarget.currentTime)}
+        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setPos(0); }} />
+      <span className="av"><Icon name="mic" size={15} />{ptt !== false && <i />}</span>
+      <button type="button" className="pl nodrag" aria-label={playing ? 'Pausar' : 'Ouvir'} onClick={toggle}><Icon name={playing ? 'pause' : 'play'} size={15} /></button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="wave">{WAVE.map((h, i) => <span key={i} style={{ height: h, opacity: i / WAVE.length <= pct ? 1 : 0.45 }} />)}</div>
+        <div className="tm">{fmt(playing || pos ? pos : dur)}</div>
+      </div>
+    </div>
+  );
+}
+function MediaPreview({ d }) {
+  if (!d || !/^https?:\/\//.test(d.url || '')) return null;
+  const badges = [d.view_once && '1× visualização única', d.forwarded && 'encaminhado', d.reply_last && 'responde o lead', d.react_last && `reage ${d.react_emoji || '👍'}`].filter(Boolean);
+  return (
+    <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {d.kind === 'image' && <img src={d.url} alt="" className="kf-thumb" />}
+      {d.kind === 'video' && (
+        <div style={{ position: 'relative' }}>
+          <video src={`${d.url}#t=0.5`} muted preload="metadata" playsInline className="kf-thumb" />
+          <span className="kf-vplay"><Icon name="play" size={18} /></span>
+        </div>
+      )}
+      {d.kind === 'audio' && <AudioBubble url={d.url} ptt={d.ptt} />}
+      {badges.length > 0 && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{badges.map((b) => <span key={b} className="kf-badge">{b}</span>)}</div>}
+    </div>
+  );
+}
+
 // ---- Campos de cada bloco ---------------------------------------------------------
 const RULE_KINDS = [
   { value: 'var', label: 'Variável' }, { value: 'tag', label: 'Etiqueta' }, { value: 'purchased', label: 'Comprou' },
@@ -463,7 +896,7 @@ function RuleFields({ r, set, tags }) {
 
 function BlockFields({ node, onChange }) {
   const lookups = React.useContext(LookupsCtx);
-  const { templates, tags, integrations = [], pixels = [], channels = [] } = lookups;
+  const { templates, tags, integrations = [], pixels = [], channels = [], addTag } = lookups;
   const d = node.data.data || {};
   const set = (patch) => onChange({ ...d, ...patch });
   const tplOptions = [{ value: '', label: 'Selecionar…' }, ...templates.map((t) => ({ value: t.id, label: `${t.name} (${t.language})${t.status === 'APPROVED' ? '' : ' — ' + t.status}` }))];
@@ -475,26 +908,22 @@ function BlockFields({ node, onChange }) {
     return cur.map((v, i) => <Input key={i} label={`Variável {{${i + 1}}}`} value={v} placeholder="ex.: primeiro_nome ou {{produto}}" onChange={(e) => set({ [key]: cur.map((x, j) => (j === i ? e.target.value : x)) })} />);
   };
   switch (node.data.type) {
-    case 'trigger': return (<>
-      <Section title="Inicia quando chegar um destes eventos do checkout">
-        <Chips value={d.events || []} onChange={(events) => set({ events })} options={TIPOS_EVENTO.map((ev) => ({ value: ev, label: ev }))} />
-      </Section>
-      <Toggle label="Encerrar este fluxo se o lead comprar" hint="Para quem pagou não receber mais mensagens de recuperação." checked={d.stop_on_purchase ?? !(d.events || []).includes('Compra Aprovada')} onChange={(v) => set({ stop_on_purchase: v })} />
-    </>);
+    case 'trigger': return <TriggerFields d={d} set={set} />;
+    case 'goto_flow': return <GotoFields d={d} set={set} />;
+    case 'webhook': return <WebhookFields d={d} set={set} />;
     case 'send_template': return (<>
       <Select label="Modelo aprovado" value={d.template_id || ''} onChange={(e) => set({ template_id: e.target.value, vars: [] })} options={tplOptions} />
       {varsFor(d.template_id, d.vars, 'vars')}
     </>);
     case 'send_text': return (<>
-      <TextArea label="Mensagem" value={d.text} onChange={(v) => set({ text: v })} rows={6} hint={VARS_HELP} />
-      <Select label="Modelo reserva (só API Oficial)" value={d.fallback_template_id || ''} onChange={(e) => set({ fallback_template_id: e.target.value || undefined, fallback_vars: [] })} options={[{ value: '', label: 'Nenhum' }, ...tplOptions.slice(1)]} />
-      <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', marginTop: -6, lineHeight: 1.5 }}>A Meta só aceita texto livre até 24 h depois da última mensagem do lead. Passou disso, a Kobly manda este modelo no lugar. No WhatsApp por QR Code não há esse limite.</div>
-      {varsFor(d.fallback_template_id, d.fallback_vars, 'fallback_vars')}
+      <RichText label="Mensagem" value={d.text} onChange={(v) => set({ text: v })} rows={6} />
+      <SendOptions d={d} set={set} kind="text" />
       <DeleteOnTag d={d} set={set} tags={tags} />
     </>);
     case 'send_email': return <EmailFields d={d} set={set} />;
     case 'send_media': return (<>
       <MediaFields d={d} set={set} upload={lookups.uploadMedia} tts={lookups.tts} />
+      <SendOptions d={d} set={set} kind={d.kind} />
       <DeleteOnTag d={d} set={set} tags={tags} />
     </>);
     case 'send_buttons': return (<>
@@ -518,15 +947,7 @@ function BlockFields({ node, onChange }) {
       <Input label="Salvar resposta em" value={d.save_as || 'resposta'} onChange={(e) => set({ save_as: e.target.value.trim() })} hint="Use depois como {{resposta}}" />
       <Input label="Prazo (minutos)" type="number" value={d.timeout_minutes ?? ''} onChange={(e) => set({ timeout_minutes: num(e.target.value) })} hint="Vazio = até 30 dias. Dica: até 1380 (23 h) mantém a janela de 24 h aberta." />
     </>);
-    case 'condition': return (<>
-      <Segmented value={d.match || 'all'} onChange={(match) => set({ match })} options={[{ value: 'all', label: 'Todas as regras (E)' }, { value: 'any', label: 'Qualquer uma (OU)' }]} />
-      <ListEditor items={d.rules || []} max={10} addLabel="Adicionar regra" onChange={(rules) => set({ rules })}
-        make={() => ({ kind: 'var', name: 'resposta', op: 'contains', value: '' })}
-        render={(r, up) => (<>
-          <Select value={r.kind} onChange={(e) => up({ kind: e.target.value, op: e.target.value === 'tag' ? 'has' : e.target.value === 'var' ? 'eq' : undefined })} options={RULE_KINDS} />
-          <RuleFields r={r} set={up} tags={tags} />
-        </>)} />
-    </>);
+    case 'condition': return <ConditionFields d={d} set={set} tags={tags} addTag={addTag} />;
     case 'ai_classify': return (<>
       <AiKeyNotice />
       <Input label="Texto analisado" value={d.input || '{{resposta}}'} onChange={(e) => set({ input: e.target.value })} />
@@ -631,11 +1052,15 @@ function BlockFields({ node, onChange }) {
       <Input label="Valor (opcional)" value={d.value ?? ''} onChange={(e) => set({ value: e.target.value || undefined })} placeholder={d.event === 'Purchase' ? 'vazio = valor pago na cobrança' : ''} />
     </>);
     case 'tag': return (<>
-      {tags.length === 0 && <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>Nenhuma etiqueta criada ainda.</span>}
+      {tags.length === 0 && <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>Nenhuma etiqueta criada ainda. Crie a primeira aqui embaixo.</span>}
       {['add', 'remove'].map((k) => (
         <Section key={k} title={k === 'add' ? 'Adicionar ao lead' : 'Remover do lead'}>
-          <Chips value={d[k] || []} onChange={(v) => set({ [k]: v })} options={tags.map((t) => ({ value: t.id, label: t.nome }))} />
+          <Chips value={d[k] || []} onChange={(v) => set({ [k]: v, [k === 'add' ? 'remove' : 'add']: (d[k === 'add' ? 'remove' : 'add'] || []).filter((x) => !v.includes(x)) })} options={tags.map((t) => ({ value: t.id, label: t.nome }))} />
         </Section>))}
+      <Section title="Criar etiqueta nova">
+        <NewTag onCreated={(t) => { addTag && addTag(t); set({ add: [...(d.add || []), t.id] }); }} />
+        <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>A etiqueta criada já entra em "Adicionar ao lead".</div>
+      </Section>
     </>);
     case 'set_var': return (<>
       <Input label="Variável" value={d.name || ''} onChange={(e) => set({ name: e.target.value.trim() })} />
@@ -733,7 +1158,8 @@ function Editor({ campaign, onBack, api, notify }) {
     if (!base && (g.versions || [])[0]) { const v = await api.flowGraph('get_version', { campaign_id: campaign.id, version: g.versions[0].version }); if (!v.error && v.graph) base = v.graph; }
     const c = toCanvas(base || emptyGraph());
     setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setEditId(null);
-    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [], ai });
+    const fl = await api.flowGraph('list', {}, campaign.empresaId).catch(() => null);
+    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [], ai, flows: (fl && fl.flows) || [] });
     setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null });
     setCopilot(null);
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos
@@ -790,6 +1216,12 @@ function Editor({ campaign, onBack, api, notify }) {
   };
   const closeModal = useCallback(() => setEditId(null), []);
   // e-mails: recarrega a lista depois de criar/editar/copiar
+  const flowVars = useMemo(() => flowVarsOf(nodes), [nodes]);
+  const addTag = (t) => setLookups((l) => ({ ...l, tags: [...(l.tags || []).filter((x) => x.id !== t.id), t].sort((a, b) => String(a.nome).localeCompare(String(b.nome))) }));
+  const createTag = async (nome) => {
+    if (!api.createTag) return { error: 'Criar etiqueta indisponível aqui.' };
+    try { const t = await api.createTag(nome, campaign.empresaId); notify('success', `Etiqueta "${t.nome}" criada.`); return t; } catch (e) { return { error: (e && e.message) || 'Não deu para criar a etiqueta.' }; }
+  };
   const reloadEmails = async () => { const list = await (api.listEmails ? api.listEmails() : Promise.resolve([])).catch(() => null); if (list) setLookups((l) => ({ ...l, emails: list })); };
   const openEmail = (id, onCreated) => {
     const found = (lookups.emails || []).find((e) => e.id === id);
@@ -861,7 +1293,7 @@ function Editor({ campaign, onBack, api, notify }) {
   );
 
   return (
-    <LookupsCtx.Provider value={{ ...lookups, metrics, uploadMedia: api.uploadMedia, tts: api.tts, openEmail, copyEmail }}>
+    <LookupsCtx.Provider value={{ ...lookups, metrics, uploadMedia: api.uploadMedia, tts: api.tts, openEmail, copyEmail, flowVars, campaignId: campaign.id, createTag, addTag }}>
       <style>{FLOW_CSS}</style>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 520, gap: 10 }}>
         {/* barra superior */}

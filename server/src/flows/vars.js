@@ -4,6 +4,7 @@
 // Nos textos: {{nome}}, {{primeiro_nome}}, {{produto}}, {{valor}}, {{cta_link}}, {{resposta}}…
 // e caminhos explícitos: {{lead.email}}, {{evento.tipo}}, {{var.minha_variavel}}.
 import { formatBRL } from '../engine/steps.js';
+import { greetingVar } from './greetings.js';
 
 export const DEFAULT_TZ = 'America/Sao_Paulo';
 
@@ -26,12 +27,15 @@ export function buildFields(ctx) {
     valor: formatBRL(lead.valor_compra ?? ev.valor), cta_link: ctx.ctaLink || '',
     evento: ev.tipo || '', data_atual: lp.date, hora_atual: lp.hhmm, dia_semana: DIAS[lp.weekday] || '',
   };
+  // anúncio que trouxe o lead (Click-to-WhatsApp)
+  const ad = (lead.ad_origin && typeof lead.ad_origin === 'object') ? lead.ad_origin : {};
+  Object.assign(base, { source_id: ad.source_id || '', ctwa_clid: ad.ctwa_clid || '', ad_source_url: ad.source_url || '', ad_title: ad.headline || '', ad_body: ad.body || '' });
   return { ...base, ...vars };
 }
 
 function lookup(path, ctx, fields) {
   const p = path.split('.');
-  if (p.length === 1) return fields[p[0]];
+  if (p.length === 1) return p[0] in fields ? fields[p[0]] : greetingVar(p[0], ctx);
   const [root, ...rest] = p;
   let cur = root === 'lead' ? ctx.lead : root === 'evento' ? ctx.evento : root === 'var' ? ctx.vars
     : root === 'global' ? ctx.globals : root === 'campo' ? ctx.campos : undefined;

@@ -161,7 +161,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
   }
 
   // Texto livre a UM número (motor de fluxos). Quem chama confere a janela de 24 h antes.
-  async function sendTextTo(orgId, { to, text }) {
+  async function sendTextTo(orgId, { to, text, replyTo = null, linkPreview = true }) {
     const row = await accountRow(orgId);
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const phone = normalizePhone(to);
@@ -169,7 +169,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     const body = String(text || '').slice(0, 4096);
     if (!body.trim()) throw new AuthError(422, 'empty_text', 'Mensagem vazia.');
     try {
-      const out = await graph.sendText(row.phone_number_id, tokenOf(row), { to: phone, text: body });
+      const out = await graph.sendText(row.phone_number_id, tokenOf(row), { to: phone, text: body, previewUrl: linkPreview !== false, replyTo: officialId(replyTo) });
       return { ok: true, id: (out.messages && out.messages[0] && out.messages[0].id) || null, to: phone };
     } catch (e) { throw metaToHttp(e); }
   }
@@ -184,8 +184,15 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
       return { ok: true, id: (out && out.messages && out.messages[0] && out.messages[0].id) || null, to: phone };
     } catch (e) { throw metaToHttp(e); }
   }
-  const sendMediaTo = (orgId, { to, kind, url, caption, filename }) =>
-    sendWith(orgId, to, (row, phone) => graph.sendMedia(row.phone_number_id, tokenOf(row), { to: phone, kind, link: url, caption, filename }));
+  // ids de mensagem do WhatsApp por QR Code começam com "uaz:" e não valem na API oficial
+  const officialId = (id) => (id && !String(id).startsWith('uaz:') ? String(id) : null);
+  const sendMediaTo = (orgId, { to, kind, url, caption, filename, replyTo = null }) =>
+    sendWith(orgId, to, (row, phone) => graph.sendMedia(row.phone_number_id, tokenOf(row), { to: phone, kind, link: url, caption, filename, replyTo: officialId(replyTo) }));
+  // Reagir com emoji à mensagem do lead (só funciona com o id da API oficial)
+  async function reactTo(orgId, { to, messageId, emoji }) {
+    if (!officialId(messageId)) throw new AuthError(400, 'not_connected', 'Mensagem de outro canal.');
+    return sendWith(orgId, to, (row, phone) => graph.sendReaction(row.phone_number_id, tokenOf(row), { to: phone, messageId: officialId(messageId), emoji }));
+  }
   const sendInteractiveTo = (orgId, { to, interactive }) =>
     sendWith(orgId, to, (row, phone) => graph.sendInteractive(row.phone_number_id, tokenOf(row), { to: phone, interactive }));
   // "digitando..." é só cosmético: qualquer falha é ignorada.
@@ -270,5 +277,5 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     return r.rowCount;
   }
 
-  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, sendMediaTo, sendInteractiveTo, typingFor, setInboundHandler, verifyWebhook, receiveWebhook, view, SAFE_COLS };
+  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, sendMediaTo, sendInteractiveTo, reactTo, typingFor, setInboundHandler, verifyWebhook, receiveWebhook, view, SAFE_COLS };
 }

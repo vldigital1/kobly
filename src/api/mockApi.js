@@ -843,7 +843,7 @@ export const KoblyApi = {
   },
   async createTag(tag) {
     const me = await currentProfile();
-    const orgId = await firstOrgId(me);
+    const orgId = tag.organizationId || await firstOrgId(me);
     if (!orgId) throw new Error('Sua conta ainda não tem organização configurada.');
     const { data, error } = await supabase.from('tags').insert({
       organization_id: orgId, nome: tag.nome, descricao: tag.descricao, tipo_evento: tag.tipoEvento || null,

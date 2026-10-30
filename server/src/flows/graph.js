@@ -36,8 +36,17 @@ export const NODE_TYPES = {
   pixel: { label: 'Pixel da Meta', exits: ['default'], required: [] },
   tag: { label: 'Etiquetas', exits: ['default'], required: [] },
   set_var: { label: 'Definir variável', exits: ['default'], required: [] },
+  goto_flow: { label: 'Conectar fluxo', exits: [], required: [] },
+  webhook: { label: 'Webhook', exits: ['success', 'error'], required: [] },
   end: { label: 'Fim', exits: [], required: [] },
 };
+export const KEYWORD_MATCH = ['contains', 'equals', 'starts'];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// opções de envio do WhatsApp (texto e mídia): responder, reagir, encaminhado, visualização única
+function sendOptions(d, at, err) {
+  for (const k of ['reply_last', 'react_last', 'forwarded', 'view_once', 'link_preview', 'ptt']) if (d[k] !== undefined && typeof d[k] !== 'boolean') err(`${at}: opção "${k}" inválida.`);
+  if (d.react_last && !(typeof d.react_emoji === 'string' && d.react_emoji.trim() && d.react_emoji.length <= 16)) err(`${at}: escolha o emoji da reação.`);
+}
 export const exitsOf = (node) => {
   const spec = NODE_TYPES[node && node.type];
   if (!spec) return [];
@@ -90,17 +99,40 @@ function checkData(node, err) {
   const at = `${labelOf(node)}`;
   switch (node.type) {
     case 'trigger':
+      if (d.source === 'message') { // mensagem no WhatsApp: qualquer texto ou palavras-chave
+        if (!['any', 'keywords'].includes(d.mode || 'any')) err(`${at}: escolha "qualquer texto" ou "palavras específicas".`);
+        if (d.mode === 'keywords') {
+          const kw = Array.isArray(d.keywords) ? d.keywords : [];
+          if (!kw.length) err(`${at}: adicione ao menos uma palavra-chave.`);
+          if (kw.length > 50 || kw.some((k) => !str(k, 120))) err(`${at}: até 50 palavras-chave de até 120 letras.`);
+          if (d.match !== undefined && !KEYWORD_MATCH.includes(d.match)) err(`${at}: correspondência inválida.`);
+        }
+        break;
+      }
       if (!Array.isArray(d.events) || !d.events.length) err(`${at}: escolha ao menos um evento de checkout.`);
       else for (const e of d.events) if (!TIPOS_EVENTO.includes(e)) err(`${at}: evento desconhecido "${e}".`);
       break;
+    case 'goto_flow':
+      if (!UUID_RE.test(String(d.campaign_id || ''))) err(`${at}: escolha o fluxo para onde o lead vai.`);
+      break;
+    case 'webhook': {
+      let u = null; try { u = new URL(String(d.url || '')); } catch { /* inválido */ }
+      if (!u || !['https:', 'http:'].includes(u.protocol)) err(`${at}: informe o link (https://…) que vai receber os dados.`);
+      if (d.method !== undefined && !['POST', 'GET', 'PUT', 'PATCH'].includes(d.method)) err(`${at}: método inválido.`);
+      if (d.headers !== undefined && !(Array.isArray(d.headers) && d.headers.length <= 10 && d.headers.every((h) => isObj(h) && /^[A-Za-z0-9-]{1,60}$/.test(String(h.key || '')) && typeof h.value === 'string' && h.value.length <= 1000))) err(`${at}: cabeçalhos inválidos.`);
+      if (d.body !== undefined && d.body !== null && (typeof d.body !== 'string' || d.body.length > 8000)) err(`${at}: corpo até 8000 caracteres.`);
+      if (d.save_as !== undefined && !VAR_NAME.test(String(d.save_as))) err(`${at}: prefixo das variáveis inválido.`);
+      break;
+    }
     case 'send_template':
       if (!str(d.template_id, 64)) err(`${at}: escolha um modelo aprovado do WhatsApp.`);
       if (d.vars !== undefined && !Array.isArray(d.vars)) err(`${at}: variáveis do modelo devem ser uma lista.`);
       break;
     case 'send_text':
       if (!str(d.text, 4096)) err(`${at}: escreva a mensagem (até 4096 caracteres).`);
-      if (d.fallback_template_id !== undefined && d.fallback_template_id !== null && !str(d.fallback_template_id, 64)) err(`${at}: modelo reserva inválido.`);
+      if (d.fallback_template_id !== undefined && d.fallback_template_id !== null && d.fallback_template_id !== '' && !str(d.fallback_template_id, 64)) err(`${at}: modelo reserva inválido.`);
       deleteOnTag(d, at, err);
+      sendOptions(d, at, err);
       break;
     case 'delay': {
       // segundos (fixo ou faixa aleatória) ou, no formato antigo, minutos
@@ -122,6 +154,7 @@ function checkData(node, err) {
       if (d.caption !== undefined && d.caption !== null && (typeof d.caption !== 'string' || d.caption.length > 1024)) err(`${at}: legenda até 1024 caracteres.`);
       if (d.kind === 'audio' && d.caption) err(`${at}: o WhatsApp não aceita legenda em áudio.`);
       deleteOnTag(d, at, err);
+      sendOptions(d, at, err);
       break;
     case 'send_buttons': {
       if (!str(d.text, 1024)) err(`${at}: escreva a pergunta (até 1024 caracteres).`);

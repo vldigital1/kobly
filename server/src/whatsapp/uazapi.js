@@ -159,6 +159,15 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     if (found) { if (!found.nome && nome) await pool.query(`update public.leads set nome = $2 where id = $1`, [found.id, nome]); return found.id; }
     return (await pool.query(`insert into public.leads (organization_id, nome, telefone, utm) values ($1, $2, $3, '{"utm_source":"whatsapp"}'::jsonb) returning id`, [orgId, nome, phone])).rows[0].id;
   }
+  // anúncio que trouxe o lead (Click-to-WhatsApp): vem em contextInfo.externalAdReply; mesmo formato do "referral" da API oficial
+  function adReplyOf(m) {
+    const c = m && typeof m.content === 'object' && m.content ? m.content : {};
+    const x = (c.contextInfo && c.contextInfo.externalAdReply) || (m.contextInfo && m.contextInfo.externalAdReply) || m.externalAdReply || null;
+    if (!x || typeof x !== 'object') return null;
+    const pick = (...k) => { for (const key of k) if (x[key]) return String(x[key]).slice(0, 500); return undefined; };
+    const r = { source_id: pick('sourceID', 'sourceId', 'source_id'), source_url: pick('sourceURL', 'sourceUrl', 'source_url'), headline: pick('title', 'headline'), body: pick('body'), ctwa_clid: pick('ctwaClid', 'ctwa_clid'), source_type: pick('sourceType', 'source_type') };
+    return Object.values(r).some(Boolean) ? r : null;
+  }
   // o que a empresa mandou pelo próprio celular (não passou pela Kobly)
   async function saveFromPhone(row, leadId, phone, m) {
     return (await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, channel, created_at, msg_type, instance_id)
@@ -387,7 +396,7 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     }
     if (!onInbound) return { status: 200 };
     await onInbound({ orgId: row.organization_id, accountId: null, instanceId: row.id,
-      message: { id: `uaz:${m.messageid}`, from, type: 'text', text: { body: messageText(m) }, timestamp: m.messageTimestamp },
+      message: { id: `uaz:${m.messageid}`, from, type: 'text', text: { body: messageText(m) }, timestamp: m.messageTimestamp, ...(adReplyOf(m) ? { referral: adReplyOf(m) } : {}) },
       contacts: m.senderName ? [{ profile: { name: m.senderName }, wa_id: from }] : [] });
     const kind = mediaKind(m);
     if (kind !== 'text') await pool.query(`update public.whatsapp_inbound_messages set msg_type = $2 where wa_message_id = $1`, [`uaz:${m.messageid}`, kind]);
@@ -399,24 +408,36 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
   }
   const msgIdOf = (r) => r.messageid || r.id || (r.message && r.message.messageid) || null;
   // Envio de texto por uma instância conectada da empresa (sem janela de 24 h: é o WhatsApp comum)
-  async function sendTextTo(orgId, { to, text }) {
+  const uazId = (id) => (id && String(id).startsWith('uaz:') ? String(id).slice(4) : null);
+  // opções do bloco do fluxo: responder a mensagem do lead, marcar como encaminhada, prévia de link
+  const extras = ({ replyTo, forwarded, linkPreview }) => ({ ...(uazId(replyTo) ? { replyid: uazId(replyTo) } : {}), ...(forwarded ? { forward: true } : {}), ...(linkPreview !== undefined ? { linkPreview: !!linkPreview } : {}) });
+  async function sendTextTo(orgId, { to, text, replyTo = null, forwarded = false, linkPreview }) {
     const row = secretKey ? await connectedRow(orgId) : null;
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const number = digits(to);
     if (number.length < 10) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDI + DDD + número.');
-    const r = await call(await serverOf(row), '/send/text', { method: 'POST', token: tokenOf(row), body: { number, text: String(text || '').slice(0, 4096) } });
+    const r = await call(await serverOf(row), '/send/text', { method: 'POST', token: tokenOf(row), body: { number, text: String(text || '').slice(0, 4096), ...extras({ replyTo, forwarded, linkPreview }) } });
     return { ok: true, id: msgIdOf(r), to: number, channel: 'uazapi', instanceId: row.id };
   }
   // Mídia por link público: POST /send/media { number, type, file, text, docName }
-  async function sendMediaTo(orgId, { to, kind, url, caption, filename }) {
+  async function sendMediaTo(orgId, { to, kind, url, caption, filename, ptt = true, viewOnce = false, replyTo = null, forwarded = false }) {
     const row = secretKey ? await connectedRow(orgId) : null;
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const number = digits(to);
     if (number.length < 10) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDI + DDD + número.');
-    const type = { image: 'image', video: 'video', audio: 'ptt', document: 'document' }[kind] || 'document';
-    const body = { number, type, file: url, ...(caption && kind !== 'audio' ? { text: String(caption).slice(0, 1024) } : {}), ...(kind === 'document' && filename ? { docName: String(filename).slice(0, 120) } : {}) };
+    // áudio: "gravação de voz" (ptt, com o microfone verde) ou arquivo de áudio comum
+    const type = { image: 'image', video: 'video', audio: ptt === false ? 'audio' : 'ptt', document: 'document' }[kind] || 'document';
+    const body = { number, type, file: url, ...(caption && kind !== 'audio' ? { text: String(caption).slice(0, 1024) } : {}), ...(kind === 'document' && filename ? { docName: String(filename).slice(0, 120) } : {}),
+      ...(viewOnce && kind !== 'document' ? { viewOnce: true } : {}), ...extras({ replyTo, forwarded }) };
     const r = await call(await serverOf(row), '/send/media', { method: 'POST', token: tokenOf(row), body });
     return { ok: true, id: msgIdOf(r), to: number, channel: 'uazapi', instanceId: row.id };
+  }
+  // Reage com emoji a uma mensagem do lead: POST /message/react { number, text, id }
+  async function reactTo(orgId, { to, messageId, emoji }) {
+    const row = secretKey ? await connectedRow(orgId) : null;
+    if (!row || !uazId(messageId)) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
+    await call(await serverOf(row), '/message/react', { method: 'POST', token: tokenOf(row), body: { number: digits(to), text: String(emoji || '👍').slice(0, 8), id: uazId(messageId) } });
+    return { ok: true };
   }
   // Apaga para todos uma mensagem enviada pela instância: POST /message/delete { id }
   async function deleteMessage(orgId, { instanceId, messageId }) {
@@ -453,5 +474,5 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     await call(await serverOf(row), '/call/make', { method: 'POST', token: tokenOf(row), body: { number: digits(phone), call_duration: 20 } });
     return { ok: true };
   }
-  return { handle, handleServers, receiveWebhook, sendTextTo, sendMediaTo, deleteMessage, hasConnected, configured, mediaLink, avatarOf, ringCall };
+  return { handle, handleServers, receiveWebhook, sendTextTo, sendMediaTo, reactTo, deleteMessage, hasConnected, configured, mediaLink, avatarOf, ringCall };
 }

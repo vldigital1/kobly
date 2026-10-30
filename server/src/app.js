@@ -107,6 +107,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       try { return await whatsapp.sendMediaTo(orgId, a); }
       catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendMediaTo(orgId, a); throw e; }
     },
+    // reagir com emoji à mensagem do lead: pelo canal em que ela chegou
+    reactTo: async (orgId, a) => (viaMeta(a) ? { ok: false } : String(a.messageId || '').startsWith('uaz:') ? uazapi.reactTo(orgId, a) : whatsapp.reactTo(orgId, a)),
     // apagar para todos só existe no WhatsApp por QR Code (a API oficial da Meta não apaga)
     deleteMessage: (orgId, a) => uazapi.deleteMessage(orgId, a),
     // mídia, foto do contato e ligação: só existem no WhatsApp por QR Code
@@ -120,7 +122,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     typingFor: (orgId, a) => (viaMeta(a) || !whatsapp.typingFor ? Promise.resolve() : whatsapp.typingFor(orgId, a)),
   };
   const flowEmail = createFlowEmail({ pool, apiKey: config.resendApiKey, platformFrom: config.mailFrom, sendingDomain: config.resendSendingDomain, unsubSecret: config.unsubscribeSecret, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
-  flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier });
+  flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier, fetchImpl });
   whatsapp.setInboundHandler(flows.onInbound);
   const bulk = createBulk({ pool, whatsapp: waRouted, email: flowEmail, flows });
   const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }), siteUrl: config.siteUrl });

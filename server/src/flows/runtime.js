@@ -4,11 +4,14 @@
 // (lease + skip locked, dois workers não pegam a mesma) → roda blocos instantâneos em sequência
 // até um bloco que pausa (Esperar / Aguardar resposta) ou o fim. Uma resposta do lead no WhatsApp
 // retoma na hora a execução que aguardava (saída "reply"); sem resposta no prazo, sai por "timeout".
+// Gatilho por mensagem: quando ninguém esperava a resposta, uma mensagem do lead no WhatsApp inicia os fluxos
+// cujo Gatilho é "mensagem" (qualquer texto só na primeira vez; palavras-chave toda vez que aparecerem).
 //
 // Garantias: estado salvo a cada bloco; envio com falha temporária repete com espera crescente
 // (MAX_ATTEMPTS) e depois segue pela saída "failed"; lead que pediu SAIR encerra a execução;
 // compra aprovada encerra execuções de recuperação (stop_on_purchase).
 import { nodeOf, nextOf, EVENTOS_RECUPERACAO, MAX_WAIT_MINUTES, delaySecondsRange } from './graph.js';
+import { isIP } from 'node:net';
 import { render, renderHtml, buildFields, evalCondition, applySetVar, isWindowOpen, inboundText, digitsOf, DEFAULT_TZ, nextBusinessStart, parseLocalDateTime } from './vars.js';
 import { resolveCtaLink, retryable } from '../engine/steps.js';
 
@@ -17,6 +20,7 @@ export const MAX_ATTEMPTS = 4;
 const BATCH = 25;
 const LEASE_MIN = 5;
 const RETRY_BACKOFF_MIN = 2;
+const VAR_OK = /^[a-z][a-z0-9_]{0,39}$/;
 
 // Valores do modelo da Meta: "{{...}}" é renderizado; nome de campo conhecido vira o valor; o resto é texto fixo.
 export function templateValues(list, ctx) {
@@ -36,6 +40,27 @@ export function buttonSuffix(components, ctaLink) {
   return ctaLink && ctaLink.startsWith(prefix) ? ctaLink.slice(prefix.length) : '';
 }
 export const delaySeconds = (d, rnd = Math.random) => { const [a, b] = delaySecondsRange(d); return Math.round(a + rnd() * (b - a)); };
+
+// Gatilho por mensagem: o texto do lead casa com o gatilho? (sem acento e sem diferença de maiúsculas)
+export function keywordHit(trigger, text) {
+  const d = trigger || {};
+  if ((d.mode || 'any') === 'any') return String(text || '').trim().length > 0;
+  const t = normTxt(text);
+  if (!t) return false;
+  return (d.keywords || []).some((k) => {
+    const w = normTxt(k);
+    if (!w) return false;
+    return d.match === 'equals' ? t === w : d.match === 'starts' ? t.startsWith(w) : t.includes(w);
+  });
+}
+// Webhook: não deixa o fluxo chamar a rede interna do servidor
+export function blockedHost(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal') || h.endsWith('.local')) return true;
+  if (isIP(h) === 4) { const [a, b] = h.split('.').map(Number); return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127); }
+  if (isIP(h) === 6) return h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80') || h === '::';
+  return false;
+}
 
 // Mensagem interativa da Meta: até 3 opções viram botões; de 4 a 10, lista.
 export function buildInteractive(d, text) {
@@ -76,7 +101,7 @@ export function pickVariant(variants, r) {
   return variants[variants.length - 1].id;
 }
 
-export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), fetchImpl = globalThis.fetch }) {
   // IA da empresa (chave própria, ai/router.js) ou um cliente fixo (testes / ambiente com uma chave só)
   const aiOf = async (ex) => (llm && llm.forOrg ? llm.forOrg(ex.organization_id) : llm);
   const graphCache = new Map(); // versões são imutáveis: cache seguro
@@ -110,7 +135,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     const started = [];
     for (const r of rows) {
       const start = nodeOf(r.graph, r.graph.start);
-      if (!start || start.type !== 'trigger' || !(start.data.events || []).includes(tipo)) continue;
+      if (!start || start.type !== 'trigger' || start.data.source === 'message' || !(start.data.events || []).includes(tipo)) continue;
       const stop = typeof start.data.stop_on_purchase === 'boolean' ? start.data.stop_on_purchase : EVENTOS_RECUPERACAO.has(tipo);
       const ins = await pool.query(`
         insert into public.flow_executions (organization_id, campaign_id, flow_id, graph_version_id, lead_id, webhook_event_id, current_ref, stop_on_purchase, variables)
@@ -149,11 +174,45 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
       [orgId, accountId, instanceId, message.id, from, message.type || 'unknown', text, JSON.stringify({ message, contact: (contacts || [])[0] || null })]);
     if (!ins.rows[0]) return false; // reentrega da Meta: já tratada
     const tail = from.slice(-10); // casa com ou sem DDI e com/sem o 9 (mesma regra do descadastro)
-    const lead = (await pool.query(`select id, automation_paused from public.leads where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 order by updated_at desc limit 1`, [orgId, tail])).rows[0];
-    if (!lead) return true;
+    let lead = (await pool.query(`select id, automation_paused from public.leads where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 order by updated_at desc limit 1`, [orgId, tail])).rows[0];
+    if (!lead) {
+      // contato novo: vira lead só se algum fluxo começa por mensagem (senão fica só na caixa de entrada)
+      if (!(await messageFlows(orgId)).length) return true;
+      const nome = String(((contacts || [])[0] || {}).profile?.name || '').trim().slice(0, 120) || null;
+      lead = (await pool.query(`insert into public.leads (organization_id, nome, telefone, utm) values ($1, $2, $3, '{"utm_source":"whatsapp"}'::jsonb) returning id, automation_paused`, [orgId, nome, from])).rows[0];
+    }
     await pool.query(`update public.whatsapp_inbound_messages set lead_id = $2 where id = $1`, [ins.rows[0].id, lead.id]);
     await pool.query(`update public.leads set whatsapp_last_inbound_at = now() where id = $1`, [lead.id]);
-    return resumeFor(lead, message, text);
+    if (message.referral && typeof message.referral === 'object') {
+      const r = message.referral;
+      const ad = Object.fromEntries(['source_id', 'source_url', 'source_type', 'headline', 'body', 'ctwa_clid'].map((k) => [k, r[k] ? String(r[k]).slice(0, 500) : null]).filter(([, v]) => v));
+      if (Object.keys(ad).length) await pool.query(`update public.leads set ad_origin = $2::jsonb where id = $1`, [lead.id, JSON.stringify({ ...ad, at: now().toISOString() })]);
+    }
+    const resumed = await resumeFor(lead, message, text);
+    if (!resumed && !lead.automation_paused) await startForMessage(orgId, lead.id, text);
+    return true;
+  }
+  // fluxos ativos cujo Gatilho é "mensagem no WhatsApp"
+  async function messageFlows(orgId) {
+    const { rows } = await pool.query(`select c.id as campaign_id, f.id as flow_id, v.id as version_id, v.graph
+        from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id join public.flow_graph_versions v on v.flow_id = f.id and v.is_active
+       where c.organization_id = $1 and c.status_campanha = 'Ativa'`, [orgId]);
+    return rows.filter((r) => { const s = nodeOf(r.graph, r.graph.start); return s && s.type === 'trigger' && s.data && s.data.source === 'message'; });
+  }
+  async function startForMessage(orgId, leadId, text) {
+    const started = [];
+    for (const r of await messageFlows(orgId)) {
+      const start = nodeOf(r.graph, r.graph.start);
+      if (!keywordHit(start.data, text)) continue;
+      // "qualquer texto": só na primeira conversa do lead com este fluxo (senão toda mensagem recomeçaria o fluxo)
+      if ((start.data.mode || 'any') === 'any' && (await pool.query(`select 1 from public.flow_executions where campaign_id = $1 and lead_id = $2 limit 1`, [r.campaign_id, leadId])).rowCount) continue;
+      const ins = await pool.query(`insert into public.flow_executions (organization_id, campaign_id, flow_id, graph_version_id, lead_id, current_ref, stop_on_purchase, variables)
+        values ($1,$2,$3,$4,$5,$6,false,$7::jsonb) on conflict (campaign_id, lead_id) where status in ('running','waiting') do nothing returning id`,
+        [orgId, r.campaign_id, r.flow_id, r.version_id, leadId, start.ref, JSON.stringify({ evento_tipo: 'Mensagem recebida', ultima_mensagem: String(text || '').slice(0, 4096), mensagem_inicial: String(text || '').slice(0, 4096) })]);
+      if (ins.rows[0]) started.push(r.campaign_id);
+    }
+    if (started.length) kick();
+    return started;
   }
   // Instagram Direct / Messenger: a mensagem já foi guardada e ligada ao lead; só retoma o fluxo que esperava resposta
   async function onInboundLead({ leadId, text }) {
@@ -162,7 +221,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     return resumeFor(lead, { type: 'text', text: { body: text } }, String(text || '').slice(0, 4096));
   }
   async function resumeFor(lead, message, text) {
-    if (lead.automation_paused) return true; // uma pessoa está atendendo no chat ao vivo
+    if (lead.automation_paused) return true; // uma pessoa está atendendo no chat ao vivo (não inicia nada)
     const waiting = (await pool.query(`select id, variables from public.flow_executions where lead_id = $1 and status = 'waiting' and wait_kind = 'reply' and resume_exit is null`, [lead.id])).rows;
     let resumed = 0;
     for (const w of waiting) {
@@ -176,7 +235,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
       resumed += r.rowCount;
     }
     if (resumed) kick();
-    return true;
+    return resumed > 0;
   }
 
   // ---- Pagamento confirmado: puxa a execução para a saída "payment_approved" -------------
@@ -210,7 +269,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
 
   // ---- Contexto do lead ------------------------------------------------------
   async function contextFor(ex) {
-    const lead = (await pool.query(`select id, organization_id, nome, sobrenome, email, telefone, produto, valor_compra, link_recuperacao, whatsapp_opt_out, whatsapp_last_inbound_at, custom_fields, ig_user_id, fb_psid from public.leads where id = $1`, [ex.lead_id])).rows[0] || null;
+    const lead = (await pool.query(`select id, organization_id, nome, sobrenome, email, telefone, produto, valor_compra, link_recuperacao, whatsapp_opt_out, whatsapp_last_inbound_at, custom_fields, ig_user_id, fb_psid, ad_origin from public.leads where id = $1`, [ex.lead_id])).rows[0] || null;
     // para onde mandar: telefone (WhatsApp) ou ig:<id> / fb:<id> (Instagram Direct / Messenger)
     if (lead) lead.dest = lead.telefone || (lead.ig_user_id ? `ig:${lead.ig_user_id}` : lead.fb_psid ? `fb:${lead.fb_psid}` : null);
     const globals = Object.fromEntries((await pool.query(`select key, value from public.global_variables where organization_id = $1`, [ex.organization_id])).rows.map((r) => [r.key, r.value]));
@@ -317,6 +376,15 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     if (!cs.rowCount) await pool.query(`insert into public.campaign_stats (campaign_id, organization_id, emails_enviados, ultimo_calculo) values ($1,$2,1,now())`, [ex.campaign_id, ex.organization_id]);
     return { exit: 'default', detail: `e-mail enviado${out.id ? ' ' + out.id : ''}` };
   }
+  // última mensagem do lead (para responder citando ou reagir com emoji)
+  async function lastInboundId(ex) {
+    return ((await pool.query(`select wa_message_id from public.whatsapp_inbound_messages where lead_id = $1 order by received_at desc limit 1`, [ex.lead_id])).rows[0] || {}).wa_message_id || null;
+  }
+  async function sendOpts(ex, ctx, d) {
+    const last = d.reply_last || d.react_last ? await lastInboundId(ex) : null;
+    if (d.react_last && last && whatsapp.reactTo) await whatsapp.reactTo(ex.organization_id, { to: ctx.lead.dest, messageId: last, emoji: d.react_emoji || '👍' }).catch(() => {});
+    return { replyTo: d.reply_last ? last : null, forwarded: !!d.forwarded };
+  }
   async function sendTemplate(ex, ctx, templateId, varsList) {
     const tpl = (await pool.query(`select id, name, components from public.whatsapp_templates where id::text = $1 and organization_id = $2`, [String(templateId), ex.organization_id])).rows[0];
     if (!tpl) return { exit: 'failed', detail: 'modelo do WhatsApp não encontrado' };
@@ -355,7 +423,8 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
         if (node.type === 'send_media') {
           const url = render(d.url, ctx).trim();
           if (!/^https:\/\/\S+$/i.test(url)) return { exit: 'failed', detail: `link da mídia inválido ou vazio${/\{\{/.test(d.url) ? ` (a variável ${d.url} não tem um link https)` : ''}` };
-          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.dest, kind: d.kind, url, caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined }), `[${d.kind || 'mídia'}] ${d.caption ? render(d.caption, ctx) : url}`, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null);
+          const o = await sendOpts(ex, ctx, d);
+          return send(ex, ctx, () => whatsapp.sendMediaTo(ex.organization_id, { to: ctx.lead.dest, kind: d.kind, url, caption: d.caption ? render(d.caption, ctx) : undefined, filename: d.filename ? render(d.filename, ctx) : undefined, ptt: d.ptt !== false, viewOnce: !!d.view_once, ...o }), `[${d.kind || 'mídia'}] ${d.caption ? render(d.caption, ctx) : url}`, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null);
         }
         const r = await send(ex, ctx, () => whatsapp.sendInteractiveTo(ex.organization_id, { to: ctx.lead.dest, interactive: buildInteractive(d, render(d.text, ctx)) }), render(d.text, ctx));
         if (r.exit !== 'sent') return r;
@@ -536,14 +605,64 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
         if (node.type === 'send_template') return sendTemplate(ex, ctx, d.template_id, d.vars);
         // WhatsApp comum (QR Code, sem API oficial) não tem janela de 24 h
         const aberta = isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora) || (whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id, ctx.lead.dest) : false);
-        if (aberta) { const text = render(d.text, ctx); return send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.dest, text }), text, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null); }
+        if (aberta) { const text = render(d.text, ctx); const o = await sendOpts(ex, ctx, d); return send(ex, ctx, () => whatsapp.sendTextTo(ex.organization_id, { to: ctx.lead.dest, text, linkPreview: d.link_preview !== false, ...o }), text, 'fluxo', TAG_ID.test(String(d.delete_on_tag || '')) ? d.delete_on_tag : null); }
         // Janela fechada: com modelo reserva, troca sozinho para o modelo aprovado (diferencial Kobly).
         if (d.fallback_template_id) { const r = await sendTemplate(ex, ctx, d.fallback_template_id, d.fallback_vars); return { ...r, detail: `janela fechada → modelo reserva${r.detail ? ': ' + r.detail : ''}` }; }
         return { exit: nextOf(node, 'window_closed') ? 'window_closed' : 'failed', detail: 'janela de 24 h fechada e sem modelo reserva' };
       }
+      case 'goto_flow': { // o lead sai deste fluxo e começa o outro do início
+        if (String(d.campaign_id) === String(ex.campaign_id)) return { stop: 'failed', detail: 'o bloco aponta para o próprio fluxo' };
+        const r = (await pool.query(`select c.nome, f.id as flow_id, v.id as version_id, v.graph from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
+          join public.flow_graph_versions v on v.flow_id = f.id and v.is_active where c.id::text = $1 and c.organization_id = $2`, [String(d.campaign_id || ''), ex.organization_id])).rows[0];
+        if (!r) return { stop: 'failed', detail: 'o fluxo de destino não existe ou não foi publicado' };
+        const ins = await pool.query(`insert into public.flow_executions (organization_id, campaign_id, flow_id, graph_version_id, lead_id, current_ref, stop_on_purchase, variables)
+          values ($1,$2,$3,$4,$5,$6,false,$7::jsonb) on conflict (campaign_id, lead_id) where status in ('running','waiting') do nothing returning id`,
+          [ex.organization_id, d.campaign_id, r.flow_id, r.version_id, ex.lead_id, r.graph.start, JSON.stringify({ ...ctx.vars, evento_tipo: 'Conectado de outro fluxo' })]);
+        kick();
+        return { stop: 'completed', detail: ins.rows[0] ? `foi para o fluxo "${r.nome}"` : `já estava no fluxo "${r.nome}"` };
+      }
+      case 'webhook': return callWebhook(ex, node, ctx);
       case 'end': return { stop: 'completed' };
       default: return { stop: 'failed', detail: `tipo de bloco desconhecido: ${node.type}` };
     }
+  }
+
+  // Bloco Webhook: manda os dados do lead para outro sistema e guarda a resposta em {{<prefixo>_...}}
+  async function callWebhook(ex, node, ctx) {
+    const d = node.data || {};
+    let url;
+    try { url = new URL(render(String(d.url || ''), ctx).trim()); } catch { return { exit: 'error', detail: 'link do webhook inválido' }; }
+    if (!['https:', 'http:'].includes(url.protocol) || blockedHost(url.hostname)) return { exit: 'error', detail: 'link do webhook não permitido' };
+    const method = ['POST', 'GET', 'PUT', 'PATCH'].includes(d.method) ? d.method : 'POST';
+    const lead = ctx.lead || {};
+    const padrao = { lead: { id: lead.id, nome: [lead.nome, lead.sobrenome].filter(Boolean).join(' '), telefone: lead.telefone || null, email: lead.email || null },
+      variaveis: Object.fromEntries(Object.entries(ctx.vars || {}).filter(([k]) => !k.startsWith('_'))), fluxo_id: ex.campaign_id, evento: (ctx.evento && ctx.evento.tipo) || ctx.vars.evento_tipo || null, enviado_em: now().toISOString() };
+    const headers = { 'User-Agent': 'Kobly-Webhook/1.0' };
+    for (const h of Array.isArray(d.headers) ? d.headers : []) if (h && /^[A-Za-z0-9-]{1,60}$/.test(String(h.key || ''))) headers[h.key] = render(String(h.value || ''), ctx).slice(0, 1000);
+    let body;
+    if (method !== 'GET') {
+      body = d.body && String(d.body).trim() ? render(String(d.body), ctx) : JSON.stringify(padrao);
+      if (!Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['Content-Type'] = 'application/json';
+    }
+    const prefix = VAR_OK.test(String(d.save_as || '')) ? d.save_as : 'webhook';
+    let res, txt = '';
+    try {
+      res = await fetchImpl(url.toString(), { method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(15000) });
+      txt = (await res.text()).slice(0, 20000);
+    } catch (e) {
+      ctx.vars[`${prefix}_status`] = '0';
+      return { exit: 'error', detail: `webhook não respondeu: ${String(e.message || e).slice(0, 120)}` };
+    }
+    ctx.vars[`${prefix}_status`] = String(res.status);
+    ctx.vars[`${prefix}_resposta`] = txt.slice(0, 2000);
+    try {
+      const j = JSON.parse(txt);
+      if (j && typeof j === 'object' && !Array.isArray(j)) for (const [k, v] of Object.entries(j).slice(0, 30)) {
+        const key = `${prefix}_${String(k).toLowerCase().replace(/[^a-z0-9_]/g, '_')}`.slice(0, 40);
+        if (VAR_OK.test(key) && key !== `${prefix}_status` && key !== `${prefix}_resposta` && (v === null || ['string', 'number', 'boolean'].includes(typeof v))) ctx.vars[key] = v === null ? '' : String(v).slice(0, 2000);
+      }
+    } catch { /* resposta não é JSON: fica só em _resposta */ }
+    return res.status >= 200 && res.status < 300 ? { exit: 'success', detail: `HTTP ${res.status}` } : { exit: 'error', detail: `HTTP ${res.status}` };
   }
 
   // ---- Uma execução -----------------------------------------------------------
@@ -657,5 +776,5 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
   // Retomada rápida (resposta do lead / evento novo) sem esperar o próximo ciclo.
   function kick() { if (autoKick) setImmediate(() => { tick().catch((e) => console.error('[flows] tick:', e.message)); }); }
 
-  return { startForEvent, startForLead, onInbound, onInboundLead, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
+  return { startForEvent, startForLead, startForMessage, onInbound, onInboundLead, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
 }

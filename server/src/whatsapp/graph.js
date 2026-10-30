@@ -47,15 +47,22 @@ export function createGraph({ base = 'https://graph.facebook.com/v21.0', fetchIm
         template: { name, language: { code: language }, ...(components && components.length ? { components } : {}) },
       }),
     // Texto livre: só é aceito pela Meta com a janela de 24 h aberta (lead escreveu nas últimas 24 h).
-    sendText: (phoneNumberId, token, { to, text, previewUrl = true }) =>
+    sendText: (phoneNumberId, token, { to, text, previewUrl = true, replyTo = null }) =>
       call('POST', `/${encodeURIComponent(phoneNumberId)}/messages`, token, {
         messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text',
+        ...(replyTo ? { context: { message_id: replyTo } } : {}),
         text: { body: text, preview_url: !!previewUrl },
       }),
+    // Reação (emoji) numa mensagem recebida
+    sendReaction: (phoneNumberId, token, { to, messageId, emoji }) =>
+      call('POST', `/${encodeURIComponent(phoneNumberId)}/messages`, token, {
+        messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'reaction', reaction: { message_id: messageId, emoji },
+      }),
     // Mídia por link público (imagem, áudio, vídeo, documento). Também exige janela de 24 h aberta.
-    sendMedia: (phoneNumberId, token, { to, kind, link, caption, filename }) =>
+    sendMedia: (phoneNumberId, token, { to, kind, link, caption, filename, replyTo = null }) =>
       call('POST', `/${encodeURIComponent(phoneNumberId)}/messages`, token, {
         messaging_product: 'whatsapp', recipient_type: 'individual', to, type: kind,
+        ...(replyTo ? { context: { message_id: replyTo } } : {}),
         [kind]: { link, ...(caption && kind !== 'audio' ? { caption } : {}), ...(filename && kind === 'document' ? { filename } : {}) },
       }),
     // Botões (até 3) ou lista (até 10): a resposta volta no webhook com o id da opção.
