@@ -208,7 +208,66 @@ function QrPanel({ id, empresaId, initialQr, onConnected, notify, flowsActive, o
   );
 }
 
-function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, navigate }) {
+// Proxy do número (Uazapi): padrão da Uazapi (IP do Brasil) ou um proxy do cliente. Testa antes de salvar.
+function ProxyModal({ target, empresaId, notify, onClose }) {
+  const [mode, setMode] = useState('uazapi');
+  const [url, setUrl] = useState('');
+  const [test, setTest] = useState(null); // { ok, ms, error } | 'run'
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (target) { setMode(target.mode || 'uazapi'); setUrl(''); setTest(null); } }, [target]);
+  if (!target) return null;
+  const unchanged = (mode === 'custom' && target.mode === 'custom' && !url.trim()) || (mode === 'uazapi' && target.mode !== 'custom');
+  async function runTest() {
+    setTest('run');
+    const r = await KoblyApi.uazapi('proxy_test', { id: target.id, proxy_url: url }, empresaId);
+    setTest(r.error ? { ok: false, error: r.error } : r);
+  }
+  async function save() {
+    if (unchanged) { onClose(false); return; }
+    setSaving(true);
+    const r = await KoblyApi.uazapi('proxy_set', { id: target.id, mode, ...(mode === 'custom' ? { proxy_url: url } : {}) }, empresaId);
+    setSaving(false);
+    if (r.error) { notify('danger', r.error); return; }
+    notify('success', mode === 'custom' ? 'Proxy trocado. O número pode reconectar sozinho em alguns segundos.' : 'O número voltou para o proxy padrão da Uazapi.');
+    onClose(true);
+  }
+  const opt = (id, icon, title, desc) => (
+    <button type="button" onClick={() => { setMode(id); setTest(null); }} aria-pressed={mode === id}
+      style={{ display: 'flex', gap: 12, alignItems: 'flex-start', textAlign: 'left', padding: 14, borderRadius: 14, cursor: 'pointer', fontFamily: 'var(--font-sans)',
+        background: mode === id ? 'var(--accent-soft)' : 'var(--surface-sunken)', border: `1px solid ${mode === id ? 'var(--border-accent)' : 'var(--border-subtle)'}` }}>
+      <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', flex: 'none', color: mode === id ? 'var(--accent)' : 'var(--text-muted)', background: 'rgba(var(--fg-rgb), .05)' }}><Icon name={icon} size={17} /></span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <b style={{ color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{title}</b>
+        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>{desc}</span>
+      </span>
+    </button>
+  );
+  return (
+    <Modal open onClose={() => onClose(false)} title="Proxy do número" subtitle={target.name} width={520}
+      footer={<><Button variant="ghost" onClick={() => onClose(false)}>Cancelar</Button><Button variant="primary" loading={saving} disabled={mode === 'custom' && !url.trim() && target.mode !== 'custom'} onClick={save}>{unchanged ? 'Fechar' : 'Salvar'}</Button></>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {opt('uazapi', 'shield', 'Padrão da Uazapi (recomendado)', 'Já vem ligado: o número sai por um proxy com IP do Brasil. Não precisa configurar nada.')}
+        {opt('custom', 'globe', 'Meu proxy', 'Use um proxy seu (http ou socks5) — por exemplo, um IP do país dos seus clientes ou um proxy residencial.')}
+        {mode === 'custom' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {target.mode === 'custom' && target.display && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Agora: <b data-no-i18n style={{ color: 'var(--text-strong)' }}>{target.display}</b>. Para trocar, cole outro endereço.</div>}
+            <Input label="Endereço do proxy" placeholder="http://usuario:senha@200.100.50.10:8080" value={url} autoComplete="off" spellCheck={false}
+              onChange={(e) => { setUrl(e.target.value); setTest(null); }} hint="Formato: http://usuario:senha@ip:porta  ou  socks5://usuario:senha@ip:porta" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button type="button" className="kc-btn" disabled={!url.trim() || test === 'run'} onClick={runTest}><Icon name={test === 'run' ? 'loader' : 'activity'} size={14} />{test === 'run' ? 'Testando…' : 'Testar proxy'}</button>
+              {test && test !== 'run' && (test.ok
+                ? <span style={{ fontSize: 'var(--text-sm)', color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="circle-check" size={15} />Proxy funcionando{test.ms != null ? ` (${test.ms} ms)` : ''}</span>
+                : <span style={{ fontSize: 'var(--text-sm)', color: 'var(--pastel-pink)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="circle-alert" size={15} />{test.error}</span>)}
+            </div>
+            <Banner tone="info">Ao salvar, a Kobly testa de novo: se o proxy não responder, nada é trocado. Depois da troca o número pode reconectar sozinho em alguns segundos.</Banner>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, onProxy, navigate }) {
   const k = KINDS.find((x) => x.id === c.kind);
   const [tone, label] = STATUS[c.status] || STATUS.disconnected;
   const ring = { ok: '#34d399', wait: '#fbbf24', off: '#fb7185', idle: '#64748b' }[tone];
@@ -268,6 +327,17 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, na
           <Icon name="pause-circle" size={16} style={{ color: c.pause ? '#34d399' : 'var(--text-subtle)' }} />
           <span style={{ flex: 1 }}>Pausar fluxos ao desconectar</span>
           <button type="button" role="switch" aria-checked={!!c.pause} aria-label="Pausar fluxos ao desconectar" className={`kc-switch${c.pause ? ' on' : ''}`} onClick={(e) => { e.stopPropagation(); onPause(!c.pause); }} />
+        </div>
+      )}
+
+      {c.kind === 'qr' && c.proxy && (
+        <div className="kc-toggle" style={{ position: 'relative', zIndex: 1 }} onClick={onProxy} title="Por onde este número sai para a internet. A Uazapi já usa um proxy com IP do Brasil; troque se quiser um IP seu.">
+          <Icon name="shield-check" size={16} style={{ color: c.proxy.mode === 'custom' ? '#22d3ee' : 'var(--text-subtle)' }} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            Proxy: <b style={{ color: 'var(--text-strong)' }}>{c.proxy.mode === 'custom' ? 'meu proxy' : 'padrão da Uazapi'}</b>
+            {c.proxy.mode === 'custom' && c.proxy.display && <span data-no-i18n style={{ display: 'block', fontSize: 11, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.proxy.display}</span>}
+          </span>
+          <button type="button" className="kc-btn" onClick={(e) => { e.stopPropagation(); onProxy(); }}><Icon name="settings-2" size={14} />Trocar</button>
         </div>
       )}
 
@@ -385,6 +455,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState(null); // { id, tab, label, origLabel, connected, name, origName, pic, image, removeImage }
   const [over, setOver] = useState(false);
+  const [proxy, setProxy] = useState(null); // { id, name, mode, display }
   const fileRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -458,7 +529,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
 
   // todas as conexões no mesmo formato de cartão
   const all = [
-    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, history: { status: i.history_status, count: i.history_count, at: i.history_at, error: i.history_error }, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
+    ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, proxy: { mode: i.proxy_mode || 'uazapi', display: i.proxy_display, checked: i.proxy_checked_at }, history: { status: i.history_status, count: i.history_count, at: i.history_at, error: i.history_error }, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
     ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at }] : []),
     ...st.meta.map((c) => ({ key: c.id, kind: c.kind, name: c.kind === 'instagram' ? (c.username ? `@${c.username}` : c.name) : c.name, profile: c.kind === 'instagram' ? c.name : null,
       sub: c.kind === 'instagram' ? 'Instagram Direct' : 'Messenger da página', pic: c.picture_url, status: c.status === 'connected' ? 'connected' : 'disconnected', when: c.created_at, reason: c.last_error })),
@@ -511,9 +582,11 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {cards.map((c) => (
           <ConnCard key={c.key} c={c} flowsActive={st.flows} navigate={store.navigate} onAct={act}
-            onQr={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })} onRename={() => setEdit({ id: c.key, tab: 'conexao', label: c.name, origLabel: c.name, connected: c.status === 'connected', name: c.profile || '', origName: c.profile || '', pic: c.pic, image: null, removeImage: false })} onPause={(on) => setPause(c, on)} onManage={() => setFlow({ kind: 'oficial', step: 'manage' })} />
+            onQr={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })} onRename={() => setEdit({ id: c.key, tab: 'conexao', label: c.name, origLabel: c.name, connected: c.status === 'connected', name: c.profile || '', origName: c.profile || '', pic: c.pic, image: null, removeImage: false })} onPause={(on) => setPause(c, on)} onProxy={() => setProxy({ id: c.key, name: c.name, mode: c.proxy ? c.proxy.mode : 'uazapi', display: c.proxy && c.proxy.display })} onManage={() => setFlow({ kind: 'oficial', step: 'manage' })} />
         ))}
       </div>
+
+      <ProxyModal target={proxy} empresaId={empresaId} notify={notify} onClose={(saved) => { setProxy(null); if (saved) load(); }} />
 
       <Modal open={picker} onClose={() => setPicker(false)} title="Nova conexão" subtitle="Escolha o canal que você quer conectar." width={640}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>

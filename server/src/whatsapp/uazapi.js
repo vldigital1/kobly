@@ -14,6 +14,7 @@
 //   POST /message/download (token)       { id, generate_mp3 } → { fileURL, mimetype }  (link vale 2 dias)
 //   POST /chat/avatar      (token)       { number, preview } → { url }
 //   POST /call/make        (token)       { number, call_duration } → ligação (muda) só para chamar a atenção
+//   POST /instance/proxy   (token)       { proxy_url } → proxy próprio do número;  DELETE /instance/proxy → volta ao proxy da Uazapi
 // Aviso "messages": { EventType, token, chat, message: { messageid, chatid, sender, sender_pn, senderName, fromMe, isGroup, messageType, text, messageTimestamp (ms) } }.
 // Toda conversa do número aparece em Conversas: quem escreve e não é lead vira lead (utm_source = whatsapp) e o que a
 // empresa responde pelo celular entra como saída "celular". Ao conectar, puxa o histórico recente (HISTORY_*).
@@ -22,10 +23,11 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
 import { encrypt, decrypt } from './crypto.js';
 import { OPT_OUT } from './service.js';
+import { parseProxy, testProxy } from './proxy.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const STATUS = new Set(['disconnected', 'connecting', 'connected', 'hibernated']);
-const SAFE = 'id, label, status, phone, profile_name, profile_pic_url, is_business, last_seen_at, disconnect_reason, pause_flows_on_disconnect, last_error, connected_at, created_at, history_status, history_count, history_at, history_error';
+const SAFE = 'id, label, status, phone, profile_name, profile_pic_url, is_business, last_seen_at, disconnect_reason, pause_flows_on_disconnect, last_error, connected_at, created_at, history_status, history_count, history_at, history_error, proxy_mode, proxy_display, proxy_checked_at';
 const digits = (v) => String(v || '').split('@')[0].replace(/\D/g, '');
 const ENV = 'env'; // id do servidor do ambiente na lista de servidores
 const HISTORY_CHATS = 150, HISTORY_PER_CHAT = 40; // conversas mais recentes e mensagens de cada uma
@@ -82,7 +84,7 @@ export function pickServer(servers) {
   return free[0] || null;
 }
 
-export function createUazapi({ pool, secretKey, base = '', adminToken = '', envCapacity = 300, publicBaseUrl = '', fetchImpl = globalThis.fetch, onInbound = null }) {
+export function createUazapi({ pool, secretKey, base = '', adminToken = '', envCapacity = 300, publicBaseUrl = '', fetchImpl = globalThis.fetch, onInbound = null, proxyTester = testProxy }) {
   const envServer = base && adminToken ? { id: ENV, label: 'Servidor do ambiente', base, adminToken, capacity: envCapacity, active: true, fromEnv: true, created_at: '0' } : null;
   const fail = (m) => { throw new AuthError(422, 'validation_failed', m); };
 
@@ -307,6 +309,33 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
         if (body.remove_image === true) await pool.query(`update public.whatsapp_uazapi_instances set profile_pic_url = null where id = $1`, [row.id]);
         const s = await refresh({ ...row });
         return { ok: true, profile_name: s.profileName, profile_pic_url: body.remove_image === true ? null : s.profilePicUrl };
+      }
+      case 'proxy_test': { // testa o proxy sem salvar
+        editor();
+        await own(orgId, body.id);
+        const p = parseProxy(body.proxy_url);
+        if (p.error) fail(p.error);
+        const r = await proxyTester(p);
+        return { ok: !!r.ok, ms: r.ms ?? null, error: r.ok ? null : r.error, display: p.display };
+      }
+      case 'proxy_set': { // "uazapi" (padrão) ou "custom" (testa antes; se falhar, nada muda)
+        editor();
+        const row = await own(orgId, body.id);
+        const server = await serverOf(row), token = tokenOf(row);
+        if (body.mode === 'uazapi') {
+          if (row.proxy_mode === 'custom') await call(server, '/instance/proxy', { method: 'DELETE', token });
+          await pool.query(`update public.whatsapp_uazapi_instances set proxy_mode = 'uazapi', proxy_url_enc = null, proxy_display = null, proxy_checked_at = null where id = $1`, [row.id]);
+          return { ok: true, proxy_mode: 'uazapi', proxy_display: null };
+        }
+        if (body.mode !== 'custom') fail('Escolha o proxy da Uazapi ou um proxy seu.');
+        const p = parseProxy(body.proxy_url);
+        if (p.error) fail(p.error);
+        const t = await proxyTester(p);
+        if (!t.ok) fail(`Proxy não passou no teste: ${t.error} Nada foi trocado.`);
+        await call(server, '/instance/proxy', { method: 'POST', token, body: { proxy_url: p.url } });
+        await pool.query(`update public.whatsapp_uazapi_instances set proxy_mode = 'custom', proxy_url_enc = $2, proxy_display = $3, proxy_checked_at = now() where id = $1`,
+          [row.id, encrypt(p.url, secretKey), p.display]);
+        return { ok: true, proxy_mode: 'custom', proxy_display: p.display, ms: t.ms ?? null };
       }
       case 'remove': {
         editor();
