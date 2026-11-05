@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { fmtDateTime, useTargetOrg } from '@/lib/workspace.jsx';
 import { useKobly } from '@/store/store.jsx';
 import { askConfirm } from '@/lib/confirm.jsx';
+import { readFlowFile, resolveTagNames, exportFlowsFile } from '@/lib/flowImport.js';
 
 // Editor do fluxo em grafo: carregado só quando aberto (traz o React Flow junto).
 const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.jsx').then((m) => ({ default: m.KoblyFlowGraphEditor })));
@@ -14,7 +15,8 @@ const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.j
 // Kobly — Fluxos. Todos os fluxos (WhatsApp e e-mail) em grafo da conta (publicados e rascunhos),
 // quantos leads estão em cada um e atalho para criar um fluxo novo do zero. Compartilhar: cada fluxo tem um código e
 // um link de prévia; quem tem o código importa na conta dele (versão mais nova, como rascunho, com etiquetas, e-mails
-// e agentes; o que é da conta — pagamento, Pixel — fica na lista "falta configurar"). KoblyFlows
+// e agentes; o que é da conta — pagamento, Pixel — fica na lista "falta configurar"). Também importa por ARQUIVO
+// (.json ou .zip exportado da Kobly, do ZapData ou da Leona) e baixa os fluxos da conta em arquivo. KoblyFlows
 
 const OPEN_KEY = 'kobly:openflow';
 
@@ -89,6 +91,48 @@ function KoblyFlows() {
     if (r.error) { setImp((x) => ({ ...x, running: false })); store.notify('danger', r.error); return; }
     setImp((x) => ({ ...x, running: false, result: r })); list.reload();
   }
+  // ---- importar / baixar por arquivo ----
+  async function pickFile(file) {
+    if (!file) return;
+    setImp((x) => ({ ...x, reading: true, fileErr: null, files: null }));
+    try {
+      const items = await readFlowFile(file);
+      setImp((x) => ({ ...x, reading: false, files: items.map((it) => ({ ...it, sel: !it.erro })), fileName: file.name }));
+    } catch (e) { setImp((x) => ({ ...x, reading: false, fileErr: e.message })); }
+  }
+  async function runFileImport() {
+    const sel = imp.files.filter((f) => f.sel && !f.erro);
+    setImp((x) => ({ ...x, running: true }));
+    const tags = await KoblyApi.getTags().catch(() => []);
+    const done = [];
+    for (const f of sel) {
+      try {
+        const c = await KoblyApi.createCampaign({ blank: true }, orgId, String(f.nome).slice(0, 80));
+        const graph = await resolveTagNames(JSON.parse(JSON.stringify(f.graph)), tags, async (nome) => { const t = await KoblyApi.createTag({ nome, organizationId: orgId }); tags.push(t); return t; });
+        const r = await KoblyApi.flowGraph('save_draft', { campaign_id: c.id, graph, source: 'import', note: `importado do ${f.origem}` }, orgId);
+        done.push(r.error ? { nome: f.nome, erro: r.error } : { nome: f.nome, campaign_id: c.id, pendencias: f.pendencias, origem: f.origem });
+      } catch (e) { done.push({ nome: f.nome, erro: (e && e.message) || 'falhou' }); }
+    }
+    setImp((x) => ({ ...x, running: false, fileResult: done })); list.reload();
+  }
+  async function graphOf(f) {
+    const g = await KoblyApi.flowGraph('get', { campaign_id: f.campaign_id }, orgId);
+    if (g.active && g.active.graph) return g.active.graph;
+    const v = (g.versions || [])[0];
+    if (!v) return null;
+    const r = await KoblyApi.flowGraph('get_version', { campaign_id: f.campaign_id, version: v.version }, orgId);
+    return r.graph || null;
+  }
+  async function download(items) {
+    const out = [];
+    for (const f of items) { const graph = await graphOf(f).catch(() => null); if (graph) out.push({ nome: f.nome, graph }); }
+    if (!out.length) { store.notify('warning', 'Nada para baixar.'); return; }
+    const blob = await exportFlowsFile(out);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = out.length === 1 ? `${String(out[0].nome).replace(/[^\w\- ]+/g, '').trim() || 'fluxo'}.kobly.json` : 'fluxos-kobly.zip';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
   // veio do link de prévia ("Importar na minha conta"): abre a importação com o código
   useEffect(() => {
     if (!orgId) return;
@@ -129,7 +173,7 @@ function KoblyFlows() {
   const oldOnes = (legacy.data || []).filter((c) => !flowIds.has(c.id));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><Button variant="secondary" iconLeft="download" onClick={() => setImp({ code: '', nome: '' })}>Importar fluxo</Button><Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button></div> : null}>
+      <PageHeader style={{ marginBottom: 0 }} action={canEdit && orgId ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{flows.length > 1 && <Button variant="ghost" iconLeft="file-archive" onClick={() => download(flows)}>Baixar todos</Button>}<Button variant="secondary" iconLeft="download" onClick={() => setImp({ code: '', nome: '' })}>Importar fluxo</Button><Button variant="primary" iconLeft="plus" onClick={() => setNovo('')}>Novo fluxo</Button></div> : null}>
         Automações de WhatsApp e e-mail: gatilho do checkout, mensagens, e-mails, botões, IA, cobrança e venda, tudo num desenho só.
         Cada fluxo tem rascunhos e versões; só a versão publicada roda.
       </PageHeader>
@@ -146,7 +190,7 @@ function KoblyFlows() {
               { key: 'nome', header: 'Fluxo', render: (r) => (
                 <button onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'start', fontFamily: 'var(--font-sans)' }}>
                   <span style={{ display: 'block', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{r.nome}</span>
-                  <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{(r.eventos || []).join(', ') || 'gatilho não definido'} · salvo {fmtDateTime(r.last_saved_at)}</span>
+                  <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{r.gatilho && r.gatilho.source === 'message' ? ((r.gatilho.mode || 'any') === 'any' ? 'Mensagem no WhatsApp' : `Mensagem: ${(r.gatilho.keywords || []).slice(0, 2).join(', ')}${(r.gatilho.keywords || []).length > 2 ? '…' : ''}`) : (r.eventos || []).join(', ') || 'gatilho não definido'} · salvo {fmtDateTime(r.last_saved_at)}</span>
                 </button>
               ) },
               { key: 'status', header: 'Situação', render: (r) => (
@@ -162,6 +206,7 @@ function KoblyFlows() {
                   {canEdit && <IconButton icon={r.status === 'Ativa' ? 'pause' : 'play'} size="sm" aria-label={r.status === 'Ativa' ? 'Pausar fluxo' : 'Ativar fluxo'} onClick={() => toggle(r)} />}
                   {canEdit && <IconButton icon="languages" size="sm" aria-label="Traduzir para outro idioma" onClick={() => openTranslate(r)} />}
                   <IconButton icon="share-2" size="sm" aria-label="Exportar fluxo (código para outra conta)" title="Exportar fluxo" onClick={() => openShare(r)} />
+                  <IconButton icon="file-down" size="sm" aria-label="Baixar arquivo do fluxo" title="Baixar arquivo (.json)" onClick={() => download([r])} />
                   <IconButton icon="pencil" size="sm" aria-label="Abrir no editor" onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} />
                 </div>
               ) },
@@ -234,11 +279,43 @@ function KoblyFlows() {
           </div>
         ))}
       </Modal>
-      <Modal open={!!imp} onClose={() => !(imp && imp.running) && setImp(null)} title={imp && imp.result ? 'Fluxo importado' : 'Importar fluxo'} subtitle={imp && !imp.result ? 'Cole o código que você recebeu. O fluxo entra como rascunho: nada roda até você revisar e publicar.' : ''} width={560}
+      <Modal open={!!imp} onClose={() => !(imp && imp.running) && setImp(null)} title={imp && (imp.result || imp.fileResult) ? 'Fluxo importado' : 'Importar fluxo'} subtitle={imp && !imp.result && !imp.fileResult ? 'Cole o código do fluxo ou envie o arquivo exportado. O fluxo entra como rascunho: nada roda até você revisar e publicar.' : ''} width={600}
         footer={imp && imp.result
           ? <><Button variant="ghost" onClick={() => setImp(null)}>Fechar</Button><Button variant="primary" iconLeft="pencil" onClick={() => { const r = imp.result; setImp(null); openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId }); }}>Abrir no editor</Button></>
-          : <><Button variant="ghost" disabled={!!(imp && imp.running)} onClick={() => setImp(null)}>Cancelar</Button><Button variant="primary" iconLeft="download" loading={!!(imp && imp.running)} disabled={!imp || imp.running || !imp.preview || !String(imp.nome || '').trim()} onClick={runImport}>Importar</Button></>}>
-        {imp && !imp.result && (
+          : imp && imp.fileResult ? <Button variant="primary" onClick={() => setImp(null)}>Fechar</Button>
+            : imp && imp.files ? <><Button variant="ghost" disabled={imp.running} onClick={() => setImp({ code: '', nome: '' })}>Voltar</Button><Button variant="primary" iconLeft="download" loading={imp.running} disabled={imp.running || !imp.files.some((f) => f.sel)} onClick={runFileImport}>Importar {imp.files.filter((f) => f.sel).length} fluxo(s)</Button></>
+              : <><Button variant="ghost" disabled={!!(imp && imp.running)} onClick={() => setImp(null)}>Cancelar</Button><Button variant="primary" iconLeft="download" loading={!!(imp && imp.running)} disabled={!imp || imp.running || !imp.preview || !String(imp.nome || '').trim()} onClick={runImport}>Importar</Button></>}>
+        {imp && imp.fileResult && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {imp.fileResult.map((r, i) => (
+              <div key={i} style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface-sunken)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name={r.erro ? 'circle-x' : 'circle-check'} size={16} style={{ color: r.erro ? '#fb7185' : '#34d399' }} />
+                  <b style={{ flex: 1, color: 'var(--text-strong)' }}>{r.nome}</b>
+                  {!r.erro && <Button size="sm" variant="secondary" iconLeft="pencil" onClick={() => { setImp(null); openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId }); }}>Abrir</Button>}
+                </div>
+                {r.erro && <div style={{ fontSize: 'var(--text-xs)', color: '#fda4af' }}>{r.erro}</div>}
+                {!r.erro && r.pendencias.length > 0 && <details><summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--amber-600)' }}>{r.pendencias.length} coisa(s) para configurar antes de publicar</summary><ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{r.pendencias.map((t, j) => <li key={j}>{t}</li>)}</ul></details>}
+              </div>
+            ))}
+          </div>
+        )}
+        {imp && imp.files && !imp.fileResult && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Encontrei {imp.files.length} fluxo(s) em <b>{imp.fileName}</b>:</div>
+            {imp.files.map((f, i) => (
+              <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface-sunken)', cursor: f.erro ? 'default' : 'pointer', opacity: f.erro ? 0.6 : 1 }}>
+                <input type="checkbox" disabled={!!f.erro} checked={!!f.sel} onChange={(e) => setImp((x) => ({ ...x, files: x.files.map((y, j) => (j === i ? { ...y, sel: e.target.checked } : y)) }))} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nome || f.arquivo}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: f.erro ? '#fda4af' : 'var(--text-muted)' }}>{f.erro || `${f.graph.nodes.length} blocos${f.pendencias.length ? ` · ${f.pendencias.length} para configurar` : ''}`}</div>
+                </div>
+                {!f.erro && <Badge tone={f.origem === 'Kobly' ? 'accent' : 'info'}>{f.origem}</Badge>}
+              </label>
+            ))}
+          </div>
+        )}
+        {imp && !imp.result && !imp.files && !imp.fileResult && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Input label="Código do fluxo" value={imp.code || ''} autoFocus placeholder="ex.: e5b37179-8ab2-4b8b-88b8-05d048acad87" onChange={(e) => checkCode(e.target.value)} />
             {imp.loading && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Procurando o fluxo…</div>}
@@ -261,6 +338,16 @@ function KoblyFlows() {
               </div>
               <Input label="Nome do fluxo nesta conta" value={imp.nome || ''} onChange={(e) => setImp({ ...imp, nome: e.target.value })} />
             </>)}
+            {!imp.preview && (
+              <label onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); pickFile(e.dataTransfer.files && e.dataTransfer.files[0]); }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '26px 16px', borderRadius: 16, border: '1.5px dashed var(--border-default)', cursor: 'pointer', textAlign: 'center' }}>
+                <input type="file" accept=".json,.zip,application/json,application/zip" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
+                <Icon name={imp.reading ? 'loader-circle' : 'upload'} size={22} style={{ color: 'var(--text-muted)' }} />
+                <b style={{ color: 'var(--text-strong)' }}>{imp.reading ? 'Lendo o arquivo…' : 'Ou envie o arquivo exportado'}</b>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Arquivo .zip (vários fluxos) ou .json exportado da Kobly, do ZapData ou da Leona</span>
+              </label>
+            )}
+            {imp.fileErr && <Banner tone="danger">{imp.fileErr}</Banner>}
           </div>
         )}
         {imp && imp.result && (

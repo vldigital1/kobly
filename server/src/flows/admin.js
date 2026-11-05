@@ -79,7 +79,9 @@ export function createFlowAdmin({ pool, copilot = null, siteUrl = '' }) {
                  (select count(*)::int from public.flow_executions e where e.flow_id = f.id and e.status in ('running','waiting')) as leads_ativos,
                  (select count(*)::int from public.flow_executions e where e.flow_id = f.id) as leads_total,
                  (select n->'data'->'events' from public.flow_graph_versions v2, jsonb_array_elements(v2.graph->'nodes') n
-                   where v2.flow_id = f.id and n->>'ref' = v2.graph->>'start' order by v2.is_active desc, v2.version desc limit 1) as eventos
+                   where v2.flow_id = f.id and n->>'ref' = v2.graph->>'start' order by v2.is_active desc, v2.version desc limit 1) as eventos,
+                 (select n->'data' from public.flow_graph_versions v2, jsonb_array_elements(v2.graph->'nodes') n
+                   where v2.flow_id = f.id and n->>'ref' = v2.graph->>'start' order by v2.is_active desc, v2.version desc limit 1) as gatilho
             from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id
             join public.flow_graph_versions v on v.flow_id = f.id
            where c.organization_id = $1
@@ -110,10 +112,12 @@ export function createFlowAdmin({ pool, copilot = null, siteUrl = '' }) {
         canEdit(ctx);
         const draft = body.action === 'save_draft';
         const v = validateGraph(body.graph);
-        if (!v.ok) throw Object.assign(new AuthError(422, 'invalid_graph', v.errors[0]), { details: v });
+        const source = ['editor', 'mcp', 'copilot', 'import'].includes(body.source) ? body.source : 'editor';
+        // fluxo trazido de arquivo (ZapData, Leona, Kobly): entra como rascunho mesmo com pendências; publicar revalida
+        const lenient = source === 'import' && draft && body.graph && Array.isArray(body.graph.nodes) && body.graph.nodes.length <= 500;
+        if (!v.ok && !lenient) throw Object.assign(new AuthError(422, 'invalid_graph', v.errors[0]), { details: v });
         const f = await flowOf(orgId, body.campaign_id);
-        const warnings = [...v.warnings, ...(await refWarnings(orgId, body.graph))];
-        const source = ['editor', 'mcp', 'copilot'].includes(body.source) ? body.source : 'editor';
+        const warnings = [...v.warnings, ...(v.ok ? [] : v.errors), ...(await refWarnings(orgId, body.graph))];
         const client = await pool.connect();
         try {
           await client.query('begin');
