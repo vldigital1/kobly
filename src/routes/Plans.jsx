@@ -434,6 +434,8 @@ function ClientBilling() {
   const [payInv, setPayInv] = useState(null);
   const [cardModal, setCardModal] = useState(false);
   const pickerRef = useRef(null);
+  const [showPicker, setShowPicker] = useState(false); // quem já assina: escolher plano numa janela
+  const [showInvoices, setShowInvoices] = useState(false);
   const load = useCallback(async () => {
     const [s, c] = await Promise.all([KoblyApi.billing('status', {}, billingOrg()).catch((e) => ({ error: e.message })), KoblyApi.billing('catalog', {}, billingOrg()).catch(() => null)]);
     if (!s || s.error || !c || c.error || !Array.isArray(c.planos)) { setErr((s && s.error) || (c && c.error) || 'Não deu para carregar seus planos.'); return; }
@@ -469,7 +471,7 @@ function ClientBilling() {
   const [icon, color] = PLAN_ICON[(sub && sub.plan) || ent.plan || 'pro'] || PLAN_ICON.pro;
   return (
     <>
-      {!st.enabled && <Banner tone="warning" title="Pagamento online ainda não ativado">A Kobly está terminando de ligar o pagamento automático. Enquanto isso, fale com o suporte para assinar.</Banner>}
+      {!st.enabled && !current && <Banner tone="warning" title="Pagamento online ainda não ativado">A Kobly está terminando de ligar o pagamento automático. Enquanto isso, fale com o suporte para assinar.</Banner>}
       {sub && sub.status === 'inadimplente' && pend && <Banner tone="danger" title="Pagamento atrasado">Sua fatura de {money(pend.value)} venceu em {dia(pend.due_date)}. Pague para não perder o acesso. <button type="button" className="kp-link" onClick={() => setPayInv(pend)}>Pagar agora</button></Banner>}
       {sub && sub.status === 'pendente' && pend && pend.pix_payload && <Banner tone="warning" title="Falta pagar para liberar seu plano">O Pix de {money(pend.value)} do {sub.nome} está esperando. <button type="button" className="kp-link" onClick={() => setPayInv(pend)}>Ver QR Code</button></Banner>}
 
@@ -489,8 +491,9 @@ function ClientBilling() {
             {sub && sub.pending_change && <Banner tone="info" title={`Redução marcada para ${dia(sub.renova_em)}`}>Depois dessa data você fica no {(cat.planos.find((p) => p.code === sub.pending_change.plan) || cat.agencias.find((a) => a.code === sub.pending_change.plan) || {}).nome} · {money(sub.pending_change.price)}. <button type="button" className="kp-link" onClick={cancelDown}>Desfazer</button></Banner>}
             {current && !viaAgency && (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <Button variant="primary" iconLeft="arrow-up-circle" onClick={() => pickerRef.current && pickerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Fazer upgrade</Button>
-                <Button variant="secondary" iconLeft="arrow-down-circle" onClick={() => pickerRef.current && pickerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Reduzir plano</Button>
+                <Button variant="primary" iconLeft="arrow-up-circle" onClick={() => setShowPicker(true)}>Fazer upgrade</Button>
+                <Button variant="secondary" iconLeft="arrow-down-circle" onClick={() => setShowPicker(true)}>Reduzir plano</Button>
+                <Button variant="ghost" iconLeft="receipt" onClick={() => setShowInvoices((v) => !v)}>{showInvoices ? 'Esconder faturas' : 'Ver faturas'}</Button>
               </div>
             )}
           </div>
@@ -519,9 +522,14 @@ function ClientBilling() {
         </div>
       )}
 
-      {!viaAgency && <div ref={pickerRef}><PlanPicker cat={cat} cycle={cycle} setCycle={setCycle} current={current} onPick={choose} enabled={st.enabled} /></div>}
+      {!viaAgency && !current && <div ref={pickerRef}><PlanPicker cat={cat} cycle={cycle} setCycle={setCycle} current={current} onPick={choose} enabled={st.enabled} /></div>}
+      {showPicker && current && (
+        <Modal open onClose={() => setShowPicker(false)} title="Mudar de plano" subtitle="Upgrade vale na hora (você paga só a diferença). Redução vale na próxima renovação." width={1120}>
+          <PlanPicker cat={cat} cycle={cycle} setCycle={setCycle} current={current} onPick={(p) => { setShowPicker(false); choose(p); }} enabled={st.enabled} />
+        </Modal>
+      )}
 
-      <div className="kp-card">
+      {(!current || showInvoices) && <div className="kp-card">
         <h2 className="kp-h"><Icon name="receipt" size={18} style={{ color: '#ff9452' }} />Faturas</h2>
         <div className="kp-sub" style={{ marginBottom: 10 }}>Tudo o que foi cobrado da sua conta.</div>
         {(st.invoices || []).length === 0 ? <div className="kp-empty">Nenhuma fatura ainda.</div> : (
@@ -542,7 +550,7 @@ function ClientBilling() {
             ))}</tbody>
           </table></div>
         )}
-      </div>
+      </div>}
 
       {pick && !pick.change && <Checkout pick={pick} status={st} onClose={() => setPick(null)} onDone={load} />}
       {pick && pick.change && <Change pick={pick} sub={sub} onClose={() => setPick(null)} onDone={load} />}

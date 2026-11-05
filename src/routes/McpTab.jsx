@@ -59,9 +59,11 @@ function KoblyMcpTab({ empresaId, notify = () => {} }) {
         {novo && (
           <Banner tone="warning" title="Copie o token agora: ele não aparece de novo.">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
-              <code style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{novo}</code>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>Claude (site ou app) → Configurações → Conectores → Adicionar conector personalizado → cole este link:</div>
+              <code style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{`${url}/${novo}`}</code>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Button size="sm" iconLeft="copy" onClick={() => copy(novo, 'Token')}>Copiar token</Button>
+                <Button size="sm" iconLeft="copy" onClick={() => copy(`${url}/${novo}`, 'Link do conector')}>Copiar link do conector</Button>
+                <Button size="sm" variant="secondary" iconLeft="copy" onClick={() => copy(novo, 'Token')}>Copiar só o token</Button>
                 <Button size="sm" variant="secondary" iconLeft="copy" onClick={() => copy(cmd, 'Comando do Claude Code')}>Copiar comando do Claude Code</Button>
                 <Button size="sm" variant="ghost" onClick={() => setNovo(null)}>Já copiei</Button>
               </div>

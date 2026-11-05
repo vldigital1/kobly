@@ -260,9 +260,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         return send(res, r.status, { ok: r.status === 200 });
       }
       // MCP da Kobly (assistentes de IA): token próprio da empresa no Authorization; só rascunhos.
-      if (path === '/mcp') {
+      // Conectores que só aceitam um link (ex.: conector personalizado do Claude): o token vai no caminho /mcp/<token>.
+      const mcpPath = /^\/mcp(?:\/(kbmcp_[A-Za-z0-9_-]{30,}))?$/.exec(path);
+      if (mcpPath) {
         if (req.method !== 'POST') { res.statusCode = 405; res.setHeader('Allow', 'POST'); return res.end(); }
-        const r = await mcp.handleHttp(bearer(req), (await readBody(req, 1024 * 1024)).toString('utf8'));
+        const r = await mcp.handleHttp(mcpPath[1] || bearer(req), (await readBody(req, 1024 * 1024)).toString('utf8'));
         if (r.body === null) { res.statusCode = r.status; return res.end(); }
         return send(res, r.status, r.body);
       }

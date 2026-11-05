@@ -1,6 +1,7 @@
 // MCP da Kobly (Model Context Protocol, transporte HTTP): POST /mcp com Authorization: Bearer kbmcp_...
 // Deixa um assistente de IA (Claude, ChatGPT…) montar fluxos para a empresa dona do token:
-// ler o catálogo de blocos e os recursos da conta, validar, salvar RASCUNHO, ler métricas e o copiloto.
+// ler o catálogo de blocos e os recursos da conta, validar, CRIAR um fluxo novo (como rascunho) ou salvar um RASCUNHO
+// num fluxo que já existe, ler métricas e o copiloto.
 // Nunca publica: ativar uma versão é sempre um clique de uma pessoa no editor. Token só em hash no banco.
 import { createHash, randomBytes } from 'node:crypto';
 import { AuthError } from '../auth.js';
@@ -12,10 +13,10 @@ const sha = (v) => createHash('sha256').update(v).digest('hex');
 
 // O que cada bloco espera em "data" (guia para a IA montar o grafo certo).
 const DATA_GUIDE = {
-  trigger: '{ events: [eventos de checkout], stop_on_purchase?: bool }',
+  trigger: '{ events: [eventos de checkout], stop_on_purchase?: bool } (evento do checkout) OU { source: "message", mode: "any" | "keywords", keywords?: ["quero saber mais", ...], match?: contains|equals|starts } (mensagem do lead no WhatsApp: qualquer texto só na primeira conversa; palavras-chave toda vez)',
   send_template: '{ template_id: id de kobly_recursos.modelos (APROVADO), vars: ["primeiro_nome" | "{{produto}}" | "texto fixo", ...] } — único que funciona com a janela de 24 h fechada',
-  send_text: '{ text, fallback_template_id?, fallback_vars? } — texto livre só com a janela de 24 h aberta; com fallback troca sozinho para o modelo',
-  send_media: '{ kind: image|audio|video|document, url: https público ou {{pagamento_qr}}, caption?, filename? }',
+  send_text: '{ text, link_preview?: bool, reply_last?: bool, react_last?: bool, react_emoji?: "👍", forwarded?: bool } — texto livre (na API oficial só com a janela de 24 h aberta)',
+  send_media: '{ kind: image|audio|video|document, url: https público ou {{pagamento_qr}}, caption? (não em áudio), filename?, ptt?: bool (áudio como gravação de voz, padrão true), view_once?: bool, reply_last?, react_last?, react_emoji?, forwarded? }',
   send_buttons: '{ text, options: [{ id: a-z0-9_, title: até 20 (≤3 opções) ou 24 caracteres }], save_as?, timeout_minutes? } — saídas opt_<id>, other, timeout, failed',
   delay: '{ min_seconds, max_seconds, typing?: bool } ou { seconds }',
   wait_reply: '{ save_as?: "resposta", timeout_minutes? }',
@@ -32,6 +33,8 @@ const DATA_GUIDE = {
   pixel: '{ pixel_config_id: id de kobly_recursos.pixels, event: Purchase|Lead|InitiateCheckout|AddPaymentInfo, value? }',
   tag: '{ add: [tag_id], remove: [tag_id] }',
   set_var: '{ name, op: set|add|subtract|multiply|divide, value }',
+  goto_flow: '{ campaign_id: id de outro fluxo (kobly_listar_campanhas) } — o lead sai deste fluxo e começa o outro; sem saídas',
+  webhook: '{ url: https://..., method?: POST|GET|PUT|PATCH, headers?: [{ key, value }], body?: texto/JSON com {{variaveis}} (vazio = JSON pronto com o lead e as variáveis), save_as?: "webhook" } — saídas success (2xx) e error; resposta em {{<save_as>_status}}, {{<save_as>_resposta}} e {{<save_as>_<campo>}}',
   end: '{}',
 };
 
@@ -44,10 +47,13 @@ export function guide() {
       'Laço precisa passar por um bloco que espera (delay, wait_reply, send_buttons, ai_agent, wait_until).',
       'Para falar com um lead que não escreveu nas últimas 24 h, comece com send_template (modelo aprovado).',
       'Use só ids que existem em kobly_recursos; não invente ids.',
-      'Valide com kobly_validar_fluxo, corrija os erros e só então salve com kobly_salvar_rascunho. Uma pessoa revisa e publica no editor.',
+      'Valide com kobly_validar_fluxo e corrija TODOS os erros antes de salvar.',
+      'Fluxo NOVO: use kobly_criar_fluxo (cria o fluxo com o nome e salva o rascunho). Mudar um fluxo que já existe: kobly_salvar_rascunho com o campaign_id dele.',
+      'Só diga ao usuário que o fluxo foi criado se a ferramenta respondeu ok: true. Se veio "erro", conte o erro, corrija e tente de novo. Depois confira com kobly_ler_fluxo.',
+      'O fluxo fica como rascunho: uma pessoa abre em Fluxos, revisa e publica.',
     ],
     eventos_de_checkout: TIPOS_EVENTO,
-    variaveis: '{{nome}} {{primeiro_nome}} {{email}} {{telefone}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{hora_atual}} {{dia_semana}} {{evento}} {{var.<nome>}} e as definidas por blocos (save_as, set_var, ai_extract, pagamento_*)',
+    variaveis: '{{nome}} {{primeiro_nome}} {{email}} {{telefone}} {{produto}} {{valor}} {{cta_link}} {{resposta}} {{ultima_mensagem}} {{mensagem_inicial}} {{hora_atual}} {{dia_semana}} {{data_atual}} {{evento}} {{var.<nome>}} e as definidas por blocos (save_as, set_var, ai_extract, pagamento_*, webhook_*). Saudação pela hora do país: {{saudacao_personalizada}} (português), {{saudacao_personalizada_es}}, {{saudacao_personalizada_en}}, {{saudacao_personalizada_es_mx}}, {{saudacao_personalizada_es_co}}, {{saudacao_personalizada_pt_br}}… Anúncio de origem (Click-to-WhatsApp): {{source_id}} {{ctwa_clid}} {{ad_source_url}} {{ad_title}} {{ad_body}}',
     blocos: Object.entries(NODE_TYPES).map(([type, s]) => ({
       type, nome: s.label, saidas: s.dynamic ? `${s.exits.join(', ')} + dinâmicas (ver data)` : s.exits.join(', ') || '(nenhuma)',
       saidas_obrigatorias: s.required, data: DATA_GUIDE[type] || '{}',
@@ -61,6 +67,7 @@ const TOOLS = [
   { name: 'kobly_recursos', description: 'Ids que os blocos usam: modelos do WhatsApp (só APPROVED enviam), etiquetas, contas de pagamento, pixels e canais de alerta. Sem segredos.', inputSchema: { type: 'object', properties: {} } },
   { name: 'kobly_ler_fluxo', description: 'Lê o fluxo de uma campanha: versão publicada (ou a versão pedida) e a lista de versões/rascunhos.', inputSchema: { type: 'object', required: ['campaign_id'], properties: { campaign_id: { type: 'string' }, version: { type: 'integer', description: 'opcional: ler uma versão específica' } } } },
   { name: 'kobly_validar_fluxo', description: 'Valida um fluxo SEM salvar. Devolve erros (impedem salvar) e avisos.', inputSchema: { type: 'object', required: ['graph'], properties: { graph: { type: 'object' } } } },
+  { name: 'kobly_criar_fluxo', description: 'Cria um FLUXO NOVO com o nome dado e salva o grafo como rascunho (não publica). Recusa se houver erros. Use para fluxo novo ou cópia; aparece em Fluxos para uma pessoa revisar e publicar.', inputSchema: { type: 'object', required: ['nome', 'graph'], properties: { nome: { type: 'string', description: 'nome do fluxo (até 80 letras)' }, graph: { type: 'object' }, nota: { type: 'string', description: 'o que o fluxo faz (aparece para quem revisa)' } } } },
   { name: 'kobly_salvar_rascunho', description: 'Salva o fluxo como RASCUNHO da campanha (não publica). Recusa se houver erros. Uma pessoa revisa e publica no editor da Kobly.', inputSchema: { type: 'object', required: ['campaign_id', 'graph'], properties: { campaign_id: { type: 'string' }, graph: { type: 'object' }, nota: { type: 'string', description: 'o que mudou e por quê (aparece para quem revisa)' } } } },
   { name: 'kobly_metricas', description: 'Métricas do fluxo publicado: execuções por situação, leads que passaram por cada bloco e leads parados em cada bloco agora (sem dados pessoais).', inputSchema: { type: 'object', required: ['campaign_id'], properties: { campaign_id: { type: 'string' } } } },
   { name: 'kobly_copiloto', description: 'Sugestões do copiloto a partir das métricas reais por bloco (onde o funil perde leads e o que mudar).', inputSchema: { type: 'object', required: ['campaign_id'], properties: { campaign_id: { type: 'string' } } } },
@@ -123,9 +130,22 @@ export function createMcp({ pool, flowAdmin, limiter = createLimiter({ max: 60, 
         return { publicado: base.active, versoes: base.versions };
       }
       case 'kobly_validar_fluxo': return A('validate', { graph: args.graph });
+      case 'kobly_criar_fluxo': {
+        const nome = String(args.nome || '').trim().slice(0, 80);
+        if (!nome) throw new AuthError(422, 'validation_failed', 'Informe o nome do fluxo.');
+        const v = await A('validate', { graph: args.graph });
+        if (!v.ok) throw Object.assign(new AuthError(422, 'invalid_graph', `O fluxo tem erros: ${v.errors.slice(0, 5).join(' | ')}`), { details: v });
+        const camp = (await pool.query(`insert into public.campaigns (organization_id, nome, status_campanha) values ($1,$2,'Rascunho') returning id`, [org.orgId, nome])).rows[0];
+        await pool.query(`insert into public.campaign_stats (campaign_id, organization_id) values ($1,$2)`, [camp.id, org.orgId]).catch(() => {});
+        try {
+          const r = await A('save_draft', { campaign_id: camp.id, graph: args.graph, note: args.nota || 'criado pela IA (MCP)', source: 'mcp' });
+          return { ...r, campaign_id: camp.id, nome, proximo_passo: `Fluxo "${nome}" criado como rascunho. Ele aparece em Fluxos na Kobly; uma pessoa abre, revisa e publica.` };
+        } catch (e) { await pool.query(`delete from public.campaigns where id = $1`, [camp.id]).catch(() => {}); throw e; }
+      }
       case 'kobly_salvar_rascunho': {
         const r = await A('save_draft', { campaign_id: args.campaign_id, graph: args.graph, note: args.nota, source: 'mcp' });
-        return { ...r, proximo_passo: 'Rascunho salvo. Peça para uma pessoa abrir a campanha no editor da Kobly, revisar e publicar a versão.' };
+        const c = (await pool.query(`select nome from public.campaigns where id = $1`, [args.campaign_id])).rows[0];
+        return { ...r, nome: c && c.nome, proximo_passo: `Rascunho salvo na versão ${r.version} do fluxo "${c && c.nome}". Uma pessoa abre esse fluxo em Fluxos, revisa e publica.` };
       }
       case 'kobly_metricas': { const { recent, by_node, ...s } = await A('stats', { campaign_id: args.campaign_id }); return s; } // sem dados pessoais
       case 'kobly_copiloto': return A('copilot', { campaign_id: args.campaign_id });
@@ -145,7 +165,7 @@ export function createMcp({ pool, flowAdmin, limiter = createLimiter({ max: 60, 
         const asked = msg.params && msg.params.protocolVersion;
         return ok({ protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0], capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'kobly', version: '1.0.0' },
-          instructions: 'Kobly: automação de recuperação de vendas pelo WhatsApp. Leia kobly_guia e kobly_recursos antes de montar um fluxo; valide antes de salvar. Você só salva rascunhos; uma pessoa publica.' });
+          instructions: 'Kobly: automação de vendas e atendimento pelo WhatsApp. Leia kobly_guia e kobly_recursos antes de montar um fluxo; valide antes de salvar. Fluxo novo: kobly_criar_fluxo. Mudar fluxo existente: kobly_salvar_rascunho. Só diga que deu certo se a resposta tiver ok: true. Você só salva rascunhos; uma pessoa publica.' });
       }
       case 'ping': return ok({});
       case 'tools/list': return ok({ tools: TOOLS });

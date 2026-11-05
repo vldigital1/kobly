@@ -224,4 +224,19 @@ test('métricas, copiloto, MCP (rascunho) e publicação do rascunho com revalid
   assert.equal(pub.status, 200);
   const v = (await pool.query(`select version, is_active, is_draft, source from public.flow_graph_versions v join public.campaign_flows f on f.id = v.flow_id where f.campaign_id = $1 order by version`, [A.campaign])).rows;
   assert.deepEqual(v.map((x) => [x.version, x.is_active, x.is_draft, x.source]), [[1, false, false, 'editor'], [2, true, false, 'mcp']]);
+
+  // fluxo NOVO pela IA: aparece em Fluxos como rascunho; com erro não cria nada e diz o porquê
+  const antes = (await pool.query(`select count(*)::int as n from public.campaigns where organization_id = $1`, [A.orgId])).rows[0].n;
+  const ruim = await rpc(4, 'kobly_criar_fluxo', { nome: 'Quebrado', graph: { version: 1, start: 'x', nodes: [] } });
+  assert.match(ruim.erro, /erros/);
+  assert.equal((await pool.query(`select count(*)::int as n from public.campaigns where organization_id = $1`, [A.orgId])).rows[0].n, antes);
+  const novo = await rpc(5, 'kobly_criar_fluxo', { nome: 'Boas-vindas pela IA', graph: graph(), nota: 'teste' });
+  assert.equal(novo.ok, true); assert.equal(novo.draft, true); assert.equal(novo.nome, 'Boas-vindas pela IA');
+  const lista = await fn('flow-graph', { action: 'list' }, A.token);
+  const achou = lista.flows.find((f) => f.campaign_id === novo.campaign_id);
+  assert.ok(achou, 'o fluxo criado pela IA aparece na tela Fluxos'); assert.equal(achou.nome, 'Boas-vindas pela IA'); assert.equal(achou.drafts, 1);
+  // conector que só aceita link: token no caminho
+  const viaLink = await post(`/mcp/${tk.token}`, { jsonrpc: '2.0', id: 6, method: 'tools/list' });
+  assert.equal(viaLink.status, 200); assert.ok((await viaLink.json()).result.tools.some((t) => t.name === 'kobly_criar_fluxo'));
+  assert.equal((await post('/mcp/kbmcp_invalidoinvalidoinvalidoinvalido', { jsonrpc: '2.0', id: 7, method: 'tools/list' })).status, 401);
 });
