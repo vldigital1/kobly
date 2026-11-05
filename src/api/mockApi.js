@@ -1179,6 +1179,7 @@ export const KoblyApi = {
   async platforms(action, extra = {}, empresaId = null) { return this.serviceCall('platforms', action, extra, empresaId); },
   // WhatsApp por QR Code (Uazapi): criar instância, QR Code, status, desconectar, excluir.
   async uazapi(action, extra = {}, empresaId = null) { return this.serviceCall('uazapi', action, extra, empresaId); },
+  async voiceAgents(action, extra = {}, empresaId = null) { return this.serviceCall('voice-agents', action, extra, empresaId); },
   async metaChannels(action, extra = {}, empresaId = null) { return this.serviceCall('meta-channels', action, extra, empresaId); },
   // Servidores Uazapi da Kobly (só Administrador): list | add | update | remove.
   async uazapiServers(action, extra = {}) { return this.serviceCall('uazapi-servers', action, extra); },

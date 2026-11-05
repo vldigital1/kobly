@@ -20,6 +20,7 @@ import { createFlowAdmin } from './flows/admin.js';
 import { createAiKeys } from './ai/router.js';
 import { createMetaAds } from './ads/meta.js';
 import { createVoice } from './voice/elevenlabs.js';
+import { createVoiceAgents } from './voice/agents.js';
 import { createGoogleAds } from './ads/google.js';
 import { createPayments } from './payments/service.js';
 import { createXpag } from './payments/xpag.js';
@@ -115,7 +116,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     // mídia, foto do contato e ligação: só existem no WhatsApp por QR Code
     mediaLink: (orgId, a) => uazapi.mediaLink(orgId, a),
     avatarOf: (orgId, phone) => uazapi.avatarOf(orgId, phone),
-    ringCall: (orgId, phone) => uazapi.ringCall(orgId, phone),
+    ringCall: (orgId, phone, seconds) => uazapi.ringCall(orgId, phone, seconds),
     // sem a API oficial, o WhatsApp comum não tem janela de 24 h
     freeTextAllowed: async (orgId, to) => !channelAddress(to) && !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
     sendTemplateTo: (orgId, a) => (viaMeta(a) ? Promise.reject(Object.assign(new Error('Instagram e Messenger não usam modelos do WhatsApp.'), { code: 'unsupported' })) : whatsapp.sendTemplateTo(orgId, a)),
@@ -123,7 +124,9 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     typingFor: (orgId, a) => (viaMeta(a) || !whatsapp.typingFor ? Promise.resolve() : whatsapp.typingFor(orgId, a)),
   };
   const flowEmail = createFlowEmail({ pool, apiKey: config.resendApiKey, platformFrom: config.mailFrom, sendingDomain: config.resendSendingDomain, unsubSecret: config.unsubscribeSecret, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
-  flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier, fetchImpl });
+  const voiceAgents = createVoiceAgents({ pool, secretKey: secretKeyBuf, fetchImpl, elevenBase: config.elevenlabsBase || undefined, publicBaseUrl: config.publicBaseUrl || '' });
+  flows = createFlowRuntime({ pool, whatsapp: waRouted, email: flowEmail, llm, payments, pixel, notifier, fetchImpl, voice: voiceAgents });
+  voiceAgents.setCallDoneHandler((call) => flows.onCallDone(call));
   whatsapp.setInboundHandler(flows.onInbound);
   const bulk = createBulk({ pool, whatsapp: waRouted, email: flowEmail, flows });
   const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }), siteUrl: config.siteUrl });
@@ -148,7 +151,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const affiliates = createAffiliates({ pool, secretKey: secretKeyBuf, flows, siteUrl: config.siteUrl });
   const billing = createBilling({ pool, secretKey: secretKeyBuf, fetchImpl, apiKey: config.asaasApiKey, env: config.asaasEnv, webhookToken: config.asaasWebhookToken });
   billing.enforce = !!config.billingEnforce;
-  const functions = createFunctions({ pool, config, auth, affiliates, billing, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, publicApiKeys: { handle: publicApi.handleKeys }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
+  const functions = createFunctions({ pool, config, auth, affiliates, billing, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, publicApiKeys: { handle: publicApi.handleKeys }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, voiceAgents, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -261,6 +264,12 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         const r = await uazapi.receiveWebhook(uz[1], (await readBody(req, 1024 * 1024)).toString('utf8'));
         return send(res, r.status, { ok: r.status === 200 });
       }
+      // OpenAI (ligação recebida por SIP): aviso assinado; a URL identifica a empresa.
+      const oa = /^\/webhooks\/openai-calls\/([0-9a-f-]{36})$/.exec(path);
+      if (oa && req.method === 'POST') {
+        const r = await voiceAgents.receiveOpenAiWebhook(oa[1], req.headers, (await readBody(req, 256 * 1024)).toString('utf8'));
+        return send(res, r.status, { ok: r.status === 200 });
+      }
       // API pública: outros sistemas disparam fluxos com a chave da empresa (Integrações → API pública).
       if (path.startsWith('/public/v1/')) {
         const r = await publicApi.handleHttp(req.method, path.slice('/public/v1'.length), req.headers, req.method === 'POST' ? (await readBody(req, 256 * 1024)).toString('utf8') : '');
@@ -332,5 +341,5 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     }
   });
   const engine = createEngine({ pool, whatsapp });
-  return { server, auth, engine, flows, bulk };
+  return { server, auth, engine, flows, bulk, voiceAgents };
 }

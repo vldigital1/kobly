@@ -101,7 +101,7 @@ export function pickVariant(variants, r) {
   return variants[variants.length - 1].id;
 }
 
-export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), fetchImpl = globalThis.fetch }) {
+export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, payments = null, pixel = null, notifier = null, now = () => new Date(), rnd = Math.random, autoKick = true, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), fetchImpl = globalThis.fetch, voice = null }) {
   // IA da empresa (chave própria, ai/router.js) ou um cliente fixo (testes / ambiente com uma chave só)
   const aiOf = async (ex) => (llm && llm.forOrg ? llm.forOrg(ex.organization_id) : llm);
   const graphCache = new Map(); // versões são imutáveis: cache seguro
@@ -622,6 +622,23 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
         return { stop: 'completed', detail: ins.rows[0] ? `foi para o fluxo "${r.nome}"` : `já estava no fluxo "${r.nome}"` };
       }
       case 'webhook': return callWebhook(ex, node, ctx);
+      case 'call': { // ligação no WhatsApp do lead
+        const phone = ctx.lead.telefone;
+        if (!phone) { ctx.vars.ligacao_status = 'falhou'; return { exit: 'no_answer', detail: 'lead sem telefone' }; }
+        if ((d.mode || 'ring') === 'ring') { // só tocar (WhatsApp por QR Code): não dá para saber se atendeu
+          if (!whatsapp.ringCall) return { exit: 'no_answer', detail: 'ligação indisponível' };
+          try { await whatsapp.ringCall(ex.organization_id, phone, d.ring_seconds || 20); } catch (e) { ctx.vars.ligacao_status = 'falhou'; return { exit: 'no_answer', detail: String(e.message || e).slice(0, 120) }; }
+          ctx.vars.ligacao_status = 'tocou';
+          return { exit: 'answered', detail: 'tocou' };
+        }
+        if (!voice) return { exit: 'no_answer', detail: 'agentes de voz indisponíveis' };
+        const simple = Object.fromEntries(Object.entries(ctx.vars).filter(([k, v]) => !k.startsWith('_') && ['string', 'number', 'boolean'].includes(typeof v)));
+        try { await voice.startCall({ orgId: ex.organization_id, agentId: d.voice_agent_id, phone, leadId: ex.lead_id, executionId: ex.id, variables: { nome: ctx.lead.nome || '', ...simple } }); }
+        catch (e) { ctx.vars.ligacao_status = 'falhou'; return { exit: 'no_answer', detail: String(e.message || e).slice(0, 160) }; }
+        ctx.vars.ligacao_status = 'chamando';
+        // a ElevenLabs pede permissão ao lead e liga; o resultado chega por onCallDone (até 26 h)
+        return { wait: { kind: 'timer', seconds: 26 * 3600 } };
+      }
       case 'end': return { stop: 'completed' };
       default: return { stop: 'failed', detail: `tipo de bloco desconhecido: ${node.type}` };
     }
@@ -694,6 +711,11 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
         await logEvent(ex, node, 'reply');
       } else {
         if (node && node.type === 'ai_agent' && exit === 'timeout') exit = 'expiration';
+        if (node && node.type === 'call') { // sem resultado no prazo = não atendeu; saída do agente sem ligação = segue pelo resultado
+          if (exit === 'default') { exit = 'no_answer'; ctx.vars.ligacao_status = 'nao_atendida'; }
+          if (exit.startsWith('out_') && !nextOf(node, exit)) exit = ctx.vars._call_result || 'answered';
+          delete ctx.vars._call_result;
+        }
         await logEvent(ex, node, exit);
         ref = nextOf(node, exit);
         if (!ref) return finish(ex, ctx, 'completed', null, ex.current_ref);
@@ -776,5 +798,21 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
   // Retomada rápida (resposta do lead / evento novo) sem esperar o próximo ciclo.
   function kick() { if (autoKick) setImmediate(() => { tick().catch((e) => console.error('[flows] tick:', e.message)); }); }
 
-  return { startForEvent, startForLead, startForMessage, onInbound, onInboundLead, onPaymentConfirmed, tick, kick, process, runNode, loadGraph, processDeletions };
+  // fim da ligação com agente de voz: grava o resultado nas variáveis e retoma o fluxo pela saída certa
+  async function onCallDone(call) {
+    if (!call || !call.execution_id) return false;
+    const ex = (await pool.query(`select id, variables from public.flow_executions where id = $1 and status = 'waiting'`, [call.execution_id])).rows[0];
+    if (!ex) return false;
+    const vars = { ...(ex.variables || {}),
+      ligacao_status: { answered: 'atendida', no_answer: 'nao_atendida', rejected: 'recusada' }[call.result] || 'nao_atendida',
+      ligacao_duracao: call.duration_s || 0, ligacao_saida: call.outcome || '', ligacao_resumo: call.summary || '',
+      ligacao_transcricao: String(call.transcript || '').slice(0, 4000), _call_result: call.result || 'no_answer' };
+    const exit = call.result === 'answered' && call.outcome ? `out_${call.outcome}` : (call.result || 'no_answer');
+    const r = await pool.query(`update public.flow_executions set variables = $2::jsonb, resume_exit = $3, run_at = now() where id = $1 and status = 'waiting' and resume_exit is null returning id`,
+      [ex.id, JSON.stringify(vars), exit]);
+    if (r.rowCount) kick();
+    return r.rowCount > 0;
+  }
+
+  return { startForEvent, startForLead, startForMessage, onInbound, onInboundLead, onPaymentConfirmed, onCallDone, tick, kick, process, runNode, loadGraph, processDeletions };
 }

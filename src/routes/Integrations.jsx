@@ -1094,6 +1094,7 @@ const SECTIONS = [
   { value: 'trackeamento', label: 'Trackeamento', icon: 'chart-line', help: 'Pixels (Meta, TikTok e Google), UTMify e de onde vêm os leads.' },
   { value: 'ia', label: 'IA (sua chave)', icon: 'sparkles', help: 'Sua chave de API de IA (Gemini, OpenAI, Claude, DeepSeek ou OpenRouter): os blocos de IA usam a sua conta do provedor.' },
   { value: 'voz', label: 'Voz (ElevenLabs)', icon: 'mic', help: 'Sua chave da ElevenLabs: áudios com voz natural nos fluxos e tradução de fluxos com áudio.' },
+  { value: 'agentes-voz', label: 'Agentes de voz', icon: 'phone-call', help: 'IA que liga para o lead no WhatsApp (ElevenLabs) ou atende quem liga (OpenAI), usada no bloco Ligação dos fluxos.' },
   { value: 'postback', label: 'Postback', icon: 'webhook', help: 'URLs de postback para checkouts e integrações próprias.' },
   { value: 'produtos', label: 'Produtos', icon: 'package', help: 'Seus produtos, os nomes que cada checkout usa e os números de venda de cada um.' },
   { value: 'loja', label: 'Configuração de e-mail', icon: 'mail', help: 'Remetente e identidade visual dos e-mails.' },
@@ -1110,6 +1111,7 @@ const KoblyPlatformsTab = React.lazy(() => import('@/routes/PlatformsTab.jsx').t
 const KoblyAiKeysTab = React.lazy(() => import('@/routes/AiKeysTab.jsx').then((m) => ({ default: m.KoblyAiKeysTab })));
 const KoblyProductsLazy = React.lazy(() => import('@/routes/Products.jsx').then((m) => ({ default: m.KoblyProducts })));
 const KoblyVoiceTab = React.lazy(() => import('@/routes/VoiceTab.jsx').then((m) => ({ default: m.KoblyVoiceTab })));
+const KoblyVoiceAgentsTab = React.lazy(() => import('@/routes/VoiceAgentsTab.jsx').then((m) => ({ default: m.KoblyVoiceAgentsTab })));
 const KoblyPublicApiTab = React.lazy(() => import('@/routes/PublicApiTab.jsx').then((m) => ({ default: m.KoblyPublicApiTab })));
 const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
@@ -1254,6 +1256,11 @@ function KoblyIntegrations() {
           {section === 'voz' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
               <KoblyVoiceTab empresaId={empresaId} notify={store.notify} />
+            </React.Suspense>
+          )}
+          {section === 'agentes-voz' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <KoblyVoiceAgentsTab empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
           )}
           {section === 'api' && (

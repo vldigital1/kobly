@@ -55,6 +55,7 @@ export function flowVarsOf(nodes) {
     if (t === 'ai_extract') for (const f of d.fields || []) if (f.name) out.add(f.name);
     if (t === 'payment') { const p = d.save_as || 'pagamento'; ['codigo', 'qr', 'link', 'valor', 'status'].forEach((k) => out.add(`${p}_${k}`)); }
     if (t === 'webhook') { const p = d.save_as || 'webhook'; out.add(`${p}_status`); out.add(`${p}_resposta`); }
+    if (t === 'call') ['ligacao_status', 'ligacao_saida', 'ligacao_duracao', 'ligacao_resumo', 'ligacao_transcricao'].forEach((k) => out.add(k));
   }
   return [...out].filter((v) => /^[a-z][a-z0-9_]*$/.test(v)).sort().map((code) => ({ code, label: '' }));
 }

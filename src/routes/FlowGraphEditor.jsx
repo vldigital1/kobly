@@ -29,6 +29,7 @@ const defaultApi = {
   renameFlow: (id, nome) => KoblyApi.renameCampaign(id, nome),
   createTag: (nome, orgId) => KoblyApi.createTag({ nome, organizationId: orgId }),
   listAiKeys: () => KoblyApi.aiKeys('list').then((r) => ({ keys: r.keys || [], platform: !!r.platform_fallback })),
+  listVoiceAgents: () => KoblyApi.voiceAgents('list').then((r) => (r && !r.error ? r : null)),
 };
 
 const LookupsCtx = React.createContext({ templates: [], tags: [], integrations: [], pixels: [], channels: [], agents: [], metrics: null, uploadMedia: null, emails: [], openEmail: null, copyEmail: null });
@@ -803,6 +804,40 @@ function GotoFields({ d, set }) {
     </div>
   </>);
 }
+function CallFields({ d, set }) {
+  const { voiceAgents = [], voiceSettings } = React.useContext(LookupsCtx);
+  const store = useKobly();
+  const mode = d.mode || 'ring';
+  const agents = voiceAgents.filter((a) => a.provider === 'elevenlabs');
+  const cur = agents.find((a) => a.id === d.voice_agent_id);
+  const pick = (id) => { const a = agents.find((x) => x.id === id); set({ voice_agent_id: id, outcomes: a ? (a.outcomes || []).map((o) => ({ key: o.key, label: o.label })) : [] }); };
+  const openVoice = () => { try { sessionStorage.setItem('kobly:int-section', 'agentes-voz'); } catch { /* ok */ } store.navigate('integracoes'); };
+  const stale = cur && JSON.stringify((cur.outcomes || []).map((o) => o.key)) !== JSON.stringify((d.outcomes || []).map((o) => o.key));
+  return (<>
+    <Segmented value={mode} onChange={(m) => set(m === 'ring' ? { mode: 'ring', ring_seconds: d.ring_seconds || 20, voice_agent_id: undefined, outcomes: undefined } : { mode: 'agent', ring_seconds: undefined })}
+      options={[{ value: 'ring', label: 'Só tocar' }, { value: 'agent', label: 'Agente de voz' }]} />
+    {mode === 'ring' ? (<>
+      <Input label="Tempo tocando (segundos)" type="number" min={3} max={60} value={d.ring_seconds || 20} onChange={(e) => set({ ring_seconds: Math.max(3, Math.min(60, Math.round(Number(e.target.value) || 20))) })} />
+      <div className="kf-row" style={{ alignItems: 'flex-start' }}>
+        <Icon name="phone-call" size={16} style={{ color: '#a78bfa', marginTop: 2 }} />
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.55 }}>O WhatsApp do lead toca pelo seu número por QR Code (sem voz), só para chamar a atenção. O fluxo segue por <b>Atendeu</b>. Use com moderação para evitar bloqueios.</div>
+      </div>
+    </>) : (<>
+      <Select label="Agente de voz" value={d.voice_agent_id || ''} onChange={(e) => pick(e.target.value)}
+        options={[{ value: '', label: agents.length ? 'Escolha o agente…' : 'Nenhum agente da ElevenLabs criado' }, ...agents.map((a) => ({ value: a.id, label: a.name }))]} />
+      {stale && <div style={{ color: 'var(--amber-600)', fontSize: 'var(--text-xs)' }}>As saídas deste agente mudaram. <button type="button" onClick={() => pick(cur.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 0, background: 'transparent', padding: 0, color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 'var(--text-xs)', fontWeight: 600 }}>Atualizar as saídas do bloco</button></div>}
+      {voiceSettings && !(voiceSettings.el_phone_number_id && voiceSettings.permission_template) && <div style={{ color: 'var(--amber-600)', fontSize: 'var(--text-xs)' }}>Falta configurar o número de ligação e o modelo de permissão.</div>}
+      <button type="button" onClick={openVoice} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, border: 0, background: 'transparent', padding: 0, color: 'var(--accent)', cursor: 'pointer', font: 'inherit', fontSize: 'var(--text-xs)', fontWeight: 600 }}><Icon name="settings-2" size={13} />Criar ou configurar agentes de voz</button>
+      <div className="kf-row" style={{ alignItems: 'flex-start' }}>
+        <Icon name="audio-lines" size={16} style={{ color: '#a78bfa', marginTop: 2 }} />
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+          A ElevenLabs liga pelo número de ligação e o agente conversa. Se o lead ainda não aceitou ligações, chega antes uma mensagem pedindo a permissão. O fluxo espera o fim da ligação (até 26 h) e segue pela <b>saída escolhida pelo agente</b>, ou por Atendeu / Não atendeu / Recusou.
+          Depois use {'{{ligacao_status}}'}, {'{{ligacao_saida}}'}, {'{{ligacao_resumo}}'} e {'{{ligacao_duracao}}'}.
+        </div>
+      </div>
+    </>)}
+  </>);
+}
 function WebhookFields({ d, set }) {
   const [custom, setCustom] = useState(!!(d.body && String(d.body).trim()));
   const p = d.save_as || 'webhook';
@@ -913,6 +948,7 @@ function BlockFields({ node, onChange }) {
     case 'trigger': return <TriggerFields d={d} set={set} />;
     case 'goto_flow': return <GotoFields d={d} set={set} />;
     case 'webhook': return <WebhookFields d={d} set={set} />;
+    case 'call': return <CallFields d={d} set={set} />;
     case 'send_template': return (<>
       <Select label="Modelo aprovado" value={d.template_id || ''} onChange={(e) => set({ template_id: e.target.value, vars: [] })} options={tplOptions} />
       {varsFor(d.template_id, d.vars, 'vars')}
@@ -1161,7 +1197,8 @@ function Editor({ campaign, onBack, api, notify }) {
     const c = toCanvas(base || emptyGraph());
     setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setEditId(null);
     const fl = await api.flowGraph('list', {}, campaign.empresaId).catch(() => null);
-    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [], ai, flows: (fl && fl.flows) || [] });
+    const vo = await (api.listVoiceAgents ? api.listVoiceAgents() : Promise.resolve(null)).catch(() => null);
+    setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [], ai, flows: (fl && fl.flows) || [], voiceAgents: (vo && vo.agents) || [], voiceSettings: (vo && vo.settings) || null });
     setState({ loading: false, error: null, version: g.active ? g.active.version : null, versions: g.versions || [], viewing: null });
     setCopilot(null);
     setCanvasKey((k) => k + 1); // remonta o canvas: o fitView nativo enquadra depois de medir os blocos

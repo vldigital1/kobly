@@ -38,6 +38,7 @@ export const NODE_TYPES = {
   set_var: { label: 'Definir variável', exits: ['default'], required: [] },
   goto_flow: { label: 'Conectar fluxo', exits: [], required: [] },
   webhook: { label: 'Webhook', exits: ['success', 'error'], required: [] },
+  call: { label: 'Ligação', exits: ['answered', 'no_answer', 'rejected'], dynamic: (d) => (d.mode === 'agent' ? (d.outcomes || []).map((o) => `out_${o.key}`) : []), required: [] },
   end: { label: 'Fim', exits: [], required: [] },
 };
 export const KEYWORD_MATCH = ['contains', 'equals', 'starts'];
@@ -122,6 +123,15 @@ function checkData(node, err) {
       if (d.headers !== undefined && !(Array.isArray(d.headers) && d.headers.length <= 10 && d.headers.every((h) => isObj(h) && /^[A-Za-z0-9-]{1,60}$/.test(String(h.key || '')) && typeof h.value === 'string' && h.value.length <= 1000))) err(`${at}: cabeçalhos inválidos.`);
       if (d.body !== undefined && d.body !== null && (typeof d.body !== 'string' || d.body.length > 8000)) err(`${at}: corpo até 8000 caracteres.`);
       if (d.save_as !== undefined && !VAR_NAME.test(String(d.save_as))) err(`${at}: prefixo das variáveis inválido.`);
+      break;
+    }
+    case 'call': { // ligar no WhatsApp do lead: só tocar (QR Code) ou agente de voz (ElevenLabs)
+      if (!['ring', 'agent'].includes(d.mode || 'ring')) err(`${at}: escolha "só tocar" ou "agente de voz".`);
+      if (d.mode === 'agent') {
+        if (!UUID_RE.test(String(d.voice_agent_id || ''))) err(`${at}: escolha o agente de voz.`);
+        if (d.outcomes !== undefined && !(Array.isArray(d.outcomes) && d.outcomes.length <= 8 && d.outcomes.every((o) => isObj(o) && KEY.test(String(o.key || ''))))) err(`${at}: saídas do agente inválidas.`);
+      }
+      if (d.ring_seconds !== undefined && !(Number.isInteger(d.ring_seconds) && d.ring_seconds >= 3 && d.ring_seconds <= 60)) err(`${at}: tempo tocando entre 3 e 60 segundos.`);
       break;
     }
     case 'send_template':

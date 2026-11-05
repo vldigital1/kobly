@@ -61,6 +61,10 @@ export const BLOCKS = {
     exits: [], make: () => ({ campaign_id: '' }) },
   webhook: { label: 'Webhook', group: 'Ações', icon: 'webhook', tone: 'neutral', hint: 'Manda os dados do lead para outro sistema (CRM, planilha, Make, Zapier) e guarda a resposta.',
     exits: [['success', 'Sucesso'], ['error', 'Erro']], make: () => ({ url: '', method: 'POST', save_as: 'webhook' }) },
+  call: { label: 'Ligação', group: 'Ações', icon: 'phone-call', tone: 'blue', hint: 'Liga no WhatsApp do lead: só tocar (chamar a atenção) ou um agente de voz que conversa e escolhe a saída.',
+    exits: [['answered', 'Atendeu'], ['no_answer', 'Não atendeu'], ['rejected', 'Recusou']],
+    dynamic: (d) => (d.mode === 'agent' ? (d.outcomes || []).map((o) => [`out_${o.key}`, o.label || o.key]) : []),
+    make: () => ({ mode: 'ring', ring_seconds: 20 }) },
   end: { label: 'Fim', group: null, icon: 'flag', tone: 'neutral', hint: 'Encerra o fluxo para o lead.', exits: [], make: () => ({}) },
 };
 export const PALETTE_GROUPS = ['Mensagens', 'Controle', 'IA', 'Dinheiro', 'Ações'];
@@ -166,6 +170,11 @@ export function summaryOf(type, d, lookups = {}) {
     }
     case 'goto_flow': return (lookups.flows || []).find((f) => f.campaign_id === d.campaign_id)?.nome ? `→ ${(lookups.flows || []).find((f) => f.campaign_id === d.campaign_id).nome}` : 'Escolha o fluxo';
     case 'webhook': { try { return `${d.method || 'POST'} ${new URL(d.url).host}`; } catch { return 'Informe o link'; } }
+    case 'call': {
+      if ((d.mode || 'ring') === 'ring') return `Só tocar · ${d.ring_seconds || 20} s`;
+      const a = (lookups.voiceAgents || []).find((x) => x.id === d.voice_agent_id);
+      return a ? `Agente de voz: ${a.name}` : 'Escolha o agente de voz';
+    }
     case 'send_template': return (lookups.templates || []).find((t) => t.id === d.template_id)?.name || 'Escolha o modelo';
     case 'send_text': return d.text || '';
     case 'send_media': {

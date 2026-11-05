@@ -12,7 +12,7 @@ try {
   console.error('[kobly-api] o usuário do banco não pode assumir kobly_authenticated:', e.message);
   process.exit(1);
 }
-const { server, engine, flows, bulk } = createApp({ pool, config });
+const { server, engine, flows, bulk, voiceAgents } = createApp({ pool, config });
 server.listen(config.port, config.host, () => console.log(`[kobly-api] ouvindo em ${config.host}:${config.port}`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => server.close(() => pool.end().then(() => process.exit(0))));
 
@@ -35,4 +35,13 @@ if (process.env.ENGINE_ENABLED !== 'false') {
     try { const b = await bulk.tick(); if (b.sent) console.log('[disparo]', JSON.stringify(b)); }
     catch (e) { console.error('[disparo] tick falhou:', e.message); }
   }, flowEvery).unref();
+
+  // Ligações com agente de voz (ElevenLabs): consulta o resultado das ligações em andamento.
+  let polling = false;
+  setInterval(async () => {
+    if (polling || !voiceAgents) return; polling = true;
+    try { const v = await voiceAgents.poll(); if (v.done) console.log('[voz]', JSON.stringify(v)); }
+    catch (e) { console.error('[voz] consulta falhou:', e.message); }
+    finally { polling = false; }
+  }, 15000).unref();
 }

@@ -497,10 +497,10 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     return /^https:\/\//.test(String(r.url || '')) ? String(r.url).slice(0, 1000) : '';
   }
   // ligação muda: o telefone da pessoa toca por alguns segundos (chamar a atenção)
-  async function ringCall(orgId, phone) {
+  async function ringCall(orgId, phone, seconds = 20) {
     const row = secretKey ? await connectedRow(orgId) : null;
     if (!row) throw new AuthError(409, 'not_connected', 'Ligação só funciona com o WhatsApp por QR Code conectado.');
-    await call(await serverOf(row), '/call/make', { method: 'POST', token: tokenOf(row), body: { number: digits(phone), call_duration: 20 } });
+    await call(await serverOf(row), '/call/make', { method: 'POST', token: tokenOf(row), body: { number: digits(phone), call_duration: Math.min(60, Math.max(3, Math.round(Number(seconds) || 20))) } });
     return { ok: true };
   }
   return { handle, handleServers, receiveWebhook, sendTextTo, sendMediaTo, reactTo, deleteMessage, hasConnected, configured, mediaLink, avatarOf, ringCall };
