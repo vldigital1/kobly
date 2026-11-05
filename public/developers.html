@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API pública — Kobly Desenvolvedores</title>
+<meta name="description" content="Dispare fluxos de WhatsApp da Kobly a partir do seu gateway, checkout ou CRM.">
+<link rel="icon" href="/assets/favicon.png">
+<style>
+:root { --bg: #0b0c11; --card: #13151d; --line: rgba(255,255,255,.08); --text: #e8e9ee; --muted: #9aa0ad; --accent: #ff6201; --accent2: #ff9452; --code: #0f1118; }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(900px 500px at 10% -10%, rgba(255,98,1,.14), transparent 60%), var(--bg); color: var(--text); font: 15px/1.6 -apple-system, "Segoe UI", Roboto, Inter, sans-serif; }
+a { color: var(--accent2); }
+header { border-bottom: 1px solid var(--line); }
+header .in { max-width: 1120px; margin: 0 auto; padding: 16px 20px; display: flex; align-items: center; gap: 14px; }
+.logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 900; color: var(--accent); text-decoration: none; letter-spacing: .02em; font-size: 18px; }
+.sep { width: 1px; height: 20px; background: var(--line); } .dev { font-weight: 700; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 36px; }
+.hero { max-width: 1120px; margin: 0 auto; padding: 48px 20px 36px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px; align-items: center; }
+.hero h1 { font-size: 46px; line-height: 1.05; margin: 0 0 14px; letter-spacing: -.02em; }
+.hero p { color: var(--muted); font-size: 17px; margin: 0 0 20px; }
+.base { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--code); border: 1px solid var(--line); font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: #cfd3dc; overflow-x: auto; }
+.btn { display: inline-flex; padding: 11px 18px; border-radius: 12px; font-weight: 700; text-decoration: none; color: #fff; background: linear-gradient(135deg, var(--accent2), var(--accent)); margin-top: 16px; margin-right: 8px; }
+.btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+.demo { border-radius: 18px; border: 1px solid rgba(255,148,82,.25); background: var(--card); padding: 18px; }
+pre { margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--code); border: 1px solid var(--line); overflow-x: auto; font: 13px/1.55 ui-monospace, Consolas, monospace; color: #d7dae3; }
+.m { display: inline-block; padding: 1px 8px; border-radius: 6px; font: 700 11px ui-monospace, monospace; margin-right: 8px; }
+.get { background: rgba(52,211,153,.15); color: #6ee7b7; } .post { background: rgba(255,98,1,.18); color: #ffb485; }
+nav.side { position: sticky; top: 20px; align-self: start; padding-top: 8px; }
+nav.side h4 { margin: 18px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+nav.side a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; }
+nav.side a:hover { background: rgba(255,255,255,.05); }
+section { padding: 22px 0 28px; border-top: 1px solid var(--line); }
+section h2 { margin: 0 0 10px; font-size: 24px; }
+section h3 { margin: 22px 0 8px; font-size: 17px; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 6px; }
+.muted { color: var(--muted); }
+footer { max-width: 1120px; margin: 0 auto; padding: 30px 20px 50px; color: var(--muted); font-size: 13px; }
+@media (max-width: 860px) { .hero, .wrap { grid-template-columns: 1fr; } .hero h1 { font-size: 34px; } nav.side { display: none; } }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <a class="logo" href="/">KOBLY</a><span class="sep"></span><span class="dev">Desenvolvedores</span>
+</div></header>
+
+<div class="hero">
+  <div>
+    <h1>Dispare fluxos da Kobly a partir da sua plataforma.</h1>
+    <p>Liste os números e os fluxos publicados de uma conta e coloque o telefone do cliente no início de um fluxo a cada evento do seu sistema (pagamento aprovado, cadastro, carrinho abandonado…).</p>
+    <div class="base"><span>https://api.koblay.io/public/v1</span></div>
+    <a class="btn" href="#disparar">Disparar o primeiro fluxo</a><a class="btn ghost" href="https://app.koblay.io/">Criar uma chave</a>
+  </div>
+  <div class="demo">
+<pre><span class="m post">POST</span>/flows/{flow_id}/trigger
+{
+  "phone": "5511987654321",
+  "name": "Maria",
+  "variables": { "produto": "Curso X" }
+}</pre>
+  </div>
+</div>
+
+<div class="wrap">
+  <nav class="side">
+    <h4>Começar</h4>
+    <a href="#como">Como funciona</a><a href="#auth">Autenticação</a><a href="#erros">Erros</a><a href="#limites">Limites</a>
+    <h4>Endpoints</h4>
+    <a href="#me"><span class="m get">GET</span>Validar a chave</a><a href="#instances"><span class="m get">GET</span>Listar números</a><a href="#flows"><span class="m get">GET</span>Listar fluxos</a><a href="#disparar"><span class="m post">POST</span>Disparar um fluxo</a>
+  </nav>
+  <main>
+    <section id="como">
+      <h2>Como funciona</h2>
+      <p>O cliente da Kobly cria uma chave em <b>Integrações → API pública</b> e cola na sua plataforma. A cada evento, a sua plataforma chama <code>POST /flows/{flow_id}/trigger</code> com o telefone do contato: a Kobly cadastra o contato (se ainda não existir) e coloca ele no início do fluxo, que envia as mensagens pelo número conectado da conta.</p>
+      <table><tr><th>Item</th><th>Valor</th></tr>
+        <tr><td>URL base</td><td><code>https://api.koblay.io/public/v1</code></td></tr>
+        <tr><td>Formato</td><td>JSON em UTF-8, somente HTTPS</td></tr>
+        <tr><td>Telefone</td><td>DDI + DDD + número, só dígitos (ex.: <code>5511987654321</code>). Número brasileiro sem DDI recebe o 55.</td></tr>
+      </table>
+    </section>
+    <section id="auth">
+      <h2>Autenticação</h2>
+      <p>Mande a chave no cabeçalho <code>Authorization: Bearer kbk_...</code> (ou <code>X-Api-Key: kbk_...</code>). A chave dá acesso aos fluxos daquela conta: guarde em segredo, no servidor. Ela aparece uma única vez ao ser criada e pode ser revogada a qualquer momento.</p>
+<pre>curl https://api.koblay.io/public/v1/me \
+  -H "Authorization: Bearer kbk_SUA_CHAVE"</pre>
+    </section>
+    <section id="erros">
+      <h2>Erros</h2>
+      <p>Toda resposta de erro tem o formato <code>{ "error": { "code": "...", "message": "..." } }</code>.</p>
+      <table><tr><th>Status</th><th>Code</th><th>Quando</th></tr>
+        <tr><td>401</td><td><code>invalid_key</code></td><td>Chave ausente, errada ou revogada</td></tr>
+        <tr><td>404</td><td><code>flow_not_found</code></td><td>O fluxo não existe nesta conta</td></tr>
+        <tr><td>409</td><td><code>not_started</code></td><td>O contato já está neste fluxo, ou o fluxo não está publicado, ou a automação do contato está pausada</td></tr>
+        <tr><td>422</td><td><code>bad_phone</code> / <code>bad_variables</code></td><td>Telefone ou variáveis inválidas</td></tr>
+        <tr><td>429</td><td><code>rate_limited</code></td><td>Passou do limite de requisições</td></tr>
+      </table>
+    </section>
+    <section id="limites">
+      <h2>Limites</h2>
+      <p>Até <b>120 requisições por minuto</b> por chave. Até 50 variáveis por disparo, cada uma com até 4.096 caracteres.</p>
+    </section>
+    <section id="me">
+      <h2><span class="m get">GET</span>/me — Validar a chave</h2>
+<pre>{ "ok": true, "organization": { "id": "…", "nome": "Loja Exemplo" } }</pre>
+    </section>
+    <section id="instances">
+      <h2><span class="m get">GET</span>/instances — Listar números</h2>
+      <p>Números de WhatsApp da conta (QR Code e API oficial) e se estão conectados.</p>
+<pre>{ "instances": [ { "id": "…", "tipo": "qrcode", "nome": "Vendas", "telefone": "5511999990000", "conectado": true } ] }</pre>
+    </section>
+    <section id="flows">
+      <h2><span class="m get">GET</span>/flows — Listar fluxos</h2>
+      <p>Fluxos publicados da conta. Use o <code>id</code> para disparar.</p>
+<pre>{ "flows": [ { "id": "8d0c…", "nome": "Pós-venda", "ativo": true } ] }</pre>
+    </section>
+    <section id="disparar">
+      <h2><span class="m post">POST</span>/flows/{flow_id}/trigger — Disparar um fluxo</h2>
+      <table><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td><code>phone</code></td><td>texto · obrigatório</td><td>Telefone do contato com DDI</td></tr>
+        <tr><td><code>name</code></td><td>texto</td><td>Nome do contato (vira <code>{{nome}}</code> e <code>{{primeiro_nome}}</code>)</td></tr>
+        <tr><td><code>email</code></td><td>texto</td><td>E-mail do contato</td></tr>
+        <tr><td><code>variables</code></td><td>objeto</td><td>Variáveis usadas nas mensagens do fluxo, ex.: <code>{ "produto": "Curso X" }</code> vira <code>{{produto}}</code>. Nomes em minúsculas, números e _.</td></tr>
+      </table>
+<pre>curl -X POST https://api.koblay.io/public/v1/flows/FLOW_ID/trigger \
+  -H "Authorization: Bearer kbk_SUA_CHAVE" \
+  -H "Content-Type: application/json" \
+  -d '{ "phone": "5511987654321", "name": "Maria", "variables": { "produto": "Curso X" } }'</pre>
+      <h3>Resposta</h3>
+<pre>{ "ok": true, "lead_id": "…", "flow_id": "…" }</pre>
+      <p class="muted">O fluxo precisa estar publicado. O gatilho do fluxo não é conferido: a chamada da API já é o gatilho.</p>
+    </section>
+  </main>
+</div>
+<footer>Kobly · Agência VL Digital LTDA · <a href="/termos">Termos</a> · <a href="/privacidade">Privacidade</a></footer>
+</body>
+</html>

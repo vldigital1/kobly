@@ -102,6 +102,7 @@ export function createFunctions(ctx) {
     'pixel-configs': () => orgRoute('pixel', 'pixel-configs'),
     'notify-channels': () => orgRoute('notifier', 'notify-channels'),
     'mcp-tokens': () => orgRoute('mcpTokens', 'mcp-tokens'),
+    'public-api-keys': () => orgRoute('publicApiKeys', 'public-api-keys'),
     'workspace-settings': () => orgUserRoute('workspaceSettings', 'workspace-settings'),
     'inbox': () => orgUserRoute('inbox', 'inbox'),
     'team': () => orgUserRoute('team', 'team'),

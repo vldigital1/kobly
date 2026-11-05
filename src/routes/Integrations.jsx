@@ -1100,6 +1100,7 @@ const SECTIONS = [
   { value: 'tags', label: 'Tags', icon: 'tag', help: 'Marcadores de lead' },
   { value: 'emails', label: 'Modelos', icon: 'library', help: 'Biblioteca avançada' },
   { value: 'mcp', label: 'Acesso de IA', icon: 'bot', help: 'Tokens para assistentes de IA (MCP) criarem rascunhos de fluxo.' },
+  { value: 'api', label: 'API pública', icon: 'key-round', help: 'Chaves para gateways, checkouts e CRMs dispararem os seus fluxos.' },
 ];
 // Outras telas abrem uma seção daqui gravando o id nesta chave antes de navegar (ex.: Configurações → Trackeamento).
 export const INTEGRATIONS_SECTION_KEY = 'kobly:int-section';
@@ -1109,6 +1110,7 @@ const KoblyPlatformsTab = React.lazy(() => import('@/routes/PlatformsTab.jsx').t
 const KoblyAiKeysTab = React.lazy(() => import('@/routes/AiKeysTab.jsx').then((m) => ({ default: m.KoblyAiKeysTab })));
 const KoblyProductsLazy = React.lazy(() => import('@/routes/Products.jsx').then((m) => ({ default: m.KoblyProducts })));
 const KoblyVoiceTab = React.lazy(() => import('@/routes/VoiceTab.jsx').then((m) => ({ default: m.KoblyVoiceTab })));
+const KoblyPublicApiTab = React.lazy(() => import('@/routes/PublicApiTab.jsx').then((m) => ({ default: m.KoblyPublicApiTab })));
 const KoblyMcpTab = React.lazy(() => import('@/routes/McpTab.jsx').then((m) => ({ default: m.KoblyMcpTab })));
 const LOJA_SUBS = [
   { value: 'dominio', label: 'Remetente', icon: 'send' },
@@ -1252,6 +1254,11 @@ function KoblyIntegrations() {
           {section === 'voz' && (
             <React.Suspense fallback={<SkeletonTable rows={3} />}>
               <KoblyVoiceTab empresaId={empresaId} notify={store.notify} />
+            </React.Suspense>
+          )}
+          {section === 'api' && (
+            <React.Suspense fallback={<SkeletonTable rows={3} />}>
+              <KoblyPublicApiTab empresaId={empresaId} notify={store.notify} />
             </React.Suspense>
           )}
           {section === 'mcp' && (

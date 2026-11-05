@@ -149,7 +149,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
   }
 
   // Disparo em massa: coloca UM lead no início de um fluxo publicado (sem depender do evento do gatilho).
-  async function startForLead({ orgId, campaignId, leadId, tipo = 'Disparo em massa' }) {
+  async function startForLead({ orgId, campaignId, leadId, tipo = 'Disparo em massa', variables = {} }) {
     const lead = (await pool.query(`select automation_paused from public.leads where id = $1 and organization_id = $2`, [leadId, orgId])).rows[0];
     if (!lead) return { started: false, reason: 'lead não encontrado' };
     if (lead.automation_paused) return { started: false, reason: 'automação pausada para este lead' };
@@ -158,7 +158,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     if (!r) return { started: false, reason: 'fluxo sem versão publicada' };
     const ins = await pool.query(`insert into public.flow_executions (organization_id, campaign_id, flow_id, graph_version_id, lead_id, current_ref, stop_on_purchase, variables)
       values ($1,$2,$3,$4,$5,$6,true,$7::jsonb) on conflict (campaign_id, lead_id) where status in ('running','waiting') do nothing returning id`,
-      [orgId, campaignId, r.flow_id, r.version_id, leadId, r.graph.start, JSON.stringify({ evento_tipo: tipo })]);
+      [orgId, campaignId, r.flow_id, r.version_id, leadId, r.graph.start, JSON.stringify({ ...variables, evento_tipo: tipo })]);
     if (!ins.rows[0]) return { started: false, reason: 'o lead já está nesse fluxo' };
     kick();
     return { started: true };

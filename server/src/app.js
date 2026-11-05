@@ -31,6 +31,7 @@ import { createPixel } from './payments/pixel.js';
 import { createNotifier } from './notify/telegram.js';
 import { createCopilot } from './flows/copilot.js';
 import { createMcp } from './mcp/server.js';
+import { createPublicApi } from './publicapi/service.js';
 import { createWorkspaceSettings } from './workspace/settings.js';
 import { createInbox } from './workspace/inbox.js';
 import { createMetaChannels, channelAddress } from './messaging/metaChannels.js';
@@ -127,6 +128,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const bulk = createBulk({ pool, whatsapp: waRouted, email: flowEmail, flows });
   const flowAdmin = createFlowAdmin({ pool, copilot: createCopilot({ pool, llm }), siteUrl: config.siteUrl });
   const mcp = createMcp({ pool, flowAdmin });
+  const publicApi = createPublicApi({ pool, flows });
   const postback = createPostback({ pool, flows });
   const invites = createInvites({ pool, auth, mailer });
   const storage = createStorage({ dir: config.storageDir || '/var/lib/kobly-storage', canAccessOrg: async (user, org) => { try { return (await whatsapp.resolveOrg(user, org)).role !== 'Suporte'; } catch { return false; } } });
@@ -146,7 +148,7 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
   const affiliates = createAffiliates({ pool, secretKey: secretKeyBuf, flows, siteUrl: config.siteUrl });
   const billing = createBilling({ pool, secretKey: secretKeyBuf, fetchImpl, apiKey: config.asaasApiKey, env: config.asaasEnv, webhookToken: config.asaasWebhookToken });
   billing.enforce = !!config.billingEnforce;
-  const functions = createFunctions({ pool, config, auth, affiliates, billing, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
+  const functions = createFunctions({ pool, config, auth, affiliates, billing, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, publicApiKeys: { handle: publicApi.handleKeys }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
   const loginLimit = createLimiter({ max: config.loginPerMin ?? 60, windowMs: 60_000 });
   const signupLimit = createLimiter({ max: config.signupPerMin ?? 20, windowMs: 60_000 });
@@ -258,6 +260,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       if (uz && req.method === 'POST') {
         const r = await uazapi.receiveWebhook(uz[1], (await readBody(req, 1024 * 1024)).toString('utf8'));
         return send(res, r.status, { ok: r.status === 200 });
+      }
+      // API pública: outros sistemas disparam fluxos com a chave da empresa (Integrações → API pública).
+      if (path.startsWith('/public/v1/')) {
+        const r = await publicApi.handleHttp(req.method, path.slice('/public/v1'.length), req.headers, req.method === 'POST' ? (await readBody(req, 256 * 1024)).toString('utf8') : '');
+        return send(res, r.status, r.body);
       }
       // MCP da Kobly (assistentes de IA): token próprio da empresa no Authorization; só rascunhos.
       // Conectores que só aceitam um link (ex.: conector personalizado do Claude): o token vai no caminho /mcp/<token>.

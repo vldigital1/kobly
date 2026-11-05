@@ -1162,6 +1162,7 @@ export const KoblyApi = {
   async pixelConfigs(action, extra = {}, empresaId = null) { return this.serviceCall('pixel-configs', action, extra, empresaId); },
   async notifyChannels(action, extra = {}, empresaId = null) { return this.serviceCall('notify-channels', action, extra, empresaId); },
   async mcpTokens(action, extra = {}, empresaId = null) { return this.serviceCall('mcp-tokens', action, extra, empresaId); },
+  async publicApiKeys(action, extra = {}, empresaId = null) { return this.serviceCall('public-api-keys', action, extra, empresaId); },
   // Configurações da automação (empresa, respostas rápidas, campos, variáveis, agentes) e Chats ao vivo.
   async workspaceSettings(action, extra = {}, empresaId = null) { return this.serviceCall('workspace-settings', action, extra, empresaId); },
   async inbox(action, extra = {}, empresaId = null) { return this.serviceCall('inbox', action, extra, empresaId); },
