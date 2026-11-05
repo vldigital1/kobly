@@ -3,8 +3,8 @@ import { KoblyMockDB as DB } from '@/api/mockData.js';
 
 // Permissões por papel: protege contra um papel ganhar tela que não deveria ter.
 const NAV_ESPERADA = {
-  Cliente: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'configuracoes', 'planos', 'afiliados', 'chamados', 'ajuda', 'perfil'],
-  Gestor: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'relatorios', 'configuracoes', 'afiliados', 'chamados', 'ajuda', 'perfil'],
+  Cliente: ['painel', 'vendas', 'chats', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'configuracoes', 'planos', 'afiliados', 'chamados', 'ajuda', 'perfil'],
+  Gestor: ['painel', 'vendas', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'relatorios', 'configuracoes', 'afiliados', 'chamados', 'ajuda', 'perfil'],
   Suporte: ['chamados', 'leads', 'ajuda', 'perfil'],
   Administrador: ['painel', 'clientes', 'relatorios', 'planos', 'afiliados', 'servidores', 'seguranca', 'chamados', 'perfil'],
 };

@@ -343,6 +343,7 @@ const faq = [
 // v2: Simplificado — foco em automação pura (Campanhas, Leads, Integrações, Perfil).
 const NAV = {
   painel:        { id: 'painel',        icon: 'layout-dashboard', label: 'Dashboard',            section: 'Principal' },
+  vendas:        { id: 'vendas',        icon: 'chart-no-axes-combined', label: 'Vendas',          section: 'Principal' },
   chats:         { id: 'chats',         icon: 'message-circle',   label: 'Chats ao vivo',        section: 'Principal' },
   clientes:      { id: 'clientes',      icon: 'building-2',       label: 'Clientes',             section: 'Principal' },
   pipeline:      { id: 'pipeline',      icon: 'kanban',           label: 'Pipeline',             section: 'Principal' },
@@ -370,14 +371,14 @@ const roles = {
   Cliente: {
     label: 'Cliente',
     descricao: 'Dono da conta — dashboard, pipeline, fluxos, leads, integrações.',
-    nav: ['painel', 'chats', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'configuracoes', 'planos', 'afiliados', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'vendas', 'chats', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'configuracoes', 'planos', 'afiliados', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: false, createPlan: false, manageUsers: false, answerTickets: false },
   },
   Gestor: {
     label: 'Gestor',
     descricao: 'Agência — visão consolidada de várias contas.',
-    nav: ['painel', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'relatorios', 'configuracoes', 'afiliados', 'chamados', 'ajuda', 'perfil'],
+    nav: ['painel', 'vendas', 'chats', 'clientes', 'pipeline', 'leads', 'fluxos', 'disparos', 'integracoes', 'anuncios', 'relatorios', 'configuracoes', 'afiliados', 'chamados', 'ajuda', 'perfil'],
     home: 'painel',
     can: { editCampaign: true, viewAllAccounts: true, createPlan: false, manageUsers: false, answerTickets: false },
   },
@@ -413,7 +414,8 @@ const roleDefFor = (role, teamRole) => (role === 'Cliente' && teamRole === 'aten
 
 // Títulos de rota (topbar)
 const routeTitle = {
-  painel: 'Dashboard', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Anúncios', servidores: 'Servidores WhatsApp', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
+  painel: 'Dashboard',
+  vendas: 'Vendas', chats: 'Chats ao vivo', produtos: 'Produtos', anuncios: 'Anúncios', servidores: 'Servidores WhatsApp', fluxos: 'Fluxos', agentes: 'Agentes de IA', configuracoes: 'Configurações', clientes: 'Clientes', pipeline: 'Pipeline', campanhas: 'Campanhas',
   disparos: 'Disparo em massa',
   leads: 'Leads', integracoes: 'Integrações', relatorios: 'Relatórios', planos: 'Planos & cobrança', afiliados: 'Afiliados',
   seguranca: 'Segurança', chamados: 'Chamados', ajuda: 'Central de ajuda', perfil: 'Perfil',

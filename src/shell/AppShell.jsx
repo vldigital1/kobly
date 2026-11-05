@@ -17,6 +17,7 @@ import { SupportWidget } from '@/shell/SupportWidget.jsx';
 // Telas carregadas sob demanda: o primeiro carregamento baixa só o shell + a tela aberta.
 const screen = (load, name) => lazy(() => load().then((m) => ({ default: m[name] })));
 const KoblyDashboard = screen(() => import('@/routes/Dashboard.jsx'), 'KoblyDashboard');
+const KoblySales = screen(() => import('@/routes/Sales.jsx'), 'KoblySales');
 const KoblyPipeline = screen(() => import('@/routes/Pipeline.jsx'), 'KoblyPipeline');
 const KoblyBulkSend = screen(() => import('@/routes/BulkSend.jsx'), 'KoblyBulkSend');
 const KoblyLeads = screen(() => import('@/routes/Leads.jsx'), 'KoblyLeads');
@@ -40,6 +41,7 @@ const KoblyServers = screen(() => import('@/routes/Servers.jsx'), 'KoblyServers'
 // Route id -> screen component.
 const SCREENS = {
   painel: KoblyDashboard,
+  vendas: KoblySales,
   chats: KoblyChats,
   fluxos: KoblyFlows,
   agentes: KoblyAgents,

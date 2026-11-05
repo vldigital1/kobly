@@ -325,4 +325,4 @@ function KoblyDashboard() {
   return store.role === 'Administrador' ? <AdminDashboard /> : <ClientDashboard />;
 }
 
-export { KoblyDashboard };
+export { KoblyDashboard, KD_CSS, Kpi, AreaChart, Delta };

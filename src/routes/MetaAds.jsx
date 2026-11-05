@@ -753,4 +753,4 @@ function KoblyMetaAds() {
   );
 }
 
-export { KoblyMetaAds };
+export { KoblyMetaAds, SettingsModal };

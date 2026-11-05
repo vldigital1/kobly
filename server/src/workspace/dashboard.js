@@ -2,6 +2,8 @@
 // comparados com o período anterior, a série por dia e as atividades mais recentes. Só leitura.
 const RECUP = ['Abandono de carrinho', 'Pix Gerado', 'Boleto Gerado', 'Compra Recusada', 'Depósito Solicitado'];
 
+import { salesReport } from './sales.js';
+
 export function createDashboard({ pool }) {
   async function overview(orgId, days) {
     const d = [7, 30, 90].includes(Number(days)) ? Number(days) : 30;
@@ -95,6 +97,7 @@ export function createDashboard({ pool }) {
     admin,
     async handle(ctx, user, body) {
       if (body.action === 'overview') return overview(ctx.orgId, body.days);
+      if (body.action === 'sales') return salesReport(pool, ctx.orgId, body);
       const { AuthError } = await import('../auth.js');
       throw new AuthError(400, 'bad_action', 'Ação desconhecida.');
     },
