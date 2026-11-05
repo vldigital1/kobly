@@ -23,7 +23,7 @@ export function WhatsAppLogo({ size = 40, verified = false }) {
       {/* telefone */}
       <path d="M19.2 17.6c.4-.9 1-1 1.4-1h1c.3 0 .6.1.8.6l1.2 2.9c.1.3.1.6-.1.9l-.8 1c-.2.2-.2.5 0 .8.8 1.4 2.4 3 4 3.8.3.2.6.1.8-.1l1-1.2c.2-.3.6-.3.9-.2l2.8 1.3c.4.2.6.4.5.8-.1 1.2-.9 2.6-2.6 2.9-1.4.3-3.6-.2-6.4-2.3-3-2.3-4.3-4.6-4.6-6-.3-1.4.3-2.7 1.1-3.2z" fill="#fff" />
       {verified && (<>
-        <circle cx="38" cy="38" r="8.5" fill="#1D9BF0" stroke="#0d1018" strokeWidth="2" />
+        <circle cx="38" cy="38" r="8.5" fill="#1D9BF0" stroke="var(--surface-app)" strokeWidth="2" />
         <path d="M34.3 38.1l2.5 2.4 4.9-5" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       </>)}
     </Tile>

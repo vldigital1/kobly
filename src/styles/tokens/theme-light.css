@@ -1,0 +1,71 @@
+/* Kobly — tema claro e cores que mudam com o tema.
+   O escuro é o padrão (:root). O claro entra com <html data-theme="light"> (Configurações → Aparência ou o botão do topo).
+   Nas telas, cores translúcidas usam rgba(var(--fg-rgb), A) (brilho no escuro, sombra no claro),
+   painéis usam rgba(var(--panel-rgb), A) e o chat estilo WhatsApp usa --wa-*. */
+
+:root {
+  color-scheme: dark;
+  --fg-rgb: 255, 255, 255;      /* brilho translúcido sobre o escuro */
+  --panel-rgb: 15, 17, 26;      /* painéis de vidro */
+  --well-rgb: 0, 0, 0;          /* poços (fundo de campo, card interno) */
+  --well-k: 1;
+  /* chat no estilo WhatsApp (escuro) */
+  --wa-bg: #0b141a; --wa-panel: #111b21; --wa-in: #202c33; --wa-out: #005c4b; --wa-chip: #182229;
+  --wa-text: #e9edef; --wa-muted: #8696a0; --wa-btn: #2a3942;
+  --on-tint: #ffffff;
+  --pastel-blue: #bfdbfe; --pastel-amber: #fde68a; --pastel-green: #6ee7b7; --pastel-orange: #ffb485; --pastel-pink: #fda4af;
+  --wa-line: #222d34; --wa-icon: #aebac1; --wa-pop: #233138; --wa-text2: #d1d7db; --wa-empty: #222e35;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --fg-rgb: 22, 20, 16;
+  --panel-rgb: 255, 255, 255;
+  --well-rgb: 22, 20, 16;
+  --well-k: 0.16;
+
+  --surface-app:       #f5f3f0;
+  --surface-nav:       #fbfaf8;
+  --surface-card:      #ffffff;
+  --surface-sunken:    #f1eeea;
+  --surface-raised:    #ebe7e2;
+  --surface-overlay:   #ffffff;
+  --surface-nav-hover: #f1eeea;
+  --surface-inverse:   #16140f;
+
+  --text-strong:   #16140f;
+  --text-body:     #3b3630;
+  --text-muted:    #6b655c;
+  --text-subtle:   #8a8378;
+  --text-on-dark:  #16140f;         /* o menu lateral fica claro no tema claro */
+  --text-on-dark-muted: #5f5950;
+  --surface-nav-active: rgba(255, 98, 1, 0.12);
+  --text-link:     #d95300;
+
+  --border-subtle:  rgba(22, 20, 16, 0.09);
+  --border-default: rgba(22, 20, 16, 0.14);
+  --border-strong:  rgba(22, 20, 16, 0.22);
+  --border-nav:     rgba(22, 20, 16, 0.08);
+
+  --ink-600: #d6d1ca;
+  --ink-500: #bdb6ad;
+  --ink-200: #57524b;
+
+  --green-500: #15a35a; --green-tint: rgba(21, 163, 90, 0.12);
+  --amber-500: #c27a00; --amber-600: #a86a00; --amber-tint: rgba(194, 122, 0, 0.12);
+  --red-500:   #d93a31; --red-tint:   rgba(217, 58, 49, 0.1);
+  --status-neutral-bg: rgba(22, 20, 16, 0.06);
+
+  --shadow-xs:  0 1px 2px rgba(22, 20, 16, 0.08);
+  --shadow-sm:  0 1px 3px rgba(22, 20, 16, 0.08);
+  --shadow-md:  0 8px 24px -10px rgba(22, 20, 16, 0.18);
+  --shadow-lg:  0 20px 48px -16px rgba(22, 20, 16, 0.22);
+  --shadow-pop: 0 32px 80px -20px rgba(22, 20, 16, 0.3);
+  --grad-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 90px);
+
+  --wa-bg: #efeae2; --wa-panel: #ffffff; --wa-in: #ffffff; --wa-out: #d9fdd3; --wa-chip: #ffffff;
+  --wa-text: #111b21; --wa-muted: #667781; --wa-btn: #e9edef;
+  --on-tint: #16140f;
+  --pastel-blue: #1d4ed8; --pastel-amber: #92400e; --pastel-green: #047857; --pastel-orange: #c2410c; --pastel-pink: #be123c;
+  --wa-line: #e9edef; --wa-icon: #54656f; --wa-pop: #ffffff; --wa-text2: #3b4a54; --wa-empty: #f0f2f5;
+}

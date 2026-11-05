@@ -12,10 +12,10 @@ import { useKobly } from '@/store/store.jsx';
 
 const KD_CSS = `
 .kd-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 22px 24px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
-  background: radial-gradient(800px 300px at 0% 0%, rgba(255,98,1,.22), transparent 60%), radial-gradient(700px 300px at 100% 100%, rgba(243,146,0,.16), transparent 60%), rgba(12,14,22,.95);
-  border: 1px solid rgba(255,255,255,.08); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  background: radial-gradient(800px 300px at 0% 0%, rgba(255,98,1,.22), transparent 60%), radial-gradient(700px 300px at 100% 100%, rgba(243,146,0,.16), transparent 60%), rgba(var(--panel-rgb), .95);
+  border: 1px solid rgba(var(--fg-rgb), .08); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .kd-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(rgba(255,148,82,.18) 1px, transparent 1px); background-size: 22px 22px; mask-image: linear-gradient(90deg, transparent, #000 40%, transparent); opacity: .5; pointer-events: none; }
-.kd-hero::after { content: ''; position: absolute; left: -30%; top: 0; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); animation: kd-sweep 6s linear infinite; pointer-events: none; }
+.kd-hero::after { content: ''; position: absolute; left: -30%; top: 0; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, rgba(var(--fg-rgb), .07), transparent); animation: kd-sweep 6s linear infinite; pointer-events: none; }
 @keyframes kd-sweep { to { left: 130%; } }
 .kd-core { position: relative; width: 64px; height: 64px; flex: none; display: grid; place-items: center; }
 .kd-core .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; border-top-color: #f39200; border-right-color: #ff6201; animation: kd-spin 2.4s linear infinite; }
@@ -23,15 +23,15 @@ const KD_CSS = `
 .kd-core .dot { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #ff9452 45%, #b24500); box-shadow: 0 0 24px #ff6201, 0 0 48px rgba(243,146,0,.4); animation: kd-pulse 2s ease-in-out infinite; }
 @keyframes kd-spin { to { transform: rotate(360deg); } }
 @keyframes kd-pulse { 50% { transform: scale(.82); box-shadow: 0 0 14px #ff6201, 0 0 30px rgba(243,146,0,.3); } }
-.kd-live { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: #ffb485; }
+.kd-live { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--pastel-orange); }
 .kd-live i { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.6); animation: kd-ping 1.8s infinite; }
 @keyframes kd-ping { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); } 70% { box-shadow: 0 0 0 9px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
-.kd-seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); position: relative; z-index: 1; }
+.kd-seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: rgba(var(--fg-rgb), .04); border: 1px solid rgba(var(--fg-rgb), .08); position: relative; z-index: 1; }
 .kd-seg button { border: 0; padding: 7px 13px; border-radius: 9px; background: transparent; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; }
-.kd-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(243,146,0,.3), rgba(255,98,1,.42)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
+.kd-seg button.on { color: var(--on-tint); background: linear-gradient(135deg, rgba(243,146,0,.3), rgba(255,98,1,.42)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
 .kd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 .kd-kpi { position: relative; overflow: hidden; border-radius: 18px; padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 6px;
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.95); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 34px rgba(0,0,0,.4); animation: kd-in .5s both; }
+  background: linear-gradient(180deg, rgba(var(--fg-rgb), .05), rgba(var(--fg-rgb), .012)), rgba(var(--panel-rgb), .95); border: 1px solid rgba(var(--fg-rgb), .08); box-shadow: 0 12px 34px rgba(0,0,0,.4); animation: kd-in .5s both; }
 .kd-kpi::before { content: ''; position: absolute; left: 16px; right: 16px; top: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--c), transparent); }
 .kd-kpi::after { content: ''; position: absolute; right: -50px; top: -50px; width: 140px; height: 140px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%); }
 @keyframes kd-in { from { opacity: 0; transform: translateY(8px); } }
@@ -41,21 +41,21 @@ const KD_CSS = `
 .kd-kpi .sub { font-size: var(--text-xs); color: var(--text-subtle); position: relative; z-index: 1; display: flex; gap: 8px; align-items: center; }
 .kd-delta { font-weight: 700; padding: 1px 7px; border-radius: 999px; }
 .kd-delta.up { color: #34d399; background: rgba(52,211,153,.12); } .kd-delta.down { color: #fb7185; background: rgba(251,113,133,.12); } .kd-delta.eq { color: #94a3b8; background: rgba(148,163,184,.1); }
-.kd-panel { border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.012)), rgba(15,17,26,.95); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 14px 40px rgba(0,0,0,.4); min-width: 0; }
+.kd-panel { border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(180deg, rgba(var(--fg-rgb), .045), rgba(var(--fg-rgb), .012)), rgba(var(--panel-rgb), .95); border: 1px solid rgba(var(--fg-rgb), .08); box-shadow: 0 14px 40px rgba(0,0,0,.4); min-width: 0; }
 .kd-panel h3 { margin: 0; font-size: 15px; color: var(--text-strong); display: flex; align-items: center; gap: 8px; }
 .kd-legend { display: flex; gap: 8px; flex-wrap: wrap; }
-.kd-legend button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--font-sans); color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); }
+.kd-legend button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: var(--font-sans); color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .08); }
 .kd-legend button.on { color: var(--text-strong); border-color: color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent); }
 .kd-legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
-.kd-bar { height: 9px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+.kd-bar { height: 9px; border-radius: 999px; background: rgba(var(--fg-rgb), .06); overflow: hidden; }
 .kd-bar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 50%, #fff)); box-shadow: 0 0 10px var(--c); transition: width .8s; }
 .kd-feed { display: flex; flex-direction: column; gap: 2px; }
 .kd-feed .it { display: flex; gap: 10px; align-items: center; padding: 9px 6px; border-radius: 10px; animation: kd-in .4s both; }
-.kd-feed .it:hover { background: rgba(255,255,255,.03); }
+.kd-feed .it:hover { background: rgba(var(--fg-rgb), .03); }
 .kd-feed .ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: none; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
 .kd-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 14px; align-items: center; padding: 10px 8px; border-radius: 10px; font-size: var(--text-sm); }
-.kd-row:hover { background: rgba(255,255,255,.03); }
-.kd-skel { border-radius: 18px; height: 118px; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.07), rgba(255,255,255,.03)); background-size: 200% 100%; animation: kd-shimmer 1.4s linear infinite; }
+.kd-row:hover { background: rgba(var(--fg-rgb), .03); }
+.kd-skel { border-radius: 18px; height: 118px; background: linear-gradient(90deg, rgba(var(--fg-rgb), .03), rgba(var(--fg-rgb), .07), rgba(var(--fg-rgb), .03)); background-size: 200% 100%; animation: kd-shimmer 1.4s linear infinite; }
 @keyframes kd-shimmer { to { background-position: -200% 0; } }
 `;
 
@@ -117,7 +117,7 @@ function AreaChart({ serie, lines }) {
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 240, display: 'block' }} onMouseLeave={() => setHover(null)}
           onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.round(((e.clientX - r.left) / r.width * W - P) / (W - P * 2) * (serie.length - 1)); setHover(Math.max(0, Math.min(serie.length - 1, i))); }}>
           <defs>{lines.map((l) => <linearGradient key={l.key} id={`ag-${l.key}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={l.color} stopOpacity=".28" /><stop offset="1" stopColor={l.color} stopOpacity="0" /></linearGradient>)}</defs>
-          {[0, 0.25, 0.5, 0.75, 1].map((k) => <line key={k} x1={P} x2={W - P} y1={P + k * (H - P * 2)} y2={P + k * (H - P * 2)} stroke="rgba(255,255,255,.06)" strokeDasharray="3 5" />)}
+          {[0, 0.25, 0.5, 0.75, 1].map((k) => <line key={k} x1={P} x2={W - P} y1={P + k * (H - P * 2)} y2={P + k * (H - P * 2)} stroke="rgba(var(--fg-rgb), .06)" strokeDasharray="3 5" />)}
           {vis.map((l) => {
             const pts = serie.map((d, i) => `${x(i)},${y(d[l.key] || 0)}`).join(' ');
             return (
@@ -128,10 +128,10 @@ function AreaChart({ serie, lines }) {
             );
           })}
           {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={P} y2={H - P} stroke="rgba(255,148,82,.5)" />}
-          {hover !== null && vis.map((l) => <circle key={l.key} cx={x(hover)} cy={y(serie[hover][l.key] || 0)} r="4" fill={l.color} stroke="#0d1018" strokeWidth="2" />)}
+          {hover !== null && vis.map((l) => <circle key={l.key} cx={x(hover)} cy={y(serie[hover][l.key] || 0)} r="4" fill={l.color} stroke="var(--surface-app)" strokeWidth="2" />)}
         </svg>
         {hover !== null && serie[hover] && (
-          <div style={{ position: 'absolute', top: 6, left: `${Math.min(70, Math.max(2, (hover / Math.max(1, serie.length - 1)) * 100 - 10))}%`, padding: '8px 10px', borderRadius: 10, background: 'rgba(12,14,22,.95)', border: '1px solid rgba(255,255,255,.12)', fontSize: 12, pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>
+          <div style={{ position: 'absolute', top: 6, left: `${Math.min(70, Math.max(2, (hover / Math.max(1, serie.length - 1)) * 100 - 10))}%`, padding: '8px 10px', borderRadius: 10, background: 'rgba(var(--panel-rgb), .95)', border: '1px solid rgba(var(--fg-rgb), .12)', fontSize: 12, pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>
             <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{serie[hover].dia.split('-').reverse().join('/')}</div>
             {vis.map((l) => <div key={l.key} style={{ color: 'var(--text-strong)' }}><span style={{ color: l.color }}>●</span> {l.label}: <b>{fmt(serie[hover][l.key])}</b></div>)}
           </div>

@@ -24,7 +24,7 @@ export function NavButton({ icon, label, badge = 0, active = false, collapsed = 
         fontFamily: 'var(--font-sans)',
         fontSize: 'var(--text-md)',
         fontWeight: active ? 'var(--fw-semibold)' : 'var(--fw-medium)',
-        color: active ? '#fff' : 'var(--text-on-dark-muted)',
+        color: active ? 'var(--text-strong)' : 'var(--text-on-dark-muted)',
         background: active ? 'var(--surface-nav-active)' : 'transparent',
         border: 'none',
         borderRadius: 'var(--radius-md)',

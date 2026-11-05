@@ -17,7 +17,7 @@ const VARIANTS = {
     background: 'var(--grad-accent)',
     color: 'var(--primary-fg)',
     border: '1px solid var(--primary-bg)',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)',
+    boxShadow: 'inset 0 1px 0 rgba(var(--fg-rgb), 0.25)',
   },
   secondary: { background: 'var(--surface-card)', color: 'var(--text-strong)', border: '1px solid var(--border-default)' },
   ghost: { background: 'transparent', color: 'var(--text-body)', border: '1px solid transparent' },

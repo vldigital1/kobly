@@ -223,20 +223,20 @@ function KoblyWhatsAppEditor({ message, objetivo, draftScope = '', onClose, onSa
               <Button variant="primary" iconLeft="wand-2" fullWidth onClick={generate} disabled={aiBusy}>{aiBusy ? 'Gerando...' : 'Gerar mensagem'}</Button>
             </div>
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#0b141a', position: 'relative' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--wa-bg)', position: 'relative' }}>
             {aiBusy && (
-              <div style={{ position: 'absolute', inset: 0, zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(11,20,26,0.85)', color: '#e9edef' }}>
+              <div style={{ position: 'absolute', inset: 0, zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(var(--panel-rgb), 0.85)', color: 'var(--wa-text)' }}>
                 <Spinner size={28} style={{ color: 'var(--accent)' }} />
                 <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-medium)' }}>Gerando mensagem...</span>
               </div>
             )}
             <div style={{ flex: 1, overflow: 'auto', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 8 }}>
-              <div style={{ maxWidth: '85%', background: '#202c33', color: '#e9edef', padding: '10px 12px', borderRadius: '0 8px 8px 8px', fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-sans)' }}>
-                {previewText || <span style={{ color: '#8696a0' }}>A mensagem aparecera aqui...</span>}
-                <div style={{ fontSize: 11, color: '#8696a0', textAlign: 'right', marginTop: 4 }}>agora</div>
+              <div style={{ maxWidth: '85%', background: 'var(--wa-in)', color: 'var(--wa-text)', padding: '10px 12px', borderRadius: '0 8px 8px 8px', fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-sans)' }}>
+                {previewText || <span style={{ color: 'var(--wa-muted)' }}>A mensagem aparecera aqui...</span>}
+                <div style={{ fontSize: 11, color: 'var(--wa-muted)', textAlign: 'right', marginTop: 4 }}>agora</div>
               </div>
               {botoes.filter((b) => b.label).map((b) => (
-                <div key={b.id} style={{ maxWidth: '85%', background: '#1f2c34', border: '1px solid #2a3942', color: '#53bdeb', padding: '10px 14px', borderRadius: 8, fontSize: 14, fontWeight: 600, textAlign: 'center', fontFamily: 'var(--font-sans)' }}>
+                <div key={b.id} style={{ maxWidth: '85%', background: 'var(--wa-in)', border: '1px solid var(--wa-btn)', color: '#53bdeb', padding: '10px 14px', borderRadius: 8, fontSize: 14, fontWeight: 600, textAlign: 'center', fontFamily: 'var(--font-sans)' }}>
                   {b.type === 'URL' && '🔗 '}{b.type === 'CALL' && '📞 '}{b.label}
                 </div>
               ))}

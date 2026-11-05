@@ -8,14 +8,14 @@ import { Icon } from '@/ds';
 const KoblyFlowReadOnly = React.lazy(() => import('@/routes/FlowGraphEditor.jsx').then((m) => ({ default: m.FlowReadOnly })));
 
 const CSS = `
-.fp { min-height: 100vh; display: flex; flex-direction: column; background: radial-gradient(circle at 0% 0%, rgba(255,98,1,.16), transparent 45%), #0b0c11; color: var(--text-body); font-family: var(--font-sans); }
-.fp-top { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,.07); flex-wrap: wrap; }
+.fp { min-height: 100vh; display: flex; flex-direction: column; background: radial-gradient(circle at 0% 0%, rgba(255,98,1,.16), transparent 45%), var(--surface-app); color: var(--text-body); font-family: var(--font-sans); }
+.fp-top { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(var(--fg-rgb), .07); flex-wrap: wrap; }
 .fp-logo { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 20px; color: #ff6201; letter-spacing: .02em; text-decoration: none; }
-.fp-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-muted); background: rgba(255,255,255,.06); }
+.fp-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-muted); background: rgba(var(--fg-rgb), .06); }
 .fp-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 12px; border: 0; cursor: pointer; font-family: var(--font-sans); font-size: 14px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #ff9452, #ff6201); box-shadow: 0 0 20px rgba(255,98,1,.35); text-decoration: none; }
-.fp-btn.ghost { background: rgba(255,255,255,.06); box-shadow: none; color: var(--text-strong); border: 1px solid rgba(255,255,255,.12); }
+.fp-btn.ghost { background: rgba(var(--fg-rgb), .06); box-shadow: none; color: var(--text-strong); border: 1px solid rgba(var(--fg-rgb), .12); }
 .fp-body { flex: 1; display: flex; padding: 16px 20px 20px; min-height: 0; }
-.fp-canvas { flex: 1; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); min-height: 70vh; }
+.fp-canvas { flex: 1; border-radius: 18px; overflow: hidden; border: 1px solid rgba(var(--fg-rgb), .08); min-height: 70vh; }
 .fp-msg { margin: auto; text-align: center; max-width: 420px; padding: 40px 20px; color: var(--text-muted); }
 `;
 

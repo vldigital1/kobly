@@ -16,7 +16,7 @@ const STEPS = [
 
 function ElevenLogo({ size = 44 }) {
   return (
-    <span aria-label="ElevenLabs" style={{ width: size, height: size, borderRadius: 12, background: '#000', border: '1px solid rgba(255,255,255,.15)', display: 'grid', placeItems: 'center', flex: 'none' }}>
+    <span aria-label="ElevenLabs" style={{ width: size, height: size, borderRadius: 12, background: '#000', border: '1px solid rgba(var(--fg-rgb), .15)', display: 'grid', placeItems: 'center', flex: 'none' }}>
       <svg width={size * 0.42} height={size * 0.42} viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="2" width="3.2" height="16" rx="1" fill="#fff" /><rect x="11.8" y="2" width="3.2" height="16" rx="1" fill="#fff" /></svg>
     </span>
   );

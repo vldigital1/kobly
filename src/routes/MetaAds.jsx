@@ -143,7 +143,7 @@ function Connect({ orgId, notify, onDone }) {
               ['Dê acesso à conta de anúncios', 'Em Atribuir ativos, escolha Contas de anúncios, marque a sua e dê controle total (para a Kobly poder pausar e mudar orçamento).'],
               ['Gere o token e cole aqui', 'Clique em Gerar token, marque as permissões ads_read e ads_management e cole o token no campo abaixo.'],
             ] : STEPS).map(([t, d], i) => (
-              <div key={t} style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface-raised, rgba(255,255,255,.02))' }}>
+              <div key={t} style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface-raised, rgba(var(--fg-rgb), .02))' }}>
                 <span style={{ flex: 'none', width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#1b0d02', background: 'linear-gradient(135deg, #f39200, #ff6201)' }}>{i + 1}</span>
                 <div><div style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{t}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.5 }}>{d}</div></div>
@@ -181,7 +181,7 @@ function Connect({ orgId, notify, onDone }) {
 
 const CSS = `
 .ka { display: flex; flex-direction: column; gap: 16px; }
-.ka-plat { display: inline-flex; gap: 6px; padding: 5px; border-radius: 14px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.02); width: fit-content; max-width: 100%; overflow-x: auto; }
+.ka-plat { display: inline-flex; gap: 6px; padding: 5px; border-radius: 14px; border: 1px solid var(--border-subtle); background: rgba(var(--fg-rgb), .02); width: fit-content; max-width: 100%; overflow-x: auto; }
 .ka-plat button { display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px 7px 8px; border-radius: 10px; border: 1px solid transparent; background: none; cursor: pointer; color: var(--text-muted); font: 600 14px var(--font-sans); white-space: nowrap; }
 .ka-plat button.on { background: var(--accent-soft); border-color: rgba(255,98,1,.45); color: var(--text-strong); }
 .ka-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-subtle); overflow-x: auto; }
@@ -189,7 +189,7 @@ const CSS = `
   font: 600 14px var(--font-sans); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .ka-tab:hover { color: var(--text-strong); }
 .ka-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
-.ka-tab .n { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: rgba(255,255,255,.07); color: var(--text-body); }
+.ka-tab .n { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: rgba(var(--fg-rgb), .07); color: var(--text-body); }
 .ka-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; padding: 14px; border-radius: 16px; border: 1px solid var(--border-subtle);
   background: linear-gradient(180deg, rgba(255,98,1,.05), transparent 70%), var(--surface-card, #121212); }
 .ka-upd { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-subtle); padding-bottom: 10px; }
@@ -201,7 +201,7 @@ const CSS = `
 .ka-kpi .v { margin-top: 8px; font-size: 26px; font-weight: 800; color: var(--text-strong); font-variant-numeric: tabular-nums; }
 .ka-kpi .v.neg { color: #f87171; }
 .ka-kpi .s { margin-top: 2px; font-size: 12px; color: var(--text-muted); }
-.ka-seg { display: inline-flex; padding: 3px; border-radius: 10px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.02); }
+.ka-seg { display: inline-flex; padding: 3px; border-radius: 10px; border: 1px solid var(--border-subtle); background: rgba(var(--fg-rgb), .02); }
 .ka-seg button { border: 0; background: none; color: var(--text-muted); font: 600 12px var(--font-sans); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
 .ka-seg button.on { background: var(--accent); color: #1b0d02; }
 .ka-card { border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--surface-card, #121212); }
@@ -210,7 +210,7 @@ const CSS = `
 .ka-table th { text-align: right; padding: 11px 14px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-subtle); font-weight: 700;
   border-bottom: 1px solid var(--border-subtle); white-space: nowrap; position: sticky; top: 0; background: var(--surface-card, #121212); }
 .ka-table th.l, .ka-table td.l { text-align: left; }
-.ka-table td { text-align: right; padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,.04); color: var(--text-body); white-space: nowrap; }
+.ka-table td { text-align: right; padding: 11px 14px; border-bottom: 1px solid rgba(var(--fg-rgb), .04); color: var(--text-body); white-space: nowrap; }
 .ka-table tr:hover td { background: rgba(255,98,1,.035); }
 .ka-table tfoot td { font-weight: 700; color: var(--text-strong); border-top: 1px solid var(--border-subtle); border-bottom: 0; }
 .ka-name { display: flex; flex-direction: column; gap: 3px; min-width: 220px; max-width: 340px; white-space: normal; }
@@ -220,7 +220,7 @@ const CSS = `
 .ka-name span { font-size: 11px; color: var(--text-subtle); }
 .ka-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; width: fit-content; }
 .ka-pill.on { color: #4ade80; background: rgba(74,222,128,.1); } .ka-pill.off { color: #fca5a5; background: rgba(248,113,113,.1); } .ka-pill.mid { color: #fbbf24; background: rgba(251,191,36,.1); }
-.ka-sw { position: relative; width: 38px; height: 22px; border-radius: 99px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,.08); cursor: pointer; transition: .2s; flex: none; }
+.ka-sw { position: relative; width: 38px; height: 22px; border-radius: 99px; border: 1px solid var(--border-subtle); background: rgba(var(--fg-rgb), .08); cursor: pointer; transition: .2s; flex: none; }
 .ka-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #9ca3af; transition: .2s; }
 .ka-sw.on { background: linear-gradient(135deg, #f39200, #ff6201); border-color: transparent; }
 .ka-sw.on::after { left: 18px; background: #fff; }
@@ -301,13 +301,13 @@ function Chart({ serie, fonte, cur }) {
           <linearGradient id="ka-g1" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#ff6201" stopOpacity=".35" /><stop offset="1" stopColor="#ff6201" stopOpacity="0" /></linearGradient>
           <linearGradient id="ka-g2" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#22c55e" stopOpacity=".25" /><stop offset="1" stopColor="#22c55e" stopOpacity="0" /></linearGradient>
         </defs>
-        {ticks.map((t) => <g key={t}><line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,.06)" strokeDasharray="3 4" />
-          <text x={P.l - 8} y={y(t) + 4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,.4)">{Math.round(t).toLocaleString('pt-BR')}</text></g>)}
+        {ticks.map((t) => <g key={t}><line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="rgba(var(--fg-rgb), .06)" strokeDasharray="3 4" />
+          <text x={P.l - 8} y={y(t) + 4} textAnchor="end" fontSize="10" fill="rgba(var(--fg-rgb), .4)">{Math.round(t).toLocaleString('pt-BR')}</text></g>)}
         <path d={area(fat)} fill="url(#ka-g2)" /><path d={line(fat)} fill="none" stroke="#22c55e" strokeWidth="2.2" />
         <path d={area(serie.map((d) => d.gasto))} fill="url(#ka-g1)" /><path d={line(serie.map((d) => d.gasto))} fill="none" stroke="#ff6201" strokeWidth="2.2" />
-        {serie.map((d, i) => (serie.length <= 16 || i % Math.ceil(serie.length / 12) === 0) && <text key={d.dia} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,.4)">{dia(d.dia)}</text>)}
+        {serie.map((d, i) => (serie.length <= 16 || i % Math.ceil(serie.length / 12) === 0) && <text key={d.dia} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="rgba(var(--fg-rgb), .4)">{dia(d.dia)}</text>)}
         {serie.map((d, i) => <rect key={`h${d.dia}`} x={x(i) - (W / serie.length) / 2} y={0} width={W / serie.length} height={H} fill="transparent" onMouseEnter={() => setHover(i)} />)}
-        {hover != null && <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,.25)" />}
+        {hover != null && <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} stroke="rgba(var(--fg-rgb), .25)" />}
       </svg>
       {hover != null && (
         <div style={{ position: 'absolute', top: 8, left: `${Math.min(70, (x(hover) / W) * 100)}%`, padding: '8px 12px', borderRadius: 10, background: '#1a1a1a', border: '1px solid var(--border-subtle)', fontSize: 12, pointerEvents: 'none' }}>
@@ -352,9 +352,9 @@ function Dashboard({ P, orgId, conta, preset, tick, onSettings }) {
         <Kpi label="Ticket médio" value={money(m.ticket_medio, cur)} color="#f39200" />
         <Kpi label="Margem de lucro" value={pct(m.margem)} color={m.margem != null && m.margem < 0 ? '#f87171' : '#22c55e'} neg={m.margem != null && m.margem < 0} />
         <Kpi label="ROAS" value={roas(m.roas)} color={m.roas != null && m.roas < 1 ? '#f87171' : '#22c55e'} neg={m.roas != null && m.roas < 1} />
-        <Kpi label="Leads" value={int(m.leads)} color="#ffb485" />
+        <Kpi label="Leads" value={int(m.leads)} color="var(--pastel-orange)" />
         <Kpi label="Vendas" value={int(m.vendas)} color="#22c55e" />
-        <Kpi label="Taxa de conversão" value={pct(m.taxa_conversao)} color="#ffb485" />
+        <Kpi label="Taxa de conversão" value={pct(m.taxa_conversao)} color="var(--pastel-orange)" />
         <Kpi label="Custo por venda" value={money(m.cpa, cur)} color="#f39200" />
         {P.id === 'meta' && <Kpi label="Custo por conversa" value={money(m.custo_por_conversa, cur)} color="#ff9452" sub={`${int(d.meta.conversas)} conversas iniciadas`} />}
         {fonte === 'sistema' && <Kpi label="Recuperadas pela Kobly" value={money(d.sistema.receita_recuperada, cur)} color="#ff6201" sub={`${int(d.sistema.recuperadas)} venda(s) pelo fluxo`} />}

@@ -266,13 +266,13 @@ function KoblyFlows() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <input readOnly value={shr.code} onFocus={(e) => e.target.select()} aria-label="Código do fluxo"
-                style={{ flex: 1, minWidth: 0, padding: '12px 14px', borderRadius: 12, border: '2px solid #ff6201', background: 'rgba(0,0,0,.3)', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', fontSize: 14, outline: 'none' }} />
+                style={{ flex: 1, minWidth: 0, padding: '12px 14px', borderRadius: 12, border: '2px solid #ff6201', background: 'rgba(var(--well-rgb), calc(.3 * var(--well-k)))', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', fontSize: 14, outline: 'none' }} />
               <IconButton icon="copy" aria-label="Copiar código" onClick={() => copy(shr.code, 'Código copiado!')} />
             </div>
             <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>Ou compartilhe via link com prévia:</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input readOnly value={shr.link} onFocus={(e) => e.target.select()} aria-label="Link de prévia"
-                style={{ flex: 1, minWidth: 0, padding: '11px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.12)', background: 'rgba(0,0,0,.3)', color: 'var(--text-body)', fontSize: 13.5, outline: 'none' }} />
+                style={{ flex: 1, minWidth: 0, padding: '11px 14px', borderRadius: 12, border: '1px solid rgba(var(--fg-rgb), .12)', background: 'rgba(var(--well-rgb), calc(.3 * var(--well-k)))', color: 'var(--text-body)', fontSize: 13.5, outline: 'none' }} />
               <IconButton icon="link" aria-label="Copiar link" onClick={() => copy(shr.link, 'Link copiado!')} />
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', lineHeight: 1.5 }}>Quem importar recebe sempre a versão mais nova deste fluxo. Contas de pagamento, Pixel e chaves não vão junto.</div>
@@ -294,7 +294,7 @@ function KoblyFlows() {
                   <b style={{ flex: 1, color: 'var(--text-strong)' }}>{r.nome}</b>
                   {!r.erro && <Button size="sm" variant="secondary" iconLeft="pencil" onClick={() => { setImp(null); openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId }); }}>Abrir</Button>}
                 </div>
-                {r.erro && <div style={{ fontSize: 'var(--text-xs)', color: '#fda4af' }}>{r.erro}</div>}
+                {r.erro && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--pastel-pink)' }}>{r.erro}</div>}
                 {!r.erro && r.pendencias.length > 0 && <details><summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--amber-600)' }}>{r.pendencias.length} coisa(s) para configurar antes de publicar</summary><ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{r.pendencias.map((t, j) => <li key={j}>{t}</li>)}</ul></details>}
               </div>
             ))}
@@ -308,7 +308,7 @@ function KoblyFlows() {
                 <input type="checkbox" disabled={!!f.erro} checked={!!f.sel} onChange={(e) => setImp((x) => ({ ...x, files: x.files.map((y, j) => (j === i ? { ...y, sel: e.target.checked } : y)) }))} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nome || f.arquivo}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: f.erro ? '#fda4af' : 'var(--text-muted)' }}>{f.erro || `${f.graph.nodes.length} blocos${f.pendencias.length ? ` · ${f.pendencias.length} para configurar` : ''}`}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: f.erro ? 'var(--pastel-pink)' : 'var(--text-muted)' }}>{f.erro || `${f.graph.nodes.length} blocos${f.pendencias.length ? ` · ${f.pendencias.length} para configurar` : ''}`}</div>
                 </div>
                 {!f.erro && <Badge tone={f.origem === 'Kobly' ? 'accent' : 'info'}>{f.origem}</Badge>}
               </label>

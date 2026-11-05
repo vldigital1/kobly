@@ -26,38 +26,38 @@ const PIX = [['cpf', 'CPF'], ['cnpj', 'CNPJ'], ['email', 'E-mail'], ['telefone',
 
 const CSS = `
 .ka2 { display: flex; flex-direction: column; gap: 16px; }
-.ka2-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 22px; background: radial-gradient(circle at 0% 0%, rgba(255,98,1,.28), transparent 55%), radial-gradient(circle at 100% 100%, rgba(52,211,153,.16), transparent 50%), rgba(15,17,26,.96); border: 1px solid rgba(255,148,82,.25); }
-.ka2-link { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: 14px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1); min-width: 0; }
-.ka2-link code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ffd2b3; font-size: 14px; }
+.ka2-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 22px; background: radial-gradient(circle at 0% 0%, rgba(255,98,1,.28), transparent 55%), radial-gradient(circle at 100% 100%, rgba(52,211,153,.16), transparent 50%), rgba(var(--panel-rgb), .96); border: 1px solid rgba(255,148,82,.25); }
+.ka2-link { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: 14px; background: rgba(var(--well-rgb), calc(.35 * var(--well-k))); border: 1px solid rgba(var(--fg-rgb), .1); min-width: 0; }
+.ka2-link code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pastel-orange); font-size: 14px; }
 .ka2-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-.ka2-k { border-radius: 16px; padding: 14px 16px; display: flex; gap: 12px; align-items: center; position: relative; overflow: hidden; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.95); border: 1px solid rgba(255,255,255,.08); }
+.ka2-k { border-radius: 16px; padding: 14px 16px; display: flex; gap: 12px; align-items: center; position: relative; overflow: hidden; background: linear-gradient(180deg, rgba(var(--fg-rgb), .05), rgba(var(--fg-rgb), .012)), rgba(var(--panel-rgb), .95); border: 1px solid rgba(var(--fg-rgb), .08); }
 .ka2-k::before { content: ''; position: absolute; left: 14px; right: 14px; top: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--c), transparent); }
 .ka2-k .i { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); flex: none; }
 .ka2-k span { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .07em; } .ka2-k b { display: block; font-size: 22px; color: var(--text-strong); margin-top: 2px; }
 .ka2-k small { display: block; font-size: 11.5px; color: var(--text-subtle); margin-top: 1px; }
-.ka2-card { border-radius: 18px; padding: 18px; background: rgba(12,14,22,.92); border: 1px solid rgba(255,255,255,.07); }
+.ka2-card { border-radius: 18px; padding: 18px; background: rgba(var(--panel-rgb), .92); border: 1px solid rgba(var(--fg-rgb), .07); }
 .ka2-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.ka2-tab { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); }
-.ka2-tab.on { color: #fff; border-color: rgba(255,148,82,.6); background: rgba(255,98,1,.2); }
-.ka2-tab .n { padding: 0 7px; border-radius: 999px; font-size: 11px; background: rgba(251,191,36,.25); color: #fde68a; }
+.ka2-tab { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .08); }
+.ka2-tab.on { color: var(--on-tint); border-color: rgba(255,148,82,.6); background: rgba(255,98,1,.2); }
+.ka2-tab .n { padding: 0 7px; border-radius: 999px; font-size: 11px; background: rgba(251,191,36,.25); color: var(--pastel-amber); }
 .ka2-t { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.ka2-t th { text-align: left; font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.07); white-space: nowrap; }
-.ka2-t td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,.05); color: var(--text-body); vertical-align: middle; }
-.ka2-t tr:hover td { background: rgba(255,255,255,.02); }
+.ka2-t th { text-align: left; font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; padding: 10px 12px; border-bottom: 1px solid rgba(var(--fg-rgb), .07); white-space: nowrap; }
+.ka2-t td { padding: 11px 12px; border-bottom: 1px solid rgba(var(--fg-rgb), .05); color: var(--text-body); vertical-align: middle; }
+.ka2-t tr:hover td { background: rgba(var(--fg-rgb), .02); }
 .ka2-t .r { text-align: right; }
 .ka2-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .ka2-empty { padding: 34px 10px; text-align: center; color: var(--text-muted); font-size: 14px; }
 .ka2-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.ka2-step { border-radius: 16px; padding: 16px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 8px; }
+.ka2-step { border-radius: 16px; padding: 16px; background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .08); display: flex; flex-direction: column; gap: 8px; }
 .ka2-step i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-style: normal; font-weight: 800; color: #fff; background: linear-gradient(135deg, #ff9452, #ff6201); }
 .ka2-chart { display: flex; align-items: flex-end; gap: 8px; height: 190px; padding-top: 18px; }
 .ka2-bar { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; position: relative; }
 .ka2-bar .b { width: 100%; max-width: 38px; border-radius: 8px 8px 3px 3px; background: linear-gradient(180deg, #ff9452, #ff6201); box-shadow: 0 0 14px rgba(255,98,1,.25); min-height: 3px; transition: height .5s; }
-.ka2-bar .b.zero { background: rgba(255,255,255,.08); box-shadow: none; }
+.ka2-bar .b.zero { background: rgba(var(--fg-rgb), .08); box-shadow: none; }
 .ka2-bar .v { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
 .ka2-bar .m { font-size: 11px; color: var(--text-subtle); }
 .ka2-bar:hover .tip { display: block; }
-.ka2-bar .tip { display: none; position: absolute; bottom: calc(100% - 10px); z-index: 5; padding: 8px 10px; border-radius: 10px; background: #1b2030; border: 1px solid rgba(255,255,255,.12); font-size: 12px; color: var(--text-body); white-space: nowrap; box-shadow: 0 10px 24px rgba(0,0,0,.5); }
+.ka2-bar .tip { display: none; position: absolute; bottom: calc(100% - 10px); z-index: 5; padding: 8px 10px; border-radius: 10px; background: var(--surface-overlay); border: 1px solid rgba(var(--fg-rgb), .12); font-size: 12px; color: var(--text-body); white-space: nowrap; box-shadow: 0 10px 24px rgba(0,0,0,.5); }
 .ka2-x { overflow-x: auto; }
 `;
 
@@ -103,7 +103,7 @@ function Join({ me, notify, onDone }) {
           <div style={{ width: 64, height: 64, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, #ff9452, #ff6201)', boxShadow: '0 0 30px rgba(255,98,1,.45)', flex: 'none' }}><Icon name="handshake" size={32} style={{ color: '#fff' }} /></div>
           <div style={{ flex: 1, minWidth: 240 }}>
             <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-strong)' }}>Ganhe {r.default_pct}% todo mês indicando a Kobly</div>
-            <div style={{ fontSize: 15, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>Cada empresa que entrar pelo seu link vira comissão <b style={{ color: '#ffd2b3' }}>recorrente</b>: você recebe {r.default_pct}% de todo pagamento de plano dela, enquanto ela for cliente.</div>
+            <div style={{ fontSize: 15, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>Cada empresa que entrar pelo seu link vira comissão <b style={{ color: 'var(--pastel-orange)' }}>recorrente</b>: você recebe {r.default_pct}% de todo pagamento de plano dela, enquanto ela for cliente.</div>
           </div>
         </div>
       </div>
@@ -176,7 +176,7 @@ function AffiliatePanel({ notify }) {
           <div style={{ flex: '1 1 300px', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-strong)' }}>Seu link de afiliado</span>
-              <span className="ka2-chip" style={{ color: '#ffd2b3', background: 'rgba(255,98,1,.25)' }}><Icon name="percent" size={11} />{a.pct}% recorrente</span>
+              <span className="ka2-chip" style={{ color: 'var(--pastel-orange)', background: 'rgba(255,98,1,.25)' }}><Icon name="percent" size={11} />{a.pct}% recorrente</span>
               {a.status !== 'ativo' && <Chip s={a.status} />}
             </div>
             <div className="ka2-link" style={{ marginTop: 10 }}>
@@ -373,7 +373,7 @@ function AdminPanel({ notify }) {
         <div className="ka2-card" style={{ display: 'flex', flexDirection: 'column', gap: 12, gridColumn: '1 / -1' }}>
           <b style={{ color: 'var(--text-strong)' }}>Regras do programa (os afiliados veem)</b>
           <textarea value={cfg.terms || ''} onChange={(e) => setCfg({ ...cfg, terms: e.target.value })} rows={6} maxLength={8000} placeholder="Ex.: Não vale indicar a si mesmo. Proibido anunciar com a marca Kobly no Google…"
-            style={{ width: '100%', boxSizing: 'border-box', borderRadius: 12, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(0,0,0,.25)', color: 'var(--text-strong)', font: 'inherit', fontSize: 14, padding: 12, resize: 'vertical' }} />
+            style={{ width: '100%', boxSizing: 'border-box', borderRadius: 12, border: '1px solid rgba(var(--fg-rgb), .1)', background: 'rgba(var(--well-rgb), calc(.25 * var(--well-k)))', color: 'var(--text-strong)', font: 'inherit', fontSize: 14, padding: 12, resize: 'vertical' }} />
           <div><Button variant="primary" iconLeft="check" disabled={busy} onClick={saveCfg}>{busy ? 'Salvando…' : 'Salvar regras'}</Button></div>
         </div>
       </div>}
@@ -384,7 +384,7 @@ function AdminPanel({ notify }) {
           <Input label="Comissão deste afiliado (%)" value={edit.pctTxt} onChange={(e) => setEdit({ ...edit, pctTxt: e.target.value })} placeholder="vazio = comissão padrão" hint="Deixe vazio para usar a comissão padrão. Vale para os próximos pagamentos." />
           <Select label="Situação" value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value })} options={[{ value: 'ativo', label: 'Ativo' }, { value: 'pausado', label: 'Pausado (não gera comissão nova)' }, { value: 'bloqueado', label: 'Bloqueado' }]} />
           <Input label="Anotação (só você vê)" value={edit.note || ''} onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Link: <b style={{ color: '#ffd2b3' }}>{edit.link}</b> · Pix: {edit.pix_chave || 'não cadastrado'}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Link: <b style={{ color: 'var(--pastel-orange)' }}>{edit.link}</b> · Pix: {edit.pix_chave || 'não cadastrado'}</div>
         </div>}
       </Modal>
       <Modal open={!!add} onClose={() => setAdd(null)} title="Adicionar afiliado" subtitle="A pessoa precisa ter conta na Kobly." width={480}

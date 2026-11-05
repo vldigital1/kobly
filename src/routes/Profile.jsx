@@ -5,8 +5,26 @@ import { Avatar, Badge, Button, Card, Icon, Input } from '@/ds';
 import { PageIntro, useAsync } from '@/lib/hooks.jsx';
 import { ErrorState, Skeleton, SkeletonForm } from '@/lib/ui.jsx';
 import { useKobly } from '@/store/store.jsx';
+import { getThemePref, setThemePref } from '@/lib/theme.js';
 
 // Kobly — Perfil + meu plano. Editar dados do usuário e ver plano. KoblyProfile
+
+// Tema da tela (fica salvo neste navegador)
+function AppearancePicker() {
+  const [pref, setPref] = useState(getThemePref());
+  const opts = [['dark', 'Escuro', 'moon'], ['light', 'Claro', 'sun'], ['system', 'Automático', 'monitor']];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+      {opts.map(([v, label, icon]) => (
+        <button key={v} type="button" onClick={() => { setThemePref(v); setPref(v); }} aria-pressed={pref === v}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600,
+            color: pref === v ? 'var(--text-strong)' : 'var(--text-muted)', background: pref === v ? 'var(--accent-soft)' : 'var(--surface-sunken)', border: `1px solid ${pref === v ? 'var(--border-accent)' : 'var(--border-subtle)'}` }}>
+          <Icon name={icon} size={18} />{label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function KoblyProfile() {
   const store = useKobly();
@@ -78,6 +96,9 @@ function KoblyProfile() {
               <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 'var(--lh-normal)' }}>Usuários internos ({user.tipo}) não possuem plano de assinatura vinculado.</p>
             </Card>
           )}
+          <Card title="Aparência">
+            <AppearancePicker />
+          </Card>
           <Card title="Segurança">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Button variant="ghost" iconLeft="key-round" fullWidth onClick={async () => { const { error } = await store.resetPassword(store.session.email); store.notify(error ? 'danger' : 'info', error ? 'Não foi possível enviar o e-mail.' : 'E-mail de redefinição enviado para ' + store.session.email); }}>Redefinir senha</Button>

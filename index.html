@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KOBLY — Console</title>
     <link rel="icon" type="image/png" href="/assets/favicon.png" />
+    <script>
+      // tema salvo (claro/escuro/automático) antes do app carregar, para não piscar
+      try { var p = localStorage.getItem('kobly:theme') || 'dark'; var t = p === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : (p === 'light' ? 'light' : 'dark'); document.documentElement.setAttribute('data-theme', t); } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    </script>
   </head>
   <body>
     <div id="root"></div>

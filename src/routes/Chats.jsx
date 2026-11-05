@@ -16,9 +16,9 @@ const POLL_MS = 5000;
 const DE = {
   lead: { label: 'Lead', mine: false, icon: null },
   fluxo: { label: 'Fluxo', mine: true, icon: 'git-branch', color: '#ffb27d' },
-  agente: { label: 'IA', mine: true, icon: 'sparkles', color: '#ffd08a' },
-  humano: { label: 'Equipe', mine: true, icon: 'user', color: '#7ee2a8' },
-  celular: { label: 'Celular', mine: true, icon: 'smartphone', color: '#7dd3fc' },
+  agente: { label: 'IA', mine: true, icon: 'sparkles', color: 'var(--pastel-amber)' },
+  humano: { label: 'Equipe', mine: true, icon: 'user', color: 'var(--pastel-green)' },
+  celular: { label: 'Celular', mine: true, icon: 'smartphone', color: 'var(--pastel-blue)' },
 };
 const FILTROS = [['todas', 'Todas'], ['aguardando', 'Não respondidas'], ['fluxo', 'Em fluxo'], ['humano', 'Com humano'], ['arquivadas', 'Arquivadas']];
 const TIPO = { image: ['image', 'Foto'], audio: ['mic', 'Áudio'], video: ['video', 'Vídeo'], document: ['file-text', 'Arquivo'], sticker: ['smile', 'Figurinha'] };
@@ -55,59 +55,59 @@ function Rich({ text }) {
 
 const KH_CSS = `
 .kh-shell { position: relative; display: grid; grid-template-columns: 360px 1fr 340px; height: calc(100dvh - 150px); min-height: 560px; border-radius: 18px; overflow: hidden;
-  background: #0b141a; border: 1px solid rgba(255,255,255,.07); box-shadow: 0 20px 60px rgba(0,0,0,.45); }
+  background: var(--wa-bg); border: 1px solid rgba(var(--fg-rgb), .07); box-shadow: 0 20px 60px rgba(0,0,0,.45); }
 .kh-shell.two { grid-template-columns: 360px 1fr; } .kh-shell.one { grid-template-columns: 1fr; }
 .kh-col { display: flex; flex-direction: column; min-height: 0; min-width: 0; position: relative; }
-.kh-col.l { background: #111b21; border-right: 1px solid #222d34; }
-.kh-col.r { background: #111b21; border-left: 1px solid #222d34; }
+.kh-col.l { background: var(--wa-panel); border-right: 1px solid var(--wa-line); }
+.kh-col.r { background: var(--wa-panel); border-left: 1px solid var(--wa-line); }
 .kh-col.r.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 360px; max-width: 100%; z-index: 40; box-shadow: -12px 0 40px rgba(0,0,0,.55); animation: kh-slide .18s ease-out; }
 @keyframes kh-slide { from { transform: translateX(30px); opacity: 0; } }
-.kh-top { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; background: #111b21; }
+.kh-top { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; background: var(--wa-panel); }
 .kh-title { display: flex; align-items: center; gap: 10px; }
-.kh-search { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 10px; background: #202c33; }
-.kh-search input { flex: 1; background: transparent; border: 0; outline: none; color: #e9edef; font: inherit; font-size: 14px; }
+.kh-search { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 10px; background: var(--wa-in); }
+.kh-search input { flex: 1; background: transparent; border: 0; outline: none; color: var(--wa-text); font: inherit; font-size: 14px; }
 .kh-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-.kh-f { flex: none; padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; font-family: var(--font-sans); color: #aebac1; background: #202c33; border: 0; }
-.kh-f:hover { background: #2a3942; }
-.kh-f.on { color: #ffe0cc; background: rgba(255,98,1,.28); }
+.kh-f { flex: none; padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; font-family: var(--font-sans); color: var(--wa-icon); background: var(--wa-in); border: 0; }
+.kh-f:hover { background: var(--wa-btn); }
+.kh-f.on { color: var(--pastel-orange); background: rgba(255,98,1,.28); }
 .kh-f .n { margin-left: 5px; opacity: .75; }
 .kh-list { flex: 1; min-height: 0; overflow-y: auto; }
 .kh-item { display: flex; gap: 12px; width: 100%; text-align: left; padding: 0 14px; border: 0; cursor: pointer; font-family: var(--font-sans); background: transparent; align-items: center; }
-.kh-item:hover { background: #202c33; }
-.kh-item.on { background: #2a3942; }
-.kh-item .bd { flex: 1; min-width: 0; padding: 12px 0; border-bottom: 1px solid #222d34; }
-.kh-name { font-size: 16px; color: #e9edef; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kh-prev { font-size: 13.5px; color: #8696a0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.kh-item:hover { background: var(--wa-in); }
+.kh-item.on { background: var(--wa-btn); }
+.kh-item .bd { flex: 1; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--wa-line); }
+.kh-name { font-size: 16px; color: var(--wa-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kh-prev { font-size: 13.5px; color: var(--wa-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
 .kh-av { border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; color: #fff; position: relative; overflow: visible; }
 .kh-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
-.kh-av .st { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #111b21; }
-.kh-unread { min-width: 21px; height: 21px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #111b21; background: #25d366; flex: none; }
+.kh-av .st { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--wa-panel); }
+.kh-unread { min-width: 21px; height: 21px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--wa-panel); background: #25d366; flex: none; }
 .kh-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-.kh-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #202c33; min-height: 62px; }
+.kh-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--wa-in); min-height: 62px; }
 .kh-acts { display: flex; align-items: center; gap: 0; margin-left: auto; flex: none; }
-.kh-ic { width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: #aebac1; background: transparent; flex: none; position: relative; }
-.kh-ic:hover { background: rgba(255,255,255,.08); color: #e9edef; }
+.kh-ic { width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--wa-icon); background: transparent; flex: none; position: relative; }
+.kh-ic:hover { background: rgba(var(--fg-rgb), .08); color: var(--wa-text); }
 .kh-ic.on { color: #ff9452; }
 .kh-ic.danger:hover { color: #f87171; }
 .kh-ic:disabled { opacity: .4; cursor: not-allowed; }
-.kh-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: #e9edef; background: #2a3942; border: 0; }
+.kh-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--wa-text); background: var(--wa-btn); border: 0; }
 .kh-btn:hover { filter: brightness(1.15); }
-.kh-btn.hot { color: #111b21; background: #25d366; }
+.kh-btn.hot { color: var(--wa-panel); background: #25d366; }
 .kh-btn.orange { color: #fff; background: linear-gradient(135deg, #ff9452, #ff6201); }
-.kh-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 7% 10px; display: flex; flex-direction: column; gap: 2px; background-color: #0b141a;
+.kh-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 7% 10px; display: flex; flex-direction: column; gap: 2px; background-color: var(--wa-bg);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.035' stroke-width='1.5'%3E%3Ccircle cx='18' cy='20' r='7'/%3E%3Cpath d='M70 14l8 8-8 8-8-8z'/%3E%3Crect x='96' y='40' width='14' height='10' rx='2'/%3E%3Cpath d='M20 70c6-8 14-8 20 0'/%3E%3Ccircle cx='80' cy='82' r='4'/%3E%3Cpath d='M48 100l6 10 6-10z'/%3E%3Cpath d='M100 100c0-5 8-5 8 0s-8 9-8 9-8-4-8-9 8-5 8 0'/%3E%3Cpath d='M40 40h10v10'/%3E%3C/g%3E%3C/svg%3E"); }
-.kh-day { align-self: center; margin: 10px 0 8px; padding: 5px 12px; border-radius: 8px; font-size: 12.5px; color: #8696a0; background: #182229; box-shadow: 0 1px 1px rgba(0,0,0,.2); position: sticky; top: 0; z-index: 2; }
+.kh-day { align-self: center; margin: 10px 0 8px; padding: 5px 12px; border-radius: 8px; font-size: 12.5px; color: var(--wa-muted); background: var(--wa-chip); box-shadow: 0 1px 1px rgba(0,0,0,.2); position: sticky; top: 0; z-index: 2; }
 .kh-row { display: flex; flex-direction: column; }
 .kh-row.mine { align-items: flex-end; } .kh-row.lead { align-items: flex-start; }
 .kh-row.first { margin-top: 8px; }
-.kh-b { max-width: min(68%, 560px); padding: 6px 8px 8px 9px; border-radius: 8px; position: relative; font-size: 14.2px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: #e9edef; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
-.kh-row.lead .kh-b { background: #202c33; }
-.kh-row.mine .kh-b { background: #005c4b; }
+.kh-b { max-width: min(68%, 560px); padding: 6px 8px 8px 9px; border-radius: 8px; position: relative; font-size: 14.2px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: var(--wa-text); box-shadow: 0 1px .5px rgba(var(--panel-rgb), .13); }
+.kh-row.lead .kh-b { background: var(--wa-in); }
+.kh-row.mine .kh-b { background: var(--wa-out); }
 .kh-row.mine .kh-b.ia { background: #6b2a06; }
 .kh-row.first.lead .kh-b { border-top-left-radius: 0; }
 .kh-row.first.mine .kh-b { border-top-right-radius: 0; }
-.kh-row.first.lead .kh-b::before { content: ''; position: absolute; left: -8px; top: 0; border: 8px solid transparent; border-top-color: #202c33; border-right-color: #202c33; border-width: 0 8px 10px 0; }
-.kh-row.first.mine .kh-b::before { content: ''; position: absolute; right: -8px; top: 0; border-style: solid; border-color: #005c4b transparent transparent #005c4b; border-width: 0 0 10px 8px; }
+.kh-row.first.lead .kh-b::before { content: ''; position: absolute; left: -8px; top: 0; border: 8px solid transparent; border-top-color: var(--wa-in); border-right-color: var(--wa-in); border-width: 0 8px 10px 0; }
+.kh-row.first.mine .kh-b::before { content: ''; position: absolute; right: -8px; top: 0; border-style: solid; border-color: var(--wa-out) transparent transparent var(--wa-out); border-width: 0 0 10px 8px; }
 .kh-row.first.mine .kh-b.ia::before { border-color: #6b2a06 transparent transparent #6b2a06; }
 .kh-b .meta { float: right; margin: 8px 0 -4px 10px; font-size: 11px; color: rgba(233,237,239,.6); display: inline-flex; gap: 3px; align-items: center; white-space: nowrap; }
 .kh-b .who { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
@@ -115,60 +115,60 @@ const KH_CSS = `
 .kh-b.media .cap { padding: 4px 5px 0; }
 .kh-b.sticker { background: transparent !important; box-shadow: none; padding: 0; }
 .kh-b.sticker::before { display: none; }
-.kh-img { display: block; width: 300px; max-width: 100%; min-height: 160px; max-height: 360px; object-fit: cover; border-radius: 6px; cursor: zoom-in; background: rgba(0,0,0,.25); }
-.kh-ph { width: 300px; max-width: 100%; height: 190px; border-radius: 6px; display: grid; place-items: center; background: rgba(0,0,0,.25); color: #8696a0; }
+.kh-img { display: block; width: 300px; max-width: 100%; min-height: 160px; max-height: 360px; object-fit: cover; border-radius: 6px; cursor: zoom-in; background: rgba(var(--well-rgb), calc(.25 * var(--well-k))); }
+.kh-ph { width: 300px; max-width: 100%; height: 190px; border-radius: 6px; display: grid; place-items: center; background: rgba(var(--well-rgb), calc(.25 * var(--well-k))); color: var(--wa-muted); }
 .kh-audio { display: flex; align-items: center; gap: 10px; width: 290px; max-width: 100%; padding: 4px 2px 0; }
-.kh-audio .pp { width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: #e9edef; background: transparent; flex: none; }
+.kh-audio .pp { width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--wa-text); background: transparent; flex: none; }
 .kh-audio .wave { flex: 1; display: flex; align-items: center; gap: 2px; height: 30px; cursor: pointer; }
 .kh-audio .wave i { flex: 1; border-radius: 2px; background: rgba(233,237,239,.35); }
 .kh-audio .wave i.p { background: #53bdeb; }
-.kh-audio .sp { font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 999px; border: 0; cursor: pointer; color: #111b21; background: rgba(233,237,239,.75); }
+.kh-audio .sp { font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 999px; border: 0; cursor: pointer; color: var(--wa-panel); background: rgba(233,237,239,.75); }
 .kh-audio .t { font-size: 11px; color: rgba(233,237,239,.6); margin-top: 2px; }
-.kh-doc { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 6px; background: rgba(0,0,0,.18); width: 280px; max-width: 100%; }
-.kh-compose { display: flex; align-items: flex-end; gap: 6px; padding: 8px 12px; background: #202c33; position: relative; }
-.kh-box { flex: 1; display: flex; align-items: flex-end; border-radius: 10px; background: #2a3942; padding: 2px 6px; }
-.kh-box textarea { flex: 1; min-width: 0; white-space: pre-wrap; overflow-y: auto; background: transparent; border: 0; outline: none; resize: none; color: #e9edef; font: inherit; font-size: 15px; padding: 9px 6px; max-height: 140px; line-height: 1.35; }
-.kh-send { width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: #111b21; background: #25d366; flex: none; }
+.kh-doc { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 6px; background: rgba(var(--well-rgb), calc(.18 * var(--well-k))); width: 280px; max-width: 100%; }
+.kh-compose { display: flex; align-items: flex-end; gap: 6px; padding: 8px 12px; background: var(--wa-in); position: relative; }
+.kh-box { flex: 1; display: flex; align-items: flex-end; border-radius: 10px; background: var(--wa-btn); padding: 2px 6px; }
+.kh-box textarea { flex: 1; min-width: 0; white-space: pre-wrap; overflow-y: auto; background: transparent; border: 0; outline: none; resize: none; color: var(--wa-text); font: inherit; font-size: 15px; padding: 9px 6px; max-height: 140px; line-height: 1.35; }
+.kh-send { width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--wa-panel); background: #25d366; flex: none; }
 .kh-send:disabled { opacity: .45; cursor: not-allowed; }
-.kh-pop { position: absolute; left: 12px; bottom: calc(100% + 6px); z-index: 20; border-radius: 12px; overflow: hidden; background: #233138; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.kh-pop { position: absolute; left: 12px; bottom: calc(100% + 6px); z-index: 20; border-radius: 12px; overflow: hidden; background: var(--wa-pop); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
 .kh-menu { min-width: 230px; padding: 6px 0; }
-.kh-menu button { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 18px; background: none; border: 0; cursor: pointer; color: #d1d7db; font-family: var(--font-sans); font-size: 14.5px; }
-.kh-menu button:hover { background: #182229; }
+.kh-menu button { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 18px; background: none; border: 0; cursor: pointer; color: var(--wa-text2); font-family: var(--font-sans); font-size: 14.5px; }
+.kh-menu button:hover { background: var(--wa-chip); }
 .kh-menu .ico { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
 .kh-emoji { width: 360px; max-width: calc(100vw - 40px); }
-.kh-emoji .tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid #2a3942; overflow-x: auto; }
-.kh-emoji .tabs button { padding: 7px 10px; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; color: #8696a0; font-size: 12.5px; font-family: var(--font-sans); white-space: nowrap; }
-.kh-emoji .tabs button.on { color: #e9edef; border-bottom-color: #ff9452; }
+.kh-emoji .tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--wa-btn); overflow-x: auto; }
+.kh-emoji .tabs button { padding: 7px 10px; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; color: var(--wa-muted); font-size: 12.5px; font-family: var(--font-sans); white-space: nowrap; }
+.kh-emoji .tabs button.on { color: var(--wa-text); border-bottom-color: #ff9452; }
 .kh-emoji .grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px; padding: 8px; height: 230px; overflow-y: auto; align-content: start; }
 .kh-emoji .grid button { font-size: 23px; line-height: 1; padding: 5px 0; background: none; border: 0; cursor: pointer; border-radius: 8px; }
-.kh-emoji .grid button:hover { background: #2a3942; }
+.kh-emoji .grid button:hover { background: var(--wa-btn); }
 .kh-quick { left: 12px; right: 12px; max-height: 260px; overflow-y: auto; }
-.kh-quick button { display: block; width: 100%; text-align: left; padding: 10px 16px; background: none; border: 0; cursor: pointer; color: #d1d7db; font-family: var(--font-sans); font-size: 14px; }
-.kh-quick button:hover { background: #182229; }
-.kh-drop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; min-width: 240px; padding: 8px 0; border-radius: 12px; background: #233138; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
-.kh-drop h4 { margin: 4px 16px 8px; font-size: 13px; color: #e9edef; }
-.kh-drop label { display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer; color: #d1d7db; font-size: 14px; }
-.kh-drop label:hover { background: #182229; }
+.kh-quick button { display: block; width: 100%; text-align: left; padding: 10px 16px; background: none; border: 0; cursor: pointer; color: var(--wa-text2); font-family: var(--font-sans); font-size: 14px; }
+.kh-quick button:hover { background: var(--wa-chip); }
+.kh-drop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; min-width: 240px; padding: 8px 0; border-radius: 12px; background: var(--wa-pop); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.kh-drop h4 { margin: 4px 16px 8px; font-size: 13px; color: var(--wa-text); }
+.kh-drop label { display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer; color: var(--wa-text2); font-size: 14px; }
+.kh-drop label:hover { background: var(--wa-chip); }
 .kh-side { overflow-y: auto; display: flex; flex-direction: column; }
-.kh-side .hd { display: flex; align-items: center; gap: 12px; padding: 0 16px; min-height: 62px; background: #202c33; color: #e9edef; font-weight: 600; }
-.kh-card { padding: 16px 20px; background: #111b21; border-bottom: 8px solid #0b141a; display: flex; flex-direction: column; gap: 10px; }
-.kh-card > .lb { font-size: 13px; color: #8696a0; display: flex; align-items: center; gap: 8px; }
-.kh-kv { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #d1d7db; }
-.kh-kv svg { color: #8696a0; flex: none; }
-.kh-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; color: #e9edef; background: #2a3942; }
-.kh-tag button { background: none; border: 0; cursor: pointer; color: #8696a0; padding: 0; display: grid; }
-.kh-notes { width: 100%; min-height: 90px; resize: vertical; border-radius: 8px; border: 1px solid #2a3942; background: #0b141a; color: #e9edef; font: inherit; font-size: 14px; padding: 10px; outline: none; }
+.kh-side .hd { display: flex; align-items: center; gap: 12px; padding: 0 16px; min-height: 62px; background: var(--wa-in); color: var(--wa-text); font-weight: 600; }
+.kh-card { padding: 16px 20px; background: var(--wa-panel); border-bottom: 8px solid var(--wa-bg); display: flex; flex-direction: column; gap: 10px; }
+.kh-card > .lb { font-size: 13px; color: var(--wa-muted); display: flex; align-items: center; gap: 8px; }
+.kh-kv { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--wa-text2); }
+.kh-kv svg { color: var(--wa-muted); flex: none; }
+.kh-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; color: var(--wa-text); background: var(--wa-btn); }
+.kh-tag button { background: none; border: 0; cursor: pointer; color: var(--wa-muted); padding: 0; display: grid; }
+.kh-notes { width: 100%; min-height: 90px; resize: vertical; border-radius: 8px; border: 1px solid var(--wa-btn); background: var(--wa-bg); color: var(--wa-text); font: inherit; font-size: 14px; padding: 10px; outline: none; }
 .kh-notes:focus { border-color: #ff9452; }
 .kh-arch { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 10px; cursor: pointer; font-family: var(--font-sans); font-size: 14px; font-weight: 600; border: 1px solid rgba(248,113,113,.4); color: #f87171; background: rgba(248,113,113,.08); }
-.kh-empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 30px; background: #222e35; border-bottom: 6px solid #25d366; }
-.kh-light { position: fixed; inset: 0; z-index: 1000; background: rgba(11,20,26,.94); display: grid; place-items: center; padding: 40px; }
+.kh-empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 30px; background: var(--wa-empty); border-bottom: 6px solid #25d366; }
+.kh-light { position: fixed; inset: 0; z-index: 1000; background: rgba(var(--panel-rgb), .94); display: grid; place-items: center; padding: 40px; }
 .kh-light img, .kh-light video { max-width: 92vw; max-height: 86vh; border-radius: 6px; }
 .kh-modal { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.6); display: grid; place-items: center; padding: 20px; }
-.kh-modal > div { width: 420px; max-width: 100%; max-height: 80vh; overflow-y: auto; border-radius: 14px; background: #233138; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
-.kh-modal .opt { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 18px; background: none; border: 0; border-top: 1px solid #2a3942; cursor: pointer; color: #e9edef; font-family: var(--font-sans); font-size: 14.5px; text-align: left; }
-.kh-modal .opt:hover { background: #182229; }
+.kh-modal > div { width: 420px; max-width: 100%; max-height: 80vh; overflow-y: auto; border-radius: 14px; background: var(--wa-pop); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.kh-modal .opt { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 18px; background: none; border: 0; border-top: 1px solid var(--wa-btn); cursor: pointer; color: var(--wa-text); font-family: var(--font-sans); font-size: 14.5px; text-align: left; }
+.kh-modal .opt:hover { background: var(--wa-chip); }
 @keyframes spin { to { transform: rotate(360deg); } }
-.kh-scroll-btn { position: absolute; right: 22px; bottom: 80px; width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; background: #202c33; color: #aebac1; box-shadow: 0 2px 8px rgba(0,0,0,.4); z-index: 5; }
+.kh-scroll-btn { position: absolute; right: 22px; bottom: 80px; width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; background: var(--wa-in); color: var(--wa-icon); box-shadow: 0 2px 8px rgba(0,0,0,.4); z-index: 5; }
 `;
 
 function Avatar({ name, src, size = 49, online, channel }) {
@@ -176,9 +176,9 @@ function Avatar({ name, src, size = 49, online, channel }) {
   const h = hue(name);
   const img = src && !bad;
   return (
-    <div className="kh-av" style={{ width: size, height: size, fontSize: Math.round(size * 0.36), background: img ? '#2a3942' : `linear-gradient(135deg, hsl(${h} 55% 45%), hsl(${(h + 40) % 360} 60% 32%))` }}>
+    <div className="kh-av" style={{ width: size, height: size, fontSize: Math.round(size * 0.36), background: img ? 'var(--wa-btn)' : `linear-gradient(135deg, hsl(${h} 55% 45%), hsl(${(h + 40) % 360} 60% 32%))` }}>
       {img ? <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} /> : ini(name)}
-      {channel && channel !== 'whatsapp' ? <span style={{ position: 'absolute', right: -3, bottom: -3, borderRadius: 7, boxShadow: '0 0 0 2px #111b21', display: 'grid' }}><ChannelLogo kind={channel} size={Math.max(16, Math.round(size * 0.38))} /></span>
+      {channel && channel !== 'whatsapp' ? <span style={{ position: 'absolute', right: -3, bottom: -3, borderRadius: 7, boxShadow: '0 0 0 2px var(--wa-panel)', display: 'grid' }}><ChannelLogo kind={channel} size={Math.max(16, Math.round(size * 0.38))} /></span>
         : online !== undefined && <span className="st" style={{ background: online ? '#25d366' : '#64748b' }} />}
     </div>
   );
@@ -231,7 +231,7 @@ function AudioMsg({ m, fetcher, mine, avatar }) {
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="wave" onClick={seek}>{bars.map((h, i) => <i key={i} className={i / bars.length < pct ? 'p' : ''} style={{ height: `${h}%` }} />)}</div>
-        <div className="t">{err ? <span style={{ color: '#fda4af' }}>{err}</span> : secs(st.playing || st.t ? st.t : st.d)}</div>
+        <div className="t">{err ? <span style={{ color: 'var(--pastel-pink)' }}>{err}</span> : secs(st.playing || st.t ? st.t : st.d)}</div>
       </div>
       {url ? <button type="button" className="sp" onClick={speed}>{rate}×</button> : mine && avatar}
       {url && <audio ref={a} src={url} preload="metadata" onLoadedMetadata={(e) => { const d = e.currentTarget.duration; setSt((x) => ({ ...x, d })); }} onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; setSt((x) => ({ ...x, t })); }}
@@ -260,7 +260,7 @@ function DocMsg({ m, fetcher }) {
       <Icon name="file-text" size={30} style={{ color: '#ff9452', flex: 'none' }} />
       <div style={{ flex: 1, minWidth: 0, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.body && !/^\[/.test(m.body) ? m.body : 'Arquivo'}</div>
       <button type="button" className="kh-ic" onClick={open} aria-label="Baixar arquivo" style={{ width: 34, height: 34 }}><Icon name="download" size={18} /></button>
-      {err && <span style={{ fontSize: 11, color: '#fda4af' }}>{err}</span>}
+      {err && <span style={{ fontSize: 11, color: 'var(--pastel-pink)' }}>{err}</span>}
     </div>
   );
 }
@@ -308,16 +308,16 @@ function LeadSide({ lead, flows, tags, canEdit, onToggleTag, onClose, onNotes, o
       <div className="hd"><button type="button" className="kh-ic" onClick={onClose} aria-label="Fechar detalhes"><Icon name="x" size={20} /></button>Detalhes do contato</div>
       <div className="kh-card" style={{ alignItems: 'center', textAlign: 'center', paddingTop: 26 }}>
         <Avatar name={nomeOf(lead)} src={lead.avatar_url} size={160} channel={lead.chat_channel} />
-        <div style={{ fontSize: 22, color: '#e9edef', marginTop: 6 }}>{nomeOf(lead)}</div>
-        {lead.ig_username && <div style={{ fontSize: 15, color: '#8696a0' }}>@{lead.ig_username}</div>}
-        {lead.telefone && <div style={{ fontSize: 15, color: '#8696a0' }}>{fmtPhone(lead.telefone)}
+        <div style={{ fontSize: 22, color: 'var(--wa-text)', marginTop: 6 }}>{nomeOf(lead)}</div>
+        {lead.ig_username && <div style={{ fontSize: 15, color: 'var(--wa-muted)' }}>@{lead.ig_username}</div>}
+        {lead.telefone && <div style={{ fontSize: 15, color: 'var(--wa-muted)' }}>{fmtPhone(lead.telefone)}
           <button type="button" className="kh-ic" style={{ width: 28, height: 28, display: 'inline-grid', verticalAlign: 'middle' }} title="Copiar número" onClick={() => navigator.clipboard && navigator.clipboard.writeText(lead.telefone)}><Icon name="copy" size={14} /></button></div>}
         {lead.valor_compra != null && <div style={{ color: '#34d399', fontWeight: 700 }}>{money(lead.valor_compra)}</div>}
       </div>
       <div className="kh-card">
-        <div className="kh-kv"><Icon name="message-circle" size={17} />Mensagens não respondidas: <b style={{ color: '#e9edef' }}>{naoLidas}</b></div>
-        <div className="kh-kv"><Icon name="calendar" size={17} />Última mensagem: <b style={{ color: '#e9edef' }}>{dataHora(last)}</b></div>
-        <div className="kh-kv"><Icon name="calendar-plus" size={17} />Criado em: <b style={{ color: '#e9edef' }}>{lead.created_at ? new Date(lead.created_at).toLocaleDateString('pt-BR') : '—'}</b></div>
+        <div className="kh-kv"><Icon name="message-circle" size={17} />Mensagens não respondidas: <b style={{ color: 'var(--wa-text)' }}>{naoLidas}</b></div>
+        <div className="kh-kv"><Icon name="calendar" size={17} />Última mensagem: <b style={{ color: 'var(--wa-text)' }}>{dataHora(last)}</b></div>
+        <div className="kh-kv"><Icon name="calendar-plus" size={17} />Criado em: <b style={{ color: 'var(--wa-text)' }}>{lead.created_at ? new Date(lead.created_at).toLocaleDateString('pt-BR') : '—'}</b></div>
         {lead.email && <div className="kh-kv"><Icon name="mail" size={17} /><span style={{ wordBreak: 'break-all' }}>{lead.email}</span></div>}
         {lead.produto && <div className="kh-kv"><Icon name="package" size={17} />{lead.produto}</div>}
         {lead.utm && lead.utm.utm_source && <div className="kh-kv"><Icon name="megaphone" size={17} />Veio de: {lead.utm.utm_source}{lead.utm.utm_campaign ? ` · ${lead.utm.utm_campaign}` : ''}</div>}
@@ -328,24 +328,24 @@ function LeadSide({ lead, flows, tags, canEdit, onToggleTag, onClose, onNotes, o
           {canEdit && tags.length > 0 && <button type="button" className="kh-btn" style={{ padding: '4px 12px' }} onClick={() => setAdding((v) => !v)}>{adding ? 'Pronto' : 'Adicionar'}</button>}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {(lead.tags || []).map((t) => <span key={t.id} className="kh-tag">{t.nome}{canEdit && <button type="button" onClick={() => onToggleTag(t, false)} aria-label={`Tirar ${t.nome}`}><Icon name="x" size={12} /></button>}</span>)}
-          {!(lead.tags || []).length && !adding && <span style={{ fontSize: 13, color: '#8696a0' }}>{tags.length ? 'Sem etiquetas.' : 'Crie etiquetas em Integrações → Tags.'}</span>}
+          {!(lead.tags || []).length && !adding && <span style={{ fontSize: 13, color: 'var(--wa-muted)' }}>{tags.length ? 'Sem etiquetas.' : 'Crie etiquetas em Integrações → Tags.'}</span>}
         </div>
-        {adding && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{tags.filter((t) => !has.has(t.id)).map((t) => <button key={t.id} type="button" className="kh-tag" style={{ border: '1px dashed #3b4a54', cursor: 'pointer' }} onClick={() => onToggleTag(t, true)}><Icon name="plus" size={12} />{t.nome}</button>)}</div>}
+        {adding && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{tags.filter((t) => !has.has(t.id)).map((t) => <button key={t.id} type="button" className="kh-tag" style={{ border: '1px dashed var(--wa-line)', cursor: 'pointer' }} onClick={() => onToggleTag(t, true)}><Icon name="plus" size={12} />{t.nome}</button>)}</div>}
       </div>
       <div className="kh-card">
         <div className="lb"><Icon name="git-branch" size={16} />Automação</div>
         {lead.automation_paused ? <div style={{ fontSize: 14, color: '#fbbf24' }}>Pausada: você está atendendo.</div>
-          : flows.length ? flows.map((f) => <div key={f.id} className="kh-kv"><Icon name="zap" size={15} style={{ color: '#ff9452' }} />{f.campanha}<span style={{ fontSize: 12, color: '#8696a0' }}>{f.status === 'waiting' ? (f.wait_kind === 'reply' ? 'esperando resposta' : 'aguardando') : 'rodando'}</span></div>)
-          : <div style={{ fontSize: 14, color: '#8696a0' }}>Nenhum fluxo rodando agora.</div>}
+          : flows.length ? flows.map((f) => <div key={f.id} className="kh-kv"><Icon name="zap" size={15} style={{ color: '#ff9452' }} />{f.campanha}<span style={{ fontSize: 12, color: 'var(--wa-muted)' }}>{f.status === 'waiting' ? (f.wait_kind === 'reply' ? 'esperando resposta' : 'aguardando') : 'rodando'}</span></div>)
+          : <div style={{ fontSize: 14, color: 'var(--wa-muted)' }}>Nenhum fluxo rodando agora.</div>}
       </div>
       <div className="kh-card">
         <div className="lb"><Icon name="shopping-cart" size={16} />Histórico de compra</div>
-        {!(lead.eventos || []).length && <div style={{ fontSize: 14, color: '#8696a0' }}>Nenhum evento do checkout.</div>}
+        {!(lead.eventos || []).length && <div style={{ fontSize: 14, color: 'var(--wa-muted)' }}>Nenhum evento do checkout.</div>}
         {(lead.eventos || []).map((e, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: e.tipo === 'Compra Aprovada' ? '#34d399' : e.tipo === 'Compra Recusada' ? '#fb7185' : '#f39200' }} />
-            <span style={{ flex: 1, color: '#d1d7db' }}>{e.tipo}{e.produto ? ` · ${e.produto}` : ''}</span>
-            <span style={{ color: '#8696a0' }}>{e.valor != null ? money(e.valor) : ''}</span>
+            <span style={{ flex: 1, color: 'var(--wa-text2)' }}>{e.tipo}{e.produto ? ` · ${e.produto}` : ''}</span>
+            <span style={{ color: 'var(--wa-muted)' }}>{e.valor != null ? money(e.valor) : ''}</span>
           </div>
         ))}
       </div>
@@ -358,7 +358,7 @@ function LeadSide({ lead, flows, tags, canEdit, onToggleTag, onClose, onNotes, o
             <button type="button" className="kh-btn" onClick={() => { setNotes(lead.chat_notes || ''); setEditing(false); }}>Cancelar</button>
             <button type="button" className="kh-btn orange" onClick={async () => { await onNotes(notes); setEditing(false); }}>Salvar</button>
           </div>
-        </>) : <div style={{ fontSize: 14, color: notes ? '#d1d7db' : '#8696a0', whiteSpace: 'pre-wrap' }}>{notes || 'Nenhuma nota adicionada.'}</div>}
+        </>) : <div style={{ fontSize: 14, color: notes ? 'var(--wa-text2)' : 'var(--wa-muted)', whiteSpace: 'pre-wrap' }}>{notes || 'Nenhuma nota adicionada.'}</div>}
       </div>
       {canEdit && <div className="kh-card" style={{ borderBottom: 0 }}>
         <button type="button" className="kh-arch" onClick={onArchive}><Icon name={lead.chat_archived_at ? 'archive-restore' : 'archive'} size={17} />{lead.chat_archived_at ? 'Desarquivar conversa' : 'Arquivar conversa'}</button>
@@ -465,8 +465,8 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
     requestAnimationFrame(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = a + s.length; });
   }
 
-  if (st.loading && !st.lead) return <div className="kh-col" style={{ background: '#0b141a', display: 'grid', placeItems: 'center', color: '#8696a0' }}>Abrindo conversa…</div>;
-  if (!st.lead) return <div className="kh-col" style={{ background: '#0b141a', display: 'grid', placeItems: 'center', color: '#fda4af' }}>{st.error}</div>;
+  if (st.loading && !st.lead) return <div className="kh-col" style={{ background: 'var(--wa-bg)', display: 'grid', placeItems: 'center', color: 'var(--wa-muted)' }}>Abrindo conversa…</div>;
+  if (!st.lead) return <div className="kh-col" style={{ background: 'var(--wa-bg)', display: 'grid', placeItems: 'center', color: 'var(--pastel-pink)' }}>{st.error}</div>;
   const lead = st.lead;
   const slash = text.startsWith('/') ? text.slice(1).toLowerCase() : null;
   const sugest = slash !== null ? quickReplies.filter((q) => q.shortcut.toLowerCase().startsWith(slash)).slice(0, 8) : [];
@@ -475,19 +475,19 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
 
   return (
     <>
-      <div className="kh-col" style={{ background: '#0b141a' }}>
+      <div className="kh-col" style={{ background: 'var(--wa-bg)' }}>
         <div className="kh-head">
           {onBack && <button type="button" className="kh-ic" onClick={onBack} aria-label="Voltar"><Icon name="arrow-left" size={20} /></button>}
           <button type="button" onClick={() => setSideOpen(!sideOpen)} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 0, cursor: 'pointer', padding: 0, minWidth: 0, flex: 1, textAlign: 'left' }}>
             <Avatar name={nomeOf(lead)} src={lead.avatar_url} size={42} channel={lead.chat_channel} />
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 16, color: '#e9edef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{nomeOf(lead)}</span>
+                <span style={{ fontSize: 16, color: 'var(--wa-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{nomeOf(lead)}</span>
                 {lead.automation_paused && <span className="kh-chip" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.15)' }}><Icon name="hand" size={11} />Com humano</span>}
                 {!lead.automation_paused && st.flows[0] && <span className="kh-chip" style={{ color: '#ffb27d', background: 'rgba(255,98,1,.18)' }}><Icon name="git-branch" size={11} />{st.flows[0].campanha}</span>}
-                {(lead.tags || []).slice(0, 3).map((t) => <span key={t.id} className="kh-chip" style={{ color: '#bfdbfe', background: 'rgba(59,130,246,.2)' }}>{t.nome}</span>)}
+                {(lead.tags || []).slice(0, 3).map((t) => <span key={t.id} className="kh-chip" style={{ color: 'var(--pastel-blue)', background: 'rgba(59,130,246,.2)' }}>{t.nome}</span>)}
               </div>
-              <div style={{ fontSize: 13, color: '#8696a0' }}>{lead.chat_channel === 'instagram' ? `Instagram${lead.ig_username ? ` · @${lead.ig_username}` : ''}` : lead.chat_channel === 'messenger' ? 'Messenger' : fmtPhone(lead.telefone)}</div>
+              <div style={{ fontSize: 13, color: 'var(--wa-muted)' }}>{lead.chat_channel === 'instagram' ? `Instagram${lead.ig_username ? ` · @${lead.ig_username}` : ''}` : lead.chat_channel === 'messenger' ? 'Messenger' : fmtPhone(lead.telefone)}</div>
             </div>
           </button>
           <div className="kh-acts">
@@ -500,7 +500,7 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
               <button type="button" className={`kh-ic${pop === 'tags' ? ' on' : ''}`} title="Etiquetas" onClick={() => setPop(pop === 'tags' ? null : 'tags')}><Icon name="tag" size={19} /></button>
               {pop === 'tags' && <div className="kh-drop">
                 <h4>Etiquetas</h4>
-                {!tags.length && <div style={{ padding: '4px 16px 8px', fontSize: 13, color: '#8696a0' }}>Crie etiquetas em Integrações → Tags.</div>}
+                {!tags.length && <div style={{ padding: '4px 16px 8px', fontSize: 13, color: 'var(--wa-muted)' }}>Crie etiquetas em Integrações → Tags.</div>}
                 {tags.map((t) => <label key={t.id}><input type="checkbox" checked={has.has(t.id)} onChange={() => toggleTag(t, !has.has(t.id))} style={{ accentColor: '#ff9452', width: 16, height: 16 }} />{t.nome}</label>)}
               </div>}
             </div>}
@@ -526,10 +526,10 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
         </div>
         {!atBottom && <button type="button" className="kh-scroll-btn" aria-label="Ir para o fim" onClick={() => { endRef.current && endRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' }); setAtBottom(true); }}><Icon name="chevron-down" size={22} /></button>}
         {canEdit && (!lead.janela_aberta ? (
-          <div style={{ padding: '14px 18px', background: '#202c33', fontSize: 14, color: '#fbbf24' }}>{lead.chat_channel === 'instagram' || lead.chat_channel === 'messenger' ? `O ${lead.chat_channel === 'instagram' ? 'Instagram' : 'Messenger'} só deixa responder em até 24 h depois da última mensagem do contato. Quando ele escrever de novo, a conversa reabre.` : 'A API Oficial da Meta só deixa responder em até 24 h depois da última mensagem do contato. Dispare um fluxo com modelo aprovado para reabrir a conversa.'}</div>
+          <div style={{ padding: '14px 18px', background: 'var(--wa-in)', fontSize: 14, color: '#fbbf24' }}>{lead.chat_channel === 'instagram' || lead.chat_channel === 'messenger' ? `O ${lead.chat_channel === 'instagram' ? 'Instagram' : 'Messenger'} só deixa responder em até 24 h depois da última mensagem do contato. Quando ele escrever de novo, a conversa reabre.` : 'A API Oficial da Meta só deixa responder em até 24 h depois da última mensagem do contato. Dispare um fluxo com modelo aprovado para reabrir a conversa.'}</div>
         ) : (
           <div className="kh-compose">
-            {sugest.length > 0 && <div className="kh-pop kh-quick">{sugest.map((q) => <button key={q.id} type="button" onClick={() => setText(q.body)}><b style={{ color: '#ff9452' }}>/{q.shortcut}</b> <span style={{ color: '#8696a0' }}>{q.body.slice(0, 100)}</span></button>)}</div>}
+            {sugest.length > 0 && <div className="kh-pop kh-quick">{sugest.map((q) => <button key={q.id} type="button" onClick={() => setText(q.body)}><b style={{ color: '#ff9452' }}>/{q.shortcut}</b> <span style={{ color: 'var(--wa-muted)' }}>{q.body.slice(0, 100)}</span></button>)}</div>}
             {pop === 'emoji' && <EmojiPicker onPick={insert} />}
             {pop === 'menu' && <div className="kh-pop kh-menu">
               <button type="button" onClick={() => { setPop(null); fileRef.current && (fileRef.current.accept = 'image/*,video/mp4'); fileRef.current && fileRef.current.click(); }}><span className="ico" style={{ background: '#007bfc' }}><Icon name="image" size={17} /></span>Fotos e vídeos</button>
@@ -556,10 +556,10 @@ function Conversation({ orgId, leadId, quickReplies, tags, canEdit, notify, onCh
         <img src={light.url} alt="" onClick={(e) => e.stopPropagation()} />
       </div>}
       {flowPick && <div className="kh-modal" onClick={() => setFlowPick(null)}><div onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '16px 18px' }}><b style={{ flex: 1, color: '#e9edef', fontSize: 16 }}>Disparar fluxo para {nomeOf(lead)}</b><button type="button" className="kh-ic" onClick={() => setFlowPick(null)} aria-label="Fechar"><Icon name="x" size={18} /></button></div>
-        {flowPick.loading && <div style={{ padding: '6px 18px 18px', color: '#8696a0' }}>Carregando fluxos…</div>}
-        {!flowPick.loading && !flowPick.flows.length && <div style={{ padding: '6px 18px 18px', color: '#8696a0', fontSize: 14 }}>{flowPick.error || 'Nenhum fluxo publicado ainda. Publique um fluxo no editor primeiro.'}</div>}
-        {flowPick.flows.map((f) => <button key={f.id} type="button" className="opt" onClick={() => startFlow(f)}><Icon name="git-branch" size={17} style={{ color: '#ff9452' }} /><span style={{ flex: 1 }}>{f.nome}</span>{f.status !== 'Ativa' && <span style={{ fontSize: 12, color: '#8696a0' }}>{f.status}</span>}</button>)}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '16px 18px' }}><b style={{ flex: 1, color: 'var(--wa-text)', fontSize: 16 }}>Disparar fluxo para {nomeOf(lead)}</b><button type="button" className="kh-ic" onClick={() => setFlowPick(null)} aria-label="Fechar"><Icon name="x" size={18} /></button></div>
+        {flowPick.loading && <div style={{ padding: '6px 18px 18px', color: 'var(--wa-muted)' }}>Carregando fluxos…</div>}
+        {!flowPick.loading && !flowPick.flows.length && <div style={{ padding: '6px 18px 18px', color: 'var(--wa-muted)', fontSize: 14 }}>{flowPick.error || 'Nenhum fluxo publicado ainda. Publique um fluxo no editor primeiro.'}</div>}
+        {flowPick.flows.map((f) => <button key={f.id} type="button" className="opt" onClick={() => startFlow(f)}><Icon name="git-branch" size={17} style={{ color: '#ff9452' }} /><span style={{ flex: 1 }}>{f.nome}</span>{f.status !== 'Ativa' && <span style={{ fontSize: 12, color: 'var(--wa-muted)' }}>{f.status}</span>}</button>)}
       </div></div>}
     </>
   );
@@ -613,14 +613,14 @@ function KoblyChats() {
       <div className="kh-top">
         <div className="kh-title">
           <ChannelLogo kind="qr" size={30} />
-          <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 19, color: '#e9edef' }}>Conversas</div><div style={{ fontSize: 12, color: '#8696a0' }}>{naoResp ? `${naoResp} esperando resposta` : 'Tudo respondido'}</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 19, color: 'var(--wa-text)' }}>Conversas</div><div style={{ fontSize: 12, color: 'var(--wa-muted)' }}>{naoResp ? `${naoResp} esperando resposta` : 'Tudo respondido'}</div></div>
         </div>
-        <div className="kh-search"><Icon name="search" size={16} style={{ color: '#8696a0' }} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pesquisar nome, telefone ou e-mail" />{q && <button type="button" className="kh-ic" style={{ width: 24, height: 24 }} onClick={() => setQ('')} aria-label="Limpar busca"><Icon name="x" size={14} /></button>}</div>
+        <div className="kh-search"><Icon name="search" size={16} style={{ color: 'var(--wa-muted)' }} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pesquisar nome, telefone ou e-mail" />{q && <button type="button" className="kh-ic" style={{ width: 24, height: 24 }} onClick={() => setQ('')} aria-label="Limpar busca"><Icon name="x" size={14} /></button>}</div>
         <div className="kh-filters">{FILTROS.map(([id, label]) => <button key={id} type="button" className={`kh-f${filtro === id ? ' on' : ''}`} onClick={() => setFiltro(id)}>{label}{id === 'arquivadas' && list.arquivadas > 0 && <span className="n">{list.arquivadas}</span>}</button>)}</div>
       </div>
       <div className="kh-list">
-        {list.loading && !list.items.length ? <div style={{ padding: 20, color: '#8696a0' }}>Carregando…</div>
-          : list.items.length === 0 ? <div style={{ padding: 28, textAlign: 'center', color: '#8696a0', fontSize: 14 }}>{orgId ? (filtro === 'todas' ? 'Quando alguém mandar mensagem para o seu WhatsApp, a conversa aparece aqui.' : 'Nenhuma conversa neste filtro.') : 'Escolha a conta do cliente acima.'}</div>
+        {list.loading && !list.items.length ? <div style={{ padding: 20, color: 'var(--wa-muted)' }}>Carregando…</div>
+          : list.items.length === 0 ? <div style={{ padding: 28, textAlign: 'center', color: 'var(--wa-muted)', fontSize: 14 }}>{orgId ? (filtro === 'todas' ? 'Quando alguém mandar mensagem para o seu WhatsApp, a conversa aparece aqui.' : 'Nenhuma conversa neste filtro.') : 'Escolha a conta do cliente acima.'}</div>
           : list.items.map((c) => {
             const t = TIPO[c.ultima_tipo];
             const de = DE[c.ultima_de];
@@ -630,7 +630,7 @@ function KoblyChats() {
                 <div className="bd">
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                     <span className="kh-name">{nomeOf(c)}</span>
-                    <span style={{ fontSize: 12, color: c.nao_lidas ? '#25d366' : '#8696a0', flex: 'none' }}>{rel(c.ultima_em)}</span>
+                    <span style={{ fontSize: 12, color: c.nao_lidas ? '#25d366' : 'var(--wa-muted)', flex: 'none' }}>{rel(c.ultima_em)}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
                     <div className="kh-prev" style={{ flex: 1 }}>
@@ -652,7 +652,7 @@ function KoblyChats() {
   const conv = sel
     ? <Conversation key={sel} orgId={orgId} leadId={sel} quickReplies={quick} tags={tags} canEdit={canEdit} notify={store.notify} onChanged={() => load(true)}
       onBack={isMobile ? () => setSel(null) : null} wide={wide && !isMobile} roomy={roomy} sideOpen={sideOpen} setSideOpen={setSideOpen} />
-    : <div className="kh-empty"><div><ChannelLogo kind="qr" size={64} /><div style={{ fontSize: 28, fontWeight: 300, color: '#e9edef', marginTop: 18 }}>Kobly Conversas</div><div style={{ color: '#8696a0', fontSize: 14, marginTop: 10, maxWidth: 420, lineHeight: 1.5 }}>Escolha uma conversa para ver o que o contato mandou, ouvir os áudios, responder ou disparar um fluxo.</div></div></div>;
+    : <div className="kh-empty"><div><ChannelLogo kind="qr" size={64} /><div style={{ fontSize: 28, fontWeight: 300, color: 'var(--wa-text)', marginTop: 18 }}>Kobly Conversas</div><div style={{ color: 'var(--wa-muted)', fontSize: 14, marginTop: 10, maxWidth: 420, lineHeight: 1.5 }}>Escolha uma conversa para ver o que o contato mandou, ouvir os áudios, responder ou disparar um fluxo.</div></div></div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

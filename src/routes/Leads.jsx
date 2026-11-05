@@ -17,44 +17,44 @@ const rel = (iso) => { if (!iso) return '—'; const s = (Date.now() - new Date(
 
 const KL_CSS = `
 .kl-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
-.kl-k { border-radius: 16px; padding: 14px 16px; display: flex; gap: 12px; align-items: center; position: relative; overflow: hidden; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)), rgba(15,17,26,.95); border: 1px solid rgba(255,255,255,.08); }
+.kl-k { border-radius: 16px; padding: 14px 16px; display: flex; gap: 12px; align-items: center; position: relative; overflow: hidden; background: linear-gradient(180deg, rgba(var(--fg-rgb), .05), rgba(var(--fg-rgb), .012)), rgba(var(--panel-rgb), .95); border: 1px solid rgba(var(--fg-rgb), .08); }
 .kl-k::before { content: ''; position: absolute; left: 14px; right: 14px; top: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--c), transparent); }
 .kl-k .i { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); flex: none; }
 .kl-k span { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .07em; } .kl-k b { display: block; font-size: 22px; color: var(--text-strong); margin-top: 2px; }
 .kl-k small { display: block; font-size: 11.5px; color: var(--text-subtle); margin-top: 1px; }
 .kl-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.kl-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 40px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); flex: 1; min-width: 240px; }
+.kl-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 40px; border-radius: 12px; background: rgba(var(--fg-rgb), .04); border: 1px solid rgba(var(--fg-rgb), .08); flex: 1; min-width: 240px; }
 .kl-search input { flex: 1; background: transparent; border: 0; outline: none; color: var(--text-strong); font: inherit; font-size: var(--text-sm); }
 .kl-dd { position: relative; }
-.kl-ddb { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; color: var(--text-strong); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
-.kl-ddb:hover { background: rgba(255,255,255,.08); } .kl-ddb.act { border-color: rgba(255,148,82,.6); color: #ffb27d; }
-.kl-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 230px; max-height: 340px; overflow-y: auto; padding: 6px; border-radius: 14px; background: #161a24; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 16px 40px rgba(0,0,0,.55); }
+.kl-ddb { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; color: var(--text-strong); background: rgba(var(--fg-rgb), .04); border: 1px solid rgba(var(--fg-rgb), .08); white-space: nowrap; }
+.kl-ddb:hover { background: rgba(var(--fg-rgb), .08); } .kl-ddb.act { border-color: rgba(255,148,82,.6); color: #ffb27d; }
+.kl-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 230px; max-height: 340px; overflow-y: auto; padding: 6px; border-radius: 14px; background: #161a24; border: 1px solid rgba(var(--fg-rgb), .1); box-shadow: 0 16px 40px rgba(0,0,0,.55); }
 .kl-menu.r { left: auto; right: 0; }
 .kl-menu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px; background: none; border: 0; cursor: pointer; color: var(--text-body); font-family: var(--font-sans); font-size: 13.5px; }
 .kl-menu button:hover { background: rgba(255,98,1,.14); }
 .kl-menu .ck { width: 16px; display: grid; place-items: center; color: #ff9452; } .kl-menu .n { margin-left: auto; font-size: 11px; color: var(--text-subtle); }
 .kl-stages { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.kl-st { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); }
+.kl-st { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .08); }
 .kl-st:hover { color: var(--text-strong); }
-.kl-st.on { color: #fff; border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); }
-.kl-st .n { padding: 0 7px; border-radius: 999px; font-size: 11px; background: rgba(255,255,255,.08); }
-.kl-table { border-radius: 18px; overflow: hidden; background: rgba(12,14,22,.92); border: 1px solid rgba(255,255,255,.07); }
-.kl-row { display: grid; grid-template-columns: 34px minmax(220px, 2.2fr) 140px minmax(140px, 1.6fr) minmax(130px, 1.2fr) 110px 100px 40px; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,.05); cursor: pointer; transition: background .12s; }
-.kl-row:hover { background: rgba(255,255,255,.03); }
+.kl-st.on { color: var(--on-tint); border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); }
+.kl-st .n { padding: 0 7px; border-radius: 999px; font-size: 11px; background: rgba(var(--fg-rgb), .08); }
+.kl-table { border-radius: 18px; overflow: hidden; background: rgba(var(--panel-rgb), .92); border: 1px solid rgba(var(--fg-rgb), .07); }
+.kl-row { display: grid; grid-template-columns: 34px minmax(220px, 2.2fr) 140px minmax(140px, 1.6fr) minmax(130px, 1.2fr) 110px 100px 40px; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid rgba(var(--fg-rgb), .05); cursor: pointer; transition: background .12s; }
+.kl-row:hover { background: rgba(var(--fg-rgb), .03); }
 .kl-row.sel { background: rgba(255,98,1,.08); }
-.kl-row.head { cursor: default; padding: 12px 16px; font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .07em; background: rgba(255,255,255,.02); }
-.kl-row.head:hover { background: rgba(255,255,255,.02); }
+.kl-row.head { cursor: default; padding: 12px 16px; font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .07em; background: rgba(var(--fg-rgb), .02); }
+.kl-row.head:hover { background: rgba(var(--fg-rgb), .02); }
 .kl-cb { width: 18px; height: 18px; accent-color: #ff6201; cursor: pointer; }
 .kl-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
-.kl-msg { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #8696a0; min-width: 0; }
+.kl-msg { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--wa-muted); min-width: 0; }
 .kl-msg span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kl-go { width: 32px; height: 32px; border-radius: 10px; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--text-muted); background: transparent; }
 .kl-go:hover { color: #04130b; background: #25d366; }
-.kl-bulk { position: sticky; bottom: 14px; z-index: 30; align-self: center; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 16px; background: #1b2030; border: 1px solid rgba(255,148,82,.4); box-shadow: 0 16px 40px rgba(0,0,0,.6); animation: kl-up .2s ease-out; }
+.kl-bulk { position: sticky; bottom: 14px; z-index: 30; align-self: center; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 16px; background: var(--surface-overlay); border: 1px solid rgba(255,148,82,.4); box-shadow: 0 16px 40px rgba(0,0,0,.6); animation: kl-up .2s ease-out; }
 .kl-bulk .kl-menu { top: auto; bottom: calc(100% + 8px); }
 @keyframes kl-up { from { transform: translateY(12px); opacity: 0; } }
 .kl-pg { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-size: 13px; color: var(--text-muted); }
-.kl-pg button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: var(--text-strong); cursor: pointer; display: grid; place-items: center; }
+.kl-pg button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(var(--fg-rgb), .1); background: rgba(var(--fg-rgb), .04); color: var(--text-strong); cursor: pointer; display: grid; place-items: center; }
 .kl-pg button:disabled { opacity: .35; cursor: not-allowed; }
 .kl-empty { padding: 50px 20px; text-align: center; color: var(--text-muted); }
 @media (max-width: 1100px) { .kl-row { grid-template-columns: 34px minmax(200px, 1fr) 130px 110px 40px; } .kl-row .hide-md { display: none; } }
@@ -176,7 +176,7 @@ function KoblyLeads() {
           <input type="checkbox" className="kl-cb" checked={allOn} disabled={!canEdit || !list.leads.length} aria-label="Selecionar todos da página" onChange={() => setSel(allOn ? new Set() : new Set(list.leads.map((l) => l.id)))} />
           <span>Lead</span><span>Etapa</span><span className="hide-md">Última mensagem</span><span className="hide-md">Etiquetas</span><span>Origem</span><span className="hide-md">Atividade</span><span />
         </div>
-        {list.loading && !list.leads.length && Array.from({ length: 6 }).map((_, i) => <div key={i} className="kl-row" style={{ cursor: 'default' }}><span /><div style={{ height: 36, borderRadius: 10, background: 'rgba(255,255,255,.04)' }} /><span /><span /><span /><span /><span /><span /></div>)}
+        {list.loading && !list.leads.length && Array.from({ length: 6 }).map((_, i) => <div key={i} className="kl-row" style={{ cursor: 'default' }}><span /><div style={{ height: 36, borderRadius: 10, background: 'rgba(var(--fg-rgb), .04)' }} /><span /><span /><span /><span /><span /><span /></div>)}
         {!list.loading && !list.leads.length && <div className="kl-empty"><Icon name="users" size={34} style={{ opacity: .5 }} /><div style={{ marginTop: 10 }}>{list.error || (!orgId ? 'Escolha a conta do cliente acima.' : hasFilters ? 'Nenhum lead com esses filtros.' : 'Nenhum lead ainda. Eles chegam pelo checkout, pelo WhatsApp e pelos disparos.')}</div></div>}
         {list.leads.map((l) => {
           const sg = stageOf(l.etapa);
@@ -196,8 +196,8 @@ function KoblyLeads() {
               <span><span className="kl-chip" style={{ color: sg.c, background: `color-mix(in srgb, ${sg.c} 15%, transparent)` }}><Icon name={sg.icon} size={11} />{sg.label}</span></span>
               <div className="kl-msg hide-md">{msg ? <>{l.ultima_msg.de !== 'lead' && <Icon name="check-check" size={13} style={{ color: '#53bdeb', flex: 'none' }} />}{t && <Icon name={t[0]} size={13} style={{ flex: 'none' }} />}<span>{msg}</span></> : <span style={{ opacity: .6 }}>Sem conversa</span>}</div>
               <div className="hide-md" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', minWidth: 0 }}>
-                {(l.tags || []).slice(0, 2).map((tg) => <span key={tg.id} className="kl-chip" style={{ color: '#bfdbfe', background: 'rgba(59,130,246,.18)' }}>{tg.nome}</span>)}
-                {(l.tags || []).length > 2 && <span className="kl-chip" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,.06)' }}>+{l.tags.length - 2}</span>}
+                {(l.tags || []).slice(0, 2).map((tg) => <span key={tg.id} className="kl-chip" style={{ color: 'var(--pastel-blue)', background: 'rgba(59,130,246,.18)' }}>{tg.nome}</span>)}
+                {(l.tags || []).length > 2 && <span className="kl-chip" style={{ color: 'var(--text-muted)', background: 'rgba(var(--fg-rgb), .06)' }}>+{l.tags.length - 2}</span>}
                 {!(l.tags || []).length && <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>—</span>}
               </div>
               <span><span className="kl-chip" style={{ color: og[1], background: `color-mix(in srgb, ${og[1]} 14%, transparent)` }}><Icon name={og[0]} size={11} />{og[2]}</span></span>

@@ -104,7 +104,7 @@ export function NavRail({
       </div>
 
       {collapsed ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0', margin: 10, borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0', margin: 10, borderRadius: 'var(--radius-md)', background: 'rgba(var(--fg-rgb), 0.05)' }}>
           <Avatar name={workspaceName} tone="teal" size="sm" />
         </div>
       ) : (
@@ -116,14 +116,14 @@ export function NavRail({
             padding: '14px 16px',
             margin: 12,
             borderRadius: 'var(--radius-md)',
-            background: 'rgba(255,255,255,0.05)',
+            background: 'rgba(var(--fg-rgb), 0.05)',
           }}
         >
           <Avatar name={workspaceName} tone="teal" size="sm" />
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                color: '#fff',
+                color: 'var(--text-strong)',
                 fontSize: 'var(--text-sm)',
                 fontWeight: 'var(--fw-semibold)',
                 whiteSpace: 'nowrap',

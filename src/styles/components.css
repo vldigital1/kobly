@@ -6,7 +6,7 @@
 .kbly-btn { -webkit-tap-highlight-color: transparent; }
 /* Primary agora pinta com --grad-accent (inline no Button). No hover mantemos o gradiente
    e só aquecemos com brilho + glow; no active afundamos 1px. */
-.kbly-btn--primary:not(:disabled):hover { filter: brightness(1.08); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), var(--glow-accent-soft) !important; }
+.kbly-btn--primary:not(:disabled):hover { filter: brightness(1.08); box-shadow: inset 0 1px 0 rgba(var(--fg-rgb), 0.25), var(--glow-accent-soft) !important; }
 .kbly-btn--primary:not(:disabled):active { transform: translateY(1px); }
 .kbly-btn--secondary:not(:disabled):hover { background: var(--surface-sunken) !important; border-color: var(--border-strong) !important; }
 .kbly-btn--ghost:not(:disabled):hover { background: var(--surface-sunken) !important; }

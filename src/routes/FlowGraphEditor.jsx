@@ -45,116 +45,116 @@ const FLOW_CSS = `
 .kf-canvas { position: relative; background:
   radial-gradient(900px 520px at 12% -8%, rgba(255,98,1,.16), transparent 62%),
   radial-gradient(800px 480px at 105% 108%, rgba(243,146,0,.12), transparent 60%),
-  #090b11; }
-.kf-canvas .react-flow { --xy-background-color: transparent; --xy-controls-button-background-color: rgba(20,23,33,.92); --xy-controls-button-border-color: rgba(255,255,255,.06); --xy-minimap-background-color: rgba(14,16,24,.92); }
-.kf-canvas .react-flow__controls { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.08); }
-.kf-canvas .react-flow__minimap { border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); }
+  var(--surface-app); }
+.kf-canvas .react-flow { --xy-background-color: transparent; --xy-controls-button-background-color: rgba(var(--panel-rgb), .92); --xy-controls-button-border-color: rgba(var(--fg-rgb), .06); --xy-minimap-background-color: rgba(var(--panel-rgb), .92); }
+.kf-canvas .react-flow__controls { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.45); border: 1px solid rgba(var(--fg-rgb), .08); }
+.kf-canvas .react-flow__minimap { border-radius: 12px; overflow: hidden; border: 1px solid rgba(var(--fg-rgb), .08); }
 .kf-node { width: 252px; position: relative; border-radius: 16px; font-size: 12px; color: var(--text-body);
-  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.015)), rgba(17,20,30,.94);
-  border: 1px solid rgba(255,255,255,.09); box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  background: linear-gradient(180deg, rgba(var(--fg-rgb), .055), rgba(var(--fg-rgb), .015)), rgba(var(--panel-rgb), .94);
+  border: 1px solid rgba(var(--fg-rgb), .09); box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(var(--fg-rgb), .06);
   backdrop-filter: blur(8px); transition: border-color .15s, box-shadow .2s, transform .15s; cursor: pointer; }
 .kf-node::before { content: ''; position: absolute; left: 14px; right: 14px; top: -1px; height: 2px; border-radius: 2px;
   background: linear-gradient(90deg, transparent, var(--tone), transparent); opacity: .9; }
-.kf-node:hover { border-color: color-mix(in srgb, var(--tone) 45%, rgba(255,255,255,.12)); box-shadow: 0 14px 36px rgba(0,0,0,.5), 0 0 22px color-mix(in srgb, var(--tone) 18%, transparent); }
+.kf-node:hover { border-color: color-mix(in srgb, var(--tone) 45%, rgba(var(--fg-rgb), .12)); box-shadow: 0 14px 36px rgba(0,0,0,.5), 0 0 22px color-mix(in srgb, var(--tone) 18%, transparent); }
 .kf-node.sel { border-color: color-mix(in srgb, var(--tone) 80%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 70%, transparent), 0 0 34px color-mix(in srgb, var(--tone) 34%, transparent), 0 14px 36px rgba(0,0,0,.5); }
 .kf-ico { width: 30px; height: 30px; flex: none; border-radius: 10px; display: grid; place-items: center; color: var(--tone);
   background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--tone) 34%, transparent), color-mix(in srgb, var(--tone) 10%, transparent));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 38%, transparent), 0 0 14px color-mix(in srgb, var(--tone) 22%, transparent); }
-.kf-ref { font-family: var(--font-mono); font-size: 10px; color: var(--text-subtle); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 1px 6px; }
+.kf-ref { font-family: var(--font-mono); font-size: 10px; color: var(--text-subtle); background: rgba(var(--fg-rgb), .04); border: 1px solid rgba(var(--fg-rgb), .06); border-radius: 6px; padding: 1px 6px; }
 .kf-exit { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 5px 20px 5px 12px; color: var(--text-muted); font-size: 11px; }
-.kf-exit + .kf-exit { border-top: 1px dashed rgba(255,255,255,.05); }
+.kf-exit + .kf-exit { border-top: 1px dashed rgba(var(--fg-rgb), .05); }
 .kf-exit .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ec); box-shadow: 0 0 8px var(--ec); }
-.kf-canvas .react-flow__handle.kf-h { width: 13px; height: 13px; border: 2px solid #0d1018; background: var(--hc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hc) 22%, transparent), 0 0 12px var(--hc); transition: transform .12s; }
+.kf-canvas .react-flow__handle.kf-h { width: 13px; height: 13px; border: 2px solid var(--surface-app); background: var(--hc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hc) 22%, transparent), 0 0 12px var(--hc); transition: transform .12s; }
 .kf-canvas .react-flow__handle.kf-h:hover { transform: translate(50%, -50%) scale(1.3); }
 .kf-canvas .react-flow__handle-left.kf-h:hover { transform: translate(-50%, -50%) scale(1.3); }
 .kf-live { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.6); animation: kf-pulse 1.8s infinite; }
 @keyframes kf-pulse { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); } 70% { box-shadow: 0 0 0 9px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
 .kf-flow { animation: kf-dash 1.4s linear infinite; }
 @keyframes kf-dash { to { stroke-dashoffset: -32; } }
-.kf-edge-del { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); background: rgba(15,17,26,.95); color: #fda4af; cursor: pointer; display: grid; place-items: center; box-shadow: 0 0 12px rgba(244,63,94,.45); }
+.kf-edge-del { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(var(--fg-rgb), .18); background: rgba(var(--panel-rgb), .95); color: var(--pastel-pink); cursor: pointer; display: grid; place-items: center; box-shadow: 0 0 12px rgba(244,63,94,.45); }
 .kf-pal { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 9px; border-radius: 11px; cursor: grab; text-align: left; font-size: var(--text-sm); color: var(--text-body);
-  background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); transition: border-color .15s, background .15s, box-shadow .15s, transform .12s; }
-.kf-pal:hover { background: rgba(255,255,255,.05); border-color: color-mix(in srgb, var(--tone) 50%, transparent); box-shadow: 0 0 16px color-mix(in srgb, var(--tone) 18%, transparent); transform: translateX(2px); }
+  background: rgba(var(--fg-rgb), .025); border: 1px solid rgba(var(--fg-rgb), .06); transition: border-color .15s, background .15s, box-shadow .15s, transform .12s; }
+.kf-pal:hover { background: rgba(var(--fg-rgb), .05); border-color: color-mix(in srgb, var(--tone) 50%, transparent); box-shadow: 0 0 16px color-mix(in srgb, var(--tone) 18%, transparent); transform: translateX(2px); }
 .kf-pal .kf-ico { width: 26px; height: 26px; border-radius: 8px; }
-.kf-glass { background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015)), rgba(14,16,24,.92); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 18px 50px rgba(0,0,0,.55); backdrop-filter: blur(14px); }
+.kf-glass { background: linear-gradient(180deg, rgba(var(--fg-rgb), .05), rgba(var(--fg-rgb), .015)), rgba(var(--panel-rgb), .92); border: 1px solid rgba(var(--fg-rgb), .08); box-shadow: 0 18px 50px rgba(0,0,0,.55); backdrop-filter: blur(14px); }
 .kf-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(4,6,12,.62); backdrop-filter: blur(6px); animation: kf-fade .15s ease-out; }
 .kf-modal { width: min(600px, 100%); max-height: 88vh; display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; animation: kf-pop .18s cubic-bezier(.2,.9,.3,1.2); position: relative; }
 .kf-modal::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 1px; background: linear-gradient(90deg, transparent, var(--tone), transparent); }
 @keyframes kf-fade { from { opacity: 0; } }
 @keyframes kf-pop { from { opacity: 0; transform: translateY(8px) scale(.97); } }
 .kf-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px; font-size: var(--text-sm); cursor: pointer; user-select: none;
-  color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.09); transition: all .15s; }
+  color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .09); transition: all .15s; }
 .kf-chip:hover { color: var(--text-strong); border-color: rgba(255,148,82,.5); }
-.kf-chip.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, rgba(243,146,0,.28), rgba(255,98,1,.38)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.65), 0 0 18px rgba(255,98,1,.32); }
+.kf-chip.on { color: var(--on-tint); border-color: transparent; background: linear-gradient(135deg, rgba(243,146,0,.28), rgba(255,98,1,.38)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.65), 0 0 18px rgba(255,98,1,.32); }
 .kf-day { width: 46px; height: 46px; padding: 0; justify-content: center; border-radius: 14px; font-weight: 600; }
-.kf-switch { position: relative; width: 42px; height: 24px; flex: none; border-radius: 999px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.08); cursor: pointer; transition: all .2s; padding: 0; }
+.kf-switch { position: relative; width: 42px; height: 24px; flex: none; border-radius: 999px; border: 1px solid rgba(var(--fg-rgb), .12); background: rgba(var(--fg-rgb), .08); cursor: pointer; transition: all .2s; padding: 0; }
 .kf-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #cbd5e1; box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: all .2s cubic-bezier(.3,1.4,.5,1); }
 .kf-switch.on { border-color: transparent; background: linear-gradient(135deg, #f39200, #ff6201); box-shadow: 0 0 16px rgba(255,98,1,.5); }
 .kf-switch.on::after { left: 20px; background: #fff; }
-.kf-row { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 13px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.07); }
-.kf-seg { display: inline-flex; padding: 3px; gap: 3px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.kf-row { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 13px; background: rgba(var(--fg-rgb), .025); border: 1px solid rgba(var(--fg-rgb), .07); }
+.kf-seg { display: inline-flex; padding: 3px; gap: 3px; border-radius: 12px; background: rgba(var(--fg-rgb), .04); border: 1px solid rgba(var(--fg-rgb), .08); }
 .kf-seg button { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 7px 14px; border-radius: 9px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--text-sm); transition: all .15s; }
-.kf-seg button.on { color: #fff; background: linear-gradient(135deg, rgba(243,146,0,.3), rgba(255,98,1,.42)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
+.kf-seg button.on { color: var(--on-tint); background: linear-gradient(135deg, rgba(243,146,0,.3), rgba(255,98,1,.42)); box-shadow: inset 0 0 0 1px rgba(255,148,82,.55); }
 .kf-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 26px 16px; border-radius: 16px; cursor: pointer; text-align: center;
-  border: 1.5px dashed rgba(255,148,82,.38); background: radial-gradient(circle at 50% 0%, rgba(255,98,1,.10), transparent 70%), rgba(255,255,255,.02); transition: all .15s; }
-.kf-drop:hover, .kf-drop.over { border-color: #ff9452; background: radial-gradient(circle at 50% 0%, rgba(255,98,1,.2), transparent 70%), rgba(255,255,255,.03); box-shadow: 0 0 26px rgba(255,98,1,.22); }
-.kf-ta { background: rgba(255,255,255,.03); color: var(--text-strong); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 11px 12px; font: inherit; resize: vertical; outline: none; transition: border-color .15s, box-shadow .15s; }
+  border: 1.5px dashed rgba(255,148,82,.38); background: radial-gradient(circle at 50% 0%, rgba(255,98,1,.10), transparent 70%), rgba(var(--fg-rgb), .02); transition: all .15s; }
+.kf-drop:hover, .kf-drop.over { border-color: #ff9452; background: radial-gradient(circle at 50% 0%, rgba(255,98,1,.2), transparent 70%), rgba(var(--fg-rgb), .03); box-shadow: 0 0 26px rgba(255,98,1,.22); }
+.kf-ta { background: rgba(var(--fg-rgb), .03); color: var(--text-strong); border: 1px solid rgba(var(--fg-rgb), .1); border-radius: 12px; padding: 11px 12px; font: inherit; resize: vertical; outline: none; transition: border-color .15s, box-shadow .15s; }
 .kf-ta:focus { border-color: #ff9452; box-shadow: 0 0 0 3px rgba(255,98,1,.22); }
 .kf-name { font: inherit; font-weight: 700; font-size: 18px; color: var(--text-strong); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 4px 8px; outline: none; width: 100%; max-width: 520px; transition: border-color .15s, background .15s; }
-.kf-name:hover { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
-.kf-name:focus { border-color: #ff9452; background: rgba(255,255,255,.04); box-shadow: 0 0 0 3px rgba(255,98,1,.2); }
-.kf-varbtn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); color: var(--text-muted); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); }
+.kf-name:hover { border-color: rgba(var(--fg-rgb), .12); background: rgba(var(--fg-rgb), .03); }
+.kf-name:focus { border-color: #ff9452; background: rgba(var(--fg-rgb), .04); box-shadow: 0 0 0 3px rgba(255,98,1,.2); }
+.kf-varbtn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm); color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .1); }
 .kf-varbtn:hover { border-color: rgba(255,148,82,.5); color: var(--text-strong); }
 .kf-varpop { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; border-radius: 14px; display: flex; flex-direction: column; max-height: 360px; overflow: hidden; }
 .kf-varsearch { flex: 1; background: transparent; border: 0; outline: none; color: var(--text-strong); font: inherit; font-size: var(--text-sm); }
-.kf-varcats { width: 42%; flex: none; border-right: 1px solid rgba(255,255,255,.07); padding: 6px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.kf-varcats { width: 42%; flex: none; border-right: 1px solid rgba(var(--fg-rgb), .07); padding: 6px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .kf-varcats button { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-radius: 9px; border: 0; cursor: pointer; text-align: left; font-family: var(--font-sans); font-size: 12.5px; color: var(--text-muted); background: transparent; }
-.kf-varcats button:hover { background: rgba(255,255,255,.04); }
-.kf-varcats button.on { color: #fff; background: rgba(255,98,1,.22); }
+.kf-varcats button:hover { background: rgba(var(--fg-rgb), .04); }
+.kf-varcats button.on { color: var(--on-tint); background: rgba(255,98,1,.22); }
 .kf-varcats small { font-size: 11px; color: var(--text-subtle); }
 .kf-varlist { flex: 1; min-width: 0; overflow-y: auto; padding: 4px; }
 .kf-varlist > button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 9px; border: 0; cursor: pointer; text-align: left; font-family: var(--font-sans); font-size: 13px; background: transparent; }
 .kf-varlist > button:hover { background: rgba(255,98,1,.12); }
-.kf-varlist code { font-family: var(--font-mono); font-size: 11.5px; color: #ffb485; }
-.kf-emo-btn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: var(--text-muted); cursor: pointer; display: grid; place-items: center; }
+.kf-varlist code { font-family: var(--font-mono); font-size: 11.5px; color: var(--pastel-orange); }
+.kf-emo-btn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid rgba(var(--fg-rgb), .1); background: rgba(var(--fg-rgb), .04); color: var(--text-muted); cursor: pointer; display: grid; place-items: center; }
 .kf-emo-btn.sm { width: 28px; height: 28px; border: 0; background: transparent; }
-.kf-emo-btn:hover { color: #ffb485; }
+.kf-emo-btn:hover { color: var(--pastel-orange); }
 .kf-emojis { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 290px; padding: 8px; border-radius: 14px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
 .kf-emojis button { border: 0; background: transparent; cursor: pointer; font-size: 20px; padding: 4px 0; border-radius: 8px; }
-.kf-emojis button:hover { background: rgba(255,255,255,.08); }
-.kf-checks { display: flex; flex-direction: column; border-radius: 14px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02); }
+.kf-emojis button:hover { background: rgba(var(--fg-rgb), .08); }
+.kf-checks { display: flex; flex-direction: column; border-radius: 14px; border: 1px solid rgba(var(--fg-rgb), .07); background: rgba(var(--fg-rgb), .02); }
 .kf-check { padding: 12px 14px; }
-.kf-check + .kf-check { border-top: 1px solid rgba(255,255,255,.06); }
+.kf-check + .kf-check { border-top: 1px solid rgba(var(--fg-rgb), .06); }
 .kf-check input[type=checkbox] { appearance: none; width: 20px; height: 20px; flex: none; margin: 0; border-radius: 6px; border: 2px solid #ff7a1a; background: transparent; cursor: pointer; display: grid; place-items: center; }
 .kf-check input[type=checkbox]:checked { background: #ff6201; }
 .kf-check input[type=checkbox]:checked::after { content: ''; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
-.kf-react { width: 44px; height: 40px; border-radius: 11px; font-size: 20px; cursor: pointer; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); }
+.kf-react { width: 44px; height: 40px; border-radius: 11px; font-size: 20px; cursor: pointer; background: rgba(var(--fg-rgb), .04); border: 1px solid rgba(var(--fg-rgb), .1); }
 .kf-react.on { border-color: #ff7a1a; background: rgba(255,98,1,.18); box-shadow: 0 0 14px rgba(255,98,1,.3); }
 .kf-cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.kf-card2 { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; border-radius: 14px; cursor: pointer; font-family: var(--font-sans); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); color: var(--text-muted); font-size: 12px; }
+.kf-card2 { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; border-radius: 14px; cursor: pointer; font-family: var(--font-sans); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .1); color: var(--text-muted); font-size: 12px; }
 .kf-card2 b { color: var(--text-strong); font-size: 14px; }
 .kf-card2.on { border-color: #ff7a1a; background: rgba(255,98,1,.12); box-shadow: inset 0 0 0 1px rgba(255,122,26,.5); }
-.kf-kw { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 11px; border-radius: 999px; font-size: 12.5px; color: var(--text-strong); background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); }
-.kf-kw button { width: 18px; height: 18px; border-radius: 50%; border: 0; cursor: pointer; background: rgba(255,255,255,.1); color: var(--text-muted); line-height: 1; padding: 0; }
-.kf-rule { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.08); }
-.kf-rule-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-strong); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); }
+.kf-kw { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 11px; border-radius: 999px; font-size: 12.5px; color: var(--text-strong); background: rgba(var(--fg-rgb), .07); border: 1px solid rgba(var(--fg-rgb), .1); }
+.kf-kw button { width: 18px; height: 18px; border-radius: 50%; border: 0; cursor: pointer; background: rgba(var(--fg-rgb), .1); color: var(--text-muted); line-height: 1; padding: 0; }
+.kf-rule { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: rgba(var(--fg-rgb), .025); border: 1px solid rgba(var(--fg-rgb), .08); }
+.kf-rule-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-strong); background: rgba(var(--fg-rgb), .06); border: 1px solid rgba(var(--fg-rgb), .1); }
 .kf-addrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.kf-addrow button { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 8px; border-radius: 11px; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text-strong); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); }
+.kf-addrow button { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 8px; border-radius: 11px; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text-strong); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .1); }
 .kf-addrow button:hover { border-color: rgba(255,148,82,.6); }
 .kf-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; min-width: 210px; padding: 6px; border-radius: 12px; display: flex; flex-direction: column; }
 .kf-menu button { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 9px; border: 0; cursor: pointer; text-align: left; font-family: var(--font-sans); font-size: 13px; color: var(--text-body); background: transparent; }
 .kf-menu button:hover { background: rgba(255,98,1,.14); }
-.kf-thumb { width: 100%; max-height: 150px; object-fit: cover; border-radius: 12px; border: 1px solid rgba(255,255,255,.08); display: block; background: #000; }
-.kf-vplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.3); pointer-events: none; }
-.kf-audio { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px 12px 12px 4px; background: #1f2c33; cursor: default; }
+.kf-thumb { width: 100%; max-height: 150px; object-fit: cover; border-radius: 12px; border: 1px solid rgba(var(--fg-rgb), .08); display: block; background: #000; }
+.kf-vplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(var(--fg-rgb), .3); pointer-events: none; }
+.kf-audio { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px 12px 12px 4px; background: var(--wa-in); cursor: default; }
 .kf-audio .av { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #34d399, #059669); }
-.kf-audio .av i { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: #34d399; border: 2px solid #1f2c33; }
-.kf-audio .pl { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: #e9edef; background: transparent; }
+.kf-audio .av i { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: #34d399; border: 2px solid var(--wa-in); }
+.kf-audio .pl { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; color: var(--wa-text); background: transparent; }
 .kf-audio .wave { display: flex; align-items: center; gap: 2px; height: 24px; }
-.kf-audio .wave span { width: 3px; border-radius: 2px; background: #8696a0; flex: none; transition: opacity .1s; }
-.kf-audio .tm { font-size: 10.5px; color: #8696a0; margin-top: 2px; }
-.kf-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #ffb485; background: rgba(255,98,1,.12); border: 1px solid rgba(255,148,82,.25); }
+.kf-audio .wave span { width: 3px; border-radius: 2px; background: var(--wa-muted); flex: none; transition: opacity .1s; }
+.kf-audio .tm { font-size: 10.5px; color: var(--wa-muted); margin-top: 2px; }
+.kf-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; color: var(--pastel-orange); background: rgba(255,98,1,.12); border: 1px solid rgba(255,148,82,.25); }
 .kf-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5; pointer-events: none; padding: 7px 14px; border-radius: 999px; font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
 `;
 
@@ -199,11 +199,11 @@ function BlockNode({ id, data, selected }) {
       {data.type === 'send_media' && <MediaPreview d={data.data} />}
       {data.type === 'send_text' && textBadges.length > 0 && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: '0 12px 10px' }}>{textBadges.map((b) => <span key={b} className="kf-badge">{b}</span>)}</div>}
       {exits.length > 0 && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,.06)', padding: '2px 0' }}>
+        <div style={{ borderTop: '1px solid rgba(var(--fg-rgb), .06)', padding: '2px 0' }}>
           {exits.map(([k, label]) => {
             const ec = EDGE[edgeTone(k)].from;
             return (
-              <div key={k} className="kf-exit" style={{ '--ec': ec, color: edgeTone(k) === 'danger' ? '#fda4af' : undefined }}>
+              <div key={k} className="kf-exit" style={{ '--ec': ec, color: edgeTone(k) === 'danger' ? 'var(--pastel-pink)' : undefined }}>
                 {label}<span className="dot" />
                 <Handle type="source" id={k} position={Position.Right} className="kf-h" style={{ '--hc': ec }} />
               </div>
@@ -215,6 +215,8 @@ function BlockNode({ id, data, selected }) {
   );
 }
 const nodeTypes = { kobly: BlockNode };
+// claro/escuro do React Flow (controles, minimapa) segue o tema da Kobly
+const flowColorMode = () => (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
 
 // ---- Linha entre blocos ------------------------------------------------------------
 function GlowEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, sourceHandleId, selected }) {
@@ -398,7 +400,7 @@ function MediaFields({ d, set, upload, tts }) {
         <input ref={input} type="file" accept={m.accept} hidden onChange={(e) => { pick(e.target.files && e.target.files[0]); e.target.value = ''; }} />
         {hasFile ? (
           <div className="kf-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-            {d.kind === 'image' && <img src={d.url} alt="" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 10, background: 'rgba(0,0,0,.3)' }} />}
+            {d.kind === 'image' && <img src={d.url} alt="" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 10, background: 'rgba(var(--well-rgb), calc(.3 * var(--well-k)))' }} />}
             {d.kind === 'video' && <video src={d.url} controls style={{ width: '100%', maxHeight: 240, borderRadius: 10, background: '#000' }} />}
             {d.kind === 'audio' && <audio src={d.url} controls style={{ width: '100%' }} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -422,7 +424,7 @@ function MediaFields({ d, set, upload, tts }) {
       </>) : (
         <Input label="Link público (https)" value={d.url || ''} onChange={(e) => set({ url: e.target.value.trim(), tts_text: undefined })} placeholder="https://..." hint="O WhatsApp baixa o arquivo deste link. Também aceita uma variável, como {{pagamento_qr}}." />
       )}
-      {err && <div style={{ color: '#fda4af', fontSize: 'var(--text-xs)' }}>{err}</div>}
+      {err && <div style={{ color: 'var(--pastel-pink)', fontSize: 'var(--text-xs)' }}>{err}</div>}
       {d.kind !== 'audio' && <RichText label="Legenda (opcional)" value={d.caption} onChange={(v) => set({ caption: v })} rows={3} placeholder="Texto que vai junto com o arquivo" />}
       {d.kind === 'document' && <Input label="Nome do arquivo para o lead" value={d.filename || ''} onChange={(e) => set({ filename: e.target.value || undefined })} placeholder="material.pdf" />}
     </div>
@@ -521,7 +523,7 @@ function VarPicker({ onPick }) {
       </button>
       {open && (
         <div className="kf-varpop kf-glass" role="dialog" aria-label="Variáveis">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid rgba(var(--fg-rgb), .07)' }}>
             <Icon name="search" size={15} style={{ color: 'var(--text-subtle)' }} />
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar variável…" className="kf-varsearch" />
           </div>
@@ -654,7 +656,7 @@ function NewTag({ onCreated }) {
         <input className="kf-ta" style={{ flex: 1, padding: '9px 12px' }} value={nome} maxLength={60} placeholder="Nome da nova etiqueta" onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } }} />
         <Button size="sm" iconLeft="plus" loading={busy} disabled={!nome.trim() || busy} onClick={go}>Criar</Button>
       </div>
-      {err && <span style={{ color: '#fda4af', fontSize: 'var(--text-xs)' }}>{err}</span>}
+      {err && <span style={{ color: 'var(--pastel-pink)', fontSize: 'var(--text-xs)' }}>{err}</span>}
     </div>
   );
 }
@@ -1084,7 +1086,7 @@ function BlockModal({ node, onChange, onDelete, onClose }) {
   return (
     <div className="kf-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="kf-modal kf-glass" role="dialog" aria-modal="true" aria-label={`Editar ${b.label}`} style={{ '--tone': tone }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px 14px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px 14px', borderBottom: '1px solid rgba(var(--fg-rgb), .06)' }}>
           <span className="kf-ico" style={{ width: 40, height: 40, borderRadius: 13 }}><Icon name={b.icon} size={19} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1098,8 +1100,8 @@ function BlockModal({ node, onChange, onDelete, onClose }) {
         <div style={{ padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <BlockFields node={node} onChange={onChange} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,.06)' }}>
-          {!node.data.isStart && <Button variant="ghost" iconLeft="trash-2" onClick={onDelete} style={{ color: '#fda4af' }}>Excluir bloco</Button>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderTop: '1px solid rgba(var(--fg-rgb), .06)' }}>
+          {!node.data.isStart && <Button variant="ghost" iconLeft="trash-2" onClick={onDelete} style={{ color: 'var(--pastel-pink)' }}>Excluir bloco</Button>}
           <span style={{ flex: 1 }} />
           <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>As mudanças entram no canvas na hora</span>
           <Button iconLeft="check" onClick={onClose}>Concluir</Button>
@@ -1331,9 +1333,9 @@ function Editor({ campaign, onBack, api, notify }) {
           </div>
 
           {/* canvas */}
-          <div ref={wrap} className="kf-canvas" style={{ flex: 1, minWidth: 0, border: '1px solid rgba(255,255,255,.07)', borderRadius: 16, overflow: 'hidden' }}
+          <div ref={wrap} className="kf-canvas" style={{ flex: 1, minWidth: 0, border: '1px solid rgba(var(--fg-rgb), .07)', borderRadius: 16, overflow: 'hidden' }}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }} onDrop={onDrop}>
-            <ReactFlow key={canvasKey} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} colorMode="dark" fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+            <ReactFlow key={canvasKey} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} colorMode={flowColorMode()} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
               onNodesChange={(ch) => { onNodesChange(ch); if (ch.some((c) => c.type === 'position' || c.type === 'remove')) touch(); }}
               onEdgesChange={(ch) => { onEdgesChange(ch); if (ch.some((c) => c.type === 'remove')) touch(); }}
               onConnect={onConnect} onNodeClick={(_, n) => setEditId(n.id)}
@@ -1361,7 +1363,7 @@ function Editor({ campaign, onBack, api, notify }) {
                   {copilot.suggestions.map((s, i) => {
                     const c = s.severity === 'alta' ? '#f43f5e' : s.severity === 'media' ? '#f59e0b' : '#f39200';
                     return (
-                      <button key={i} type="button" onClick={() => s.ref && focusRef(s.ref, false)} style={{ textAlign: 'left', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)', borderLeft: `3px solid ${c}`, borderRadius: 10, padding: '8px 10px', cursor: s.ref ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <button key={i} type="button" onClick={() => s.ref && focusRef(s.ref, false)} style={{ textAlign: 'left', background: 'rgba(var(--fg-rgb), .03)', border: '1px solid rgba(var(--fg-rgb), .07)', borderLeft: `3px solid ${c}`, borderRadius: 10, padding: '8px 10px', cursor: s.ref ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{s.title}{s.ref ? <span style={{ color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', fontWeight: 400, fontSize: 10 }}> · {s.ref}</span> : null}</span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{s.detail}</span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>→ {s.action}</span>
@@ -1417,9 +1419,9 @@ function FlowReadOnly({ graph, lookups = {} }) {
       <style>{FLOW_CSS}</style>
       <div className="kf-canvas" style={{ height: '100%', minHeight: 420 }}>
         <ReactFlowProvider>
-          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} colorMode="dark" fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} colorMode={flowColorMode()} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
             nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} edgesFocusable={false} proOptions={{ hideAttribution: true }}>
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="rgba(255,255,255,.08)" />
+            <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="rgba(var(--fg-rgb), .08)" />
             <Controls showInteractive={false} />
           </ReactFlow>
         </ReactFlowProvider>

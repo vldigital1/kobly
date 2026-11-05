@@ -15,7 +15,7 @@ export function LeadAvatar({ name, src, size = 40, ring = null, dot = null }) {
   return (
     <span style={{ position: 'relative', width: size, height: size, flex: 'none', display: 'inline-grid' }}>
       <span style={{ width: size, height: size, borderRadius: '50%', display: 'grid', placeItems: 'center', overflow: 'hidden', fontWeight: 700, fontSize: Math.round(size * 0.36), color: '#fff',
-        background: img ? '#2a3942' : `linear-gradient(135deg, hsl(${h} 55% 45%), hsl(${(h + 40) % 360} 60% 32%))`, boxShadow: ring ? `0 0 0 2px #0c0e16, 0 0 0 4px ${ring}` : 'none' }}>
+        background: img ? 'var(--wa-btn)' : `linear-gradient(135deg, hsl(${h} 55% 45%), hsl(${(h + 40) % 360} 60% 32%))`, boxShadow: ring ? `0 0 0 2px #0c0e16, 0 0 0 4px ${ring}` : 'none' }}>
         {img ? <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : ini(name)}
       </span>
       {dot && <span style={{ position: 'absolute', right: -1, bottom: -1, width: Math.max(10, size * 0.28), height: Math.max(10, size * 0.28), borderRadius: '50%', background: dot, border: '2px solid #0c0e16' }} />}
