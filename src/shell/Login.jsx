@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { Button, Input, Banner, Icon } from '@/ds';
 import { useKobly } from '@/store/store.jsx';
+import { LangPicker } from '@/lib/LangPicker.jsx';
 
 // Kobly — tela de autenticação (login / cadastro / recuperação / nova senha).
 
@@ -134,6 +135,7 @@ export function KoblyAuthScreen({ mode = 'login' }) {
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 22, justifyContent: 'center' }}>
           <img src="/assets/kobly-logo.png" alt="KOBLY" style={{ display: 'block', height: 34, width: 'auto' }} />
         </div>
+        <div style={{ marginBottom: 18 }}><LangPicker compact /></div>
 
         <div style={{ position: 'relative', background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', padding: 28 }}>
           <span aria-hidden style={cardTopEdge} />

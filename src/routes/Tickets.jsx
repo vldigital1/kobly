@@ -249,7 +249,7 @@ function KoblyTickets() {
                       <div style={{
                         maxWidth: '72%', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', lineHeight: 'var(--lh-snug)',
                         background: mine ? 'var(--grad-accent)' : 'var(--surface-sunken)', color: mine ? 'var(--text-on-accent)' : 'var(--text-body)',
-                      }}>{m.texto}</div>
+                      }} data-no-i18n>{m.texto}</div>
                     </div>
                   );
                 })}

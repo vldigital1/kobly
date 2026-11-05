@@ -6,6 +6,7 @@ import { PageIntro, useAsync } from '@/lib/hooks.jsx';
 import { ErrorState, Skeleton, SkeletonForm } from '@/lib/ui.jsx';
 import { useKobly } from '@/store/store.jsx';
 import { getThemePref, setThemePref } from '@/lib/theme.js';
+import { LangPicker } from '@/lib/LangPicker.jsx';
 
 // Kobly — Perfil + meu plano. Editar dados do usuário e ver plano. KoblyProfile
 
@@ -98,6 +99,9 @@ function KoblyProfile() {
           )}
           <Card title="Aparência">
             <AppearancePicker />
+          </Card>
+          <Card title="Idioma">
+            <LangPicker />
           </Card>
           <Card title="Segurança">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

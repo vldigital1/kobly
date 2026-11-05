@@ -280,7 +280,7 @@ function Bubble({ m, first, fetcher, onOpen, lead }) {
   else body = <>{who}<Rich text={m.body || ''} />{meta}</>;
   return (
     <div className={`kh-row ${de.mine ? 'mine' : 'lead'}${first ? ' first' : ''}`}>
-      <div className={`kh-b${m.de === 'agente' ? ' ia' : ''}${tipo && tipo !== 'audio' ? ' media' : ''}${tipo === 'sticker' ? ' sticker' : ''}`}>{body}</div>
+      <div data-no-i18n className={`kh-b${m.de === 'agente' ? ' ia' : ''}${tipo && tipo !== 'audio' ? ' media' : ''}${tipo === 'sticker' ? ' sticker' : ''}`}>{body}</div>
     </div>
   );
 }
