@@ -6,26 +6,6 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "koblay.io"
-        }
-      ],
-      "destination": "/site.html"
-    },
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.koblay.io"
-        }
-      ],
-      "destination": "/site.html"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
