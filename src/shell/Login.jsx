@@ -50,6 +50,8 @@ function PasswordField({ label, id, value, onChange, autoComplete, placeholder }
 }
 
 // Link de afiliado (app.koblay.io/?ref=codigo): guarda o código por alguns dias neste navegador e abre o cadastro.
+// Botão "Criar conta" da página de vendas (app.koblay.io/?criar=1): já abre no cadastro.
+const wantsSignup = () => { try { return new URLSearchParams(window.location.search).get('criar') === '1'; } catch { return false; } };
 const REF_KEY = 'kobly:ref';
 function readRef() {
   try {
@@ -66,7 +68,7 @@ export function KoblyAuthScreen({ mode = 'login' }) {
   const [ref] = useState(() => (typeof window === 'undefined' ? null : readRef()));
   const [refName, setRefName] = useState(null);
   const [whatsapp, setWhatsapp] = useState('');
-  const [form, setForm] = useState(mode === 'recovery' ? 'recovery' : ref && ref.fresh ? 'signup' : 'login'); // login | signup | reset | recovery
+  const [form, setForm] = useState(mode === 'recovery' ? 'recovery' : (ref && ref.fresh) || wantsSignup() ? 'signup' : 'login'); // login | signup | reset | recovery
   useEffect(() => {
     if (!ref || !ref.fresh) return;
     KoblyApi.affiliateClick(ref.code, window.location.href).then((r) => {
