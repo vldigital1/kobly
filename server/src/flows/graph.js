@@ -95,7 +95,7 @@ export function labelOf(node) {
   if (node && node.type === 'send_text') return 'Texto';
   return (NODE_TYPES[node && node.type] || {}).label || 'Bloco';
 }
-function checkData(node, err) {
+function checkData(node, err, warn = err) {
   const d = isObj(node.data) ? node.data : {};
   const at = `${labelOf(node)}`;
   switch (node.type) {
@@ -224,7 +224,8 @@ function checkData(node, err) {
       break;
     }
     case 'notify':
-      if (!str(d.channel_id, 64)) err(`${at}: escolha o canal de alerta (Integrações → Pagamentos, Pixel e alertas).`);
+      // sem canal o fluxo só passa direto: nem todo mundo usa Telegram
+      if (!str(d.channel_id, 64)) warn(`${at}: sem canal de alerta, o bloco é pulado (conecte um Telegram em Integrações se quiser receber).`);
       if (!str(d.text, 2000)) err(`${at}: escreva o texto do alerta.`);
       break;
     case 'payment': {
@@ -245,7 +246,7 @@ function checkData(node, err) {
       if (d.amount !== undefined && d.amount !== null && typeof d.amount !== 'string' && typeof d.amount !== 'number') err(`${at}: valor inválido.`);
       break;
     case 'pixel':
-      if (!str(d.pixel_config_id, 64)) err(`${at}: escolha o Pixel (Integrações → Pixel da Meta).`);
+      if (!str(d.pixel_config_id, 64)) warn(`${at}: sem Pixel escolhido, o bloco é pulado (Integrações → Pixel da Meta).`);
       if (!['Purchase', 'Lead', 'InitiateCheckout', 'AddPaymentInfo'].includes(d.event)) err(`${at}: evento inválido.`);
       break;
     case 'ai_extract': {
@@ -321,7 +322,7 @@ export function validateGraph(graph) {
   for (const n of nodes) {
     if (!isObj(n) || !seen.has(n.ref)) continue;
     if (!(n.type in NODE_TYPES)) { err(`Bloco de tipo desconhecido ("${n.type}").`, n.ref); continue; }
-    checkData(n, (m) => err(m, n.ref));
+    checkData(n, (m) => err(m, n.ref), (m) => { warnings.push(m); issues.push({ ref: n.ref, message: m, level: 'warning' }); });
     const next = isObj(n.next) ? n.next : {};
     const exits = exitsOf(n);
     for (const [exit, target] of Object.entries(next)) {

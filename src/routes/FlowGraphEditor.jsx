@@ -6,6 +6,7 @@ import { useKobly } from '@/store/store.jsx';
 import { KoblyEmailEditor } from '@/routes/EmailEditor.jsx';
 import { Badge, Button, Icon, IconButton, Input, Select } from '@/ds';
 import { BLOCKS, MEDIA, PALETTE_GROUPS, TONES, TIPOS_EVENTO, PAYMENT_METHODS, CURRENCY_LABEL, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf, paletteItems, metaOf, edgeTone } from '@/lib/flowGraph.js';
+import { FlowSimulator } from '@/routes/FlowSimulator.jsx';
 import { SYSTEM_VARS, AD_VARS, GREETING_VARS, COUNTRIES, REACTION_SUGGESTIONS, EMOJIS, flowVarsOf } from '@/lib/flowVars.js';
 
 // Kobly — Editor visual do fluxo em grafo (motor novo). Blocos ligados por saídas nomeadas:
@@ -1163,6 +1164,8 @@ function Editor({ campaign, onBack, api, notify }) {
   const [copilot, setCopilot] = useState(null); // { leads, suggestions, summary }
   const [emailModal, setEmailModal] = useState(null); // { email, onCreated } — editor de e-mail das campanhas
   const [name, setName] = useState(campaign.nome || 'Fluxo sem nome');
+  const [sim, setSim] = useState(false); // simulador de WhatsApp aberto (botão Conferir)
+  const [savedAt, setSavedAt] = useState(null); // hora do último "Salvar" (rascunho)
   const [leaving, setLeaving] = useState(false); // pergunta (na própria tela) ao sair com mudanças não publicadas
   async function runCopilot() {
     if (copilot) { setCopilot(null); return; }
@@ -1192,10 +1195,16 @@ function Editor({ campaign, onBack, api, notify }) {
     ]);
     if (g.error) { setState((s) => ({ ...s, loading: false, error: g.error })); return; }
     // sem versão publicada: abre o rascunho mais recente (ex.: fluxo criado pela tela Fluxos)
+    // rascunho salvo depois da versão no ar abre no lugar dela (o "Salvar" guarda sem publicar)
     let base = g.active ? g.active.graph : null;
-    if (!base && (g.versions || [])[0]) { const v = await api.flowGraph('get_version', { campaign_id: campaign.id, version: g.versions[0].version }); if (!v.error && v.graph) base = v.graph; }
+    const newest = (g.versions || [])[0];
+    let draftAt = null;
+    if (newest && (!g.active || (newest.is_draft && newest.version > g.active.version))) {
+      const v = await api.flowGraph('get_version', { campaign_id: campaign.id, version: newest.version });
+      if (!v.error && v.graph) { base = v.graph; if (newest.is_draft) draftAt = newest.created_at ? new Date(newest.created_at) : null; }
+    }
     const c = toCanvas(base || emptyGraph());
-    setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setEditId(null);
+    setNodes(c.nodes); setEdges(c.edges); setDirty(false); setReport(null); setMetrics(null); setEditId(null); setSavedAt(draftAt);
     const fl = await api.flowGraph('list', {}, campaign.empresaId).catch(() => null);
     const vo = await (api.listVoiceAgents ? api.listVoiceAgents() : Promise.resolve(null)).catch(() => null);
     setLookups({ templates: templates || [], tags: tags || [], integrations: integrations || [], pixels: pixels || [], channels: channels || [], agents: agents || [], emails: emails || [], brands: brands || [], ai, flows: (fl && fl.flows) || [], voiceAgents: (vo && vo.agents) || [], voiceSettings: (vo && vo.settings) || null });
@@ -1284,11 +1293,20 @@ function Editor({ campaign, onBack, api, notify }) {
     catch (e) { return { error: (e && e.message) || 'Falha ao falar com o servidor.' }; }
     finally { setBusy(false); }
   };
+  // Conferir: abre o simulador de WhatsApp e mostra o que falta (se faltar)
   async function validate() {
+    setSim(true);
     const r = await call('validate', { graph: graph() });
     if (r.error) { notify('danger', r.error); return; }
     setReport(r.ok && !(r.warnings || []).length ? null : { ok: r.ok, errors: r.errors || [], warnings: r.warnings || [], issues: r.issues || [] });
-    if (r.ok) notify('success', 'Tudo certo: o fluxo pode ser publicado.');
+  }
+  // Salvar: guarda um rascunho mesmo com pendências (não roda até publicar)
+  async function saveDraft() {
+    const r = await call('save_draft', { campaign_id: campaign.id, graph: graph(), note: 'salvo no editor' });
+    if (r.error) { notify('danger', r.error); return false; }
+    setDirty(false); setSavedAt(new Date());
+    notify('success', state.version ? 'Rascunho salvo. A versão no ar continua a mesma até você publicar.' : 'Rascunho salvo.');
+    return true;
   }
   async function save() {
     const r = await call('save', { campaign_id: campaign.id, graph: graph() });
@@ -1313,6 +1331,17 @@ function Editor({ campaign, onBack, api, notify }) {
     notify('success', 'Nome do fluxo atualizado.');
   }
   const back = () => { if (dirty) setLeaving(true); else onBack(); };
+  const saveRef = useRef(saveDraft); saveRef.current = saveDraft;
+  useEffect(() => {
+    const h = (e) => { if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's') { e.preventDefault(); saveRef.current(); } };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, []);
+  // simulador: destaca o bloco que está rodando (e centraliza quando espera o contato)
+  const onSimStep = useCallback((ref, center) => {
+    setNodes((ns) => ns.map((x) => (x.selected === (x.id === ref) ? x : { ...x, selected: x.id === ref })));
+    const n = rf.getNode(ref);
+    if (n && center) rf.setCenter(n.position.x + 126, n.position.y + 60, { zoom: Math.max(rf.getZoom(), 0.8), duration: 350 });
+  }, [rf, setNodes]);
   const focusRef = (ref, open = true) => {
     const n = ref && rf.getNode(ref);
     if (n) {
@@ -1344,11 +1373,13 @@ function Editor({ campaign, onBack, api, notify }) {
               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setName(campaign.nome || ''); e.currentTarget.blur(); } }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', paddingLeft: 8 }}>
               {state.version ? <><span className="kf-live" />No ar</> : <><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#64748b' }} />Ainda não publicado</>}
+              {dirty ? <span style={{ color: 'var(--pastel-orange)' }}>· alterações não salvas</span> : savedAt ? <span>· rascunho salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span> : null}
             </div>
           </div>
           {state.version && <Button variant={copilot ? 'primary' : 'secondary'} size="sm" iconLeft="sparkles" onClick={runCopilot}>Copiloto</Button>}
           {state.version && <Button variant={metrics ? 'primary' : 'secondary'} size="sm" iconLeft="chart-column" onClick={toggleMetrics}>Métricas</Button>}
-          <Button variant="secondary" onClick={validate} loading={busy} iconLeft="check">Conferir</Button>
+          <Button variant={sim ? 'primary' : 'secondary'} onClick={validate} loading={busy} iconLeft="play">Conferir</Button>
+          <Button variant="secondary" onClick={saveDraft} loading={busy} iconLeft="save" disabled={state.loading} title="Salvar rascunho (Ctrl+S). Salva mesmo com pendências; só roda depois de publicar.">Salvar</Button>
           <Button onClick={save} loading={busy} iconLeft="send" disabled={state.loading}>Publicar</Button>
         </div>
 
@@ -1391,8 +1422,8 @@ function Editor({ campaign, onBack, api, notify }) {
                   <strong style={{ flex: 1, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{copilot ? 'Copiloto' : report && report.errors.length ? (report.errors.length === 1 ? 'Falta 1 ajuste' : `Faltam ${report.errors.length} ajustes`) : 'Avisos'}</strong>
                   <IconButton icon="x" size="sm" aria-label="Fechar painel" onClick={() => { setReport(null); setCopilot(null); }} />
                 </div>
-                {report && (report.issues && report.issues.length ? report.issues : report.errors.map((m) => ({ message: m }))).map((it, i) => <button key={'e' + i} type="button" onClick={() => focusRef(it.ref)} style={{ textAlign: 'left', background: 'rgba(244,63,94,.1)', color: '#fda4af', border: '1px solid rgba(244,63,94,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{it.message}</button>)}
-                {report && report.warnings.map((m, i) => <button key={'w' + i} type="button" style={{ textAlign: 'left', background: 'rgba(245,158,11,.1)', color: '#fcd34d', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{m}</button>)}
+                {report && (report.issues && report.issues.length ? report.issues.filter((it) => it.level !== 'warning') : report.errors.map((m) => ({ message: m }))).map((it, i) => <button key={'e' + i} type="button" onClick={() => focusRef(it.ref)} style={{ textAlign: 'left', background: 'rgba(244,63,94,.1)', color: '#fda4af', border: '1px solid rgba(244,63,94,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{it.message}</button>)}
+                {report && report.warnings.map((m, i) => <button key={'w' + i} type="button" onClick={() => { const it = (report.issues || []).find((x) => x.message === m); if (it && it.ref) focusRef(it.ref); }} style={{ textAlign: 'left', background: 'rgba(245,158,11,.1)', color: '#fcd34d', border: '1px solid rgba(245,158,11,.25)', borderRadius: 10, padding: '7px 9px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>{m}</button>)}
                 {report && report.ok && !report.errors.length && !report.warnings.length && !copilot && <Badge tone="success">Pronto para publicar</Badge>}
                 {copilot && (<>
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{copilot.leads} leads analisados</span>
@@ -1410,17 +1441,19 @@ function Editor({ campaign, onBack, api, notify }) {
                 </>)}
               </div>
             )}
-            {!state.loading && nodes.length > 0 && <div className="kf-hint kf-glass">Clique num bloco para editar · arraste da bolinha de uma saída até outro bloco para ligar</div>}
+            {!state.loading && !sim && nodes.length > 0 && <div className="kf-hint kf-glass">Clique num bloco para editar · arraste da bolinha de uma saída até outro bloco para ligar</div>}
           </div>
+          {sim && <FlowSimulator graph={graph} lookups={lookups} onStep={onSimStep} onClose={() => setSim(false)} />}
         </div>
       </div>
       {leaving && (
         <div className="kf-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setLeaving(false); }}>
           <div className="kf-modal kf-glass" role="dialog" aria-modal="true" style={{ '--tone': '#f59e0b', width: 'min(440px, 100%)', padding: 22, gap: 14 }}>
-            <strong style={{ color: 'var(--text-strong)', fontSize: 16 }}>Publicar antes de sair?</strong>
-            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', lineHeight: 1.5 }}>Você mexeu no fluxo e ainda não publicou. Se sair agora, essas mudanças se perdem.</div>
+            <strong style={{ color: 'var(--text-strong)', fontSize: 16 }}>Salvar antes de sair?</strong>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', lineHeight: 1.5 }}>Você mexeu no fluxo e não salvou. Salve como rascunho (pode ter pendências) ou publique para colocar no ar.</div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              <Button variant="ghost" onClick={() => { setLeaving(false); onBack(); }}>Sair sem publicar</Button>
+              <Button variant="ghost" onClick={() => { setLeaving(false); onBack(); }}>Sair sem salvar</Button>
+              <Button variant="secondary" iconLeft="save" loading={busy} onClick={async () => { if (await saveDraft()) { setLeaving(false); onBack(); } }}>Salvar rascunho e sair</Button>
               <Button iconLeft="send" loading={busy} onClick={async () => { if (await save()) { setLeaving(false); onBack(); } else setLeaving(false); }}>Publicar e sair</Button>
             </div>
           </div>

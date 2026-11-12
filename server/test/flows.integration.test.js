@@ -240,3 +240,13 @@ test('métricas, copiloto, MCP (rascunho) e publicação do rascunho com revalid
   assert.equal(viaLink.status, 200); assert.ok((await viaLink.json()).result.tools.some((t) => t.name === 'kobly_criar_fluxo'));
   assert.equal((await post('/mcp/kbmcp_invalidoinvalidoinvalidoinvalido', { jsonrpc: '2.0', id: 7, method: 'tools/list' })).status, 401);
 });
+
+test('Salvar no editor: rascunho com pendência salva (não muda o que está no ar); publicar continua exigindo correção', { skip }, async () => {
+  const quebrado = graph(); quebrado.nodes.find((n) => n.type === 'send_text' || n.type === 'send_template').data = {};
+  const antes = (await pool.query(`select v.version from public.flow_graph_versions v join public.campaign_flows f on f.id = v.flow_id where f.campaign_id = $1 and v.is_active`, [A.campaign])).rows;
+  const r = await fn('flow-graph', { action: 'save_draft', campaign_id: A.campaign, graph: quebrado, note: 'salvo no editor' }, A.token);
+  assert.equal(r.status, 200, JSON.stringify(r)); assert.equal(r.draft, true); assert.ok(r.warnings.length > 0, 'a pendência volta como aviso');
+  const depois = (await pool.query(`select v.version from public.flow_graph_versions v join public.campaign_flows f on f.id = v.flow_id where f.campaign_id = $1 and v.is_active`, [A.campaign])).rows;
+  assert.deepEqual(depois, antes, 'o rascunho não troca a versão no ar');
+  assert.equal((await fn('flow-graph', { action: 'save', campaign_id: A.campaign, graph: quebrado }, A.token)).status, 422);
+});

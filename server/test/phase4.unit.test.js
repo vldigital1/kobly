@@ -58,7 +58,11 @@ test('validação fase 4: agente, A/B, contador, horário comercial e alerta', (
   assert.match(e({ type: 'split', data: { variants: [{ id: 'a', weight: 50 }, { id: 'b', weight: 50 }] }, next: { var_a: 'fim' } }), /ligue o caminho "b"/);
   assert.match(e({ type: 'split', data: { variants: [{ id: 'a', weight: 0 }, { id: 'b', weight: 50 }] }, next: { var_a: 'fim', var_b: 'fim' } }), /peso do caminho "a"/);
   assert.match(e({ type: 'wait_until', data: { mode: 'business_hours', days: [1], from: '18:00', to: '09:00' }, next: { default: 'fim' } }), /início antes do fim/);
-  assert.match(e({ type: 'notify', data: { text: 'x' }, next: { default: 'fim' } }), /canal de alerta/);
+  // alerta sem canal (quem não usa Telegram) e Pixel sem escolha não travam: viram aviso e o bloco é pulado
+  const semCanal = validateGraph(g([{ ref: 'x', type: 'notify', data: { text: 'x' }, next: { default: 'fim' } }]));
+  assert.equal(semCanal.ok, true); assert.match(semCanal.warnings.join(), /sem canal de alerta/);
+  const semPixel = validateGraph(g([{ ref: 'x', type: 'pixel', data: { event: 'Purchase' }, next: { default: 'fim' } }]));
+  assert.equal(semPixel.ok, true); assert.match(semPixel.warnings.join(), /sem Pixel/);
 });
 
 test('A/B: sorteio respeita os pesos', () => {

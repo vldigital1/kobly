@@ -511,6 +511,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
         return { wait: { kind: 'timer', seconds: secs }, detail: `até ${at.toISOString()}` };
       }
       case 'notify': {
+        if (!d.channel_id) return { exit: 'default', detail: 'sem canal de alerta: bloco pulado' };
         if (!notifier) return { exit: 'default', detail: 'alertas indisponíveis neste ambiente' };
         const r = await notifier.send({ orgId: ex.organization_id, channelId: d.channel_id, text: render(d.text, ctx), chatId: d.chat_id ? render(String(d.chat_id), ctx) : undefined });
         return { exit: 'default', detail: r.ok ? 'alerta enviado' : `alerta falhou: ${r.detail}` }; // o fluxo segue mesmo se o alerta falhar
@@ -559,6 +560,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
         return { exit: 'default', detail: `${currency} ${amount}` };
       }
       case 'pixel': {
+        if (!d.pixel_config_id) return { exit: 'default', detail: 'sem Pixel escolhido: bloco pulado' };
         if (!pixel) return { exit: 'default', detail: 'pixel indisponível neste ambiente' };
         const prefix = ctx.vars._last_charge_prefix || 'pagamento';
         const value = d.value ? plainNumber(render(String(d.value), ctx)) : d.event === 'Purchase' ? (plainNumber(render(`{{${prefix}_valor_pago}}`, ctx)) || plainNumber(render(`{{${prefix}_valor}}`, ctx))) : null;

@@ -113,8 +113,8 @@ export function createFlowAdmin({ pool, copilot = null, siteUrl = '' }) {
         const draft = body.action === 'save_draft';
         const v = validateGraph(body.graph);
         const source = ['editor', 'mcp', 'copilot', 'import'].includes(body.source) ? body.source : 'editor';
-        // fluxo trazido de arquivo (ZapData, Leona, Kobly): entra como rascunho mesmo com pendências; publicar revalida
-        const lenient = source === 'import' && draft && body.graph && Array.isArray(body.graph.nodes) && body.graph.nodes.length <= 500;
+        // rascunho salva sempre, mesmo com pendências (igual ZapData): só não roda. Publicar revalida.
+        const lenient = draft && body.graph && Array.isArray(body.graph.nodes) && body.graph.nodes.length <= 500;
         if (!v.ok && !lenient) throw Object.assign(new AuthError(422, 'invalid_graph', v.errors[0]), { details: v });
         const f = await flowOf(orgId, body.campaign_id);
         const warnings = [...v.warnings, ...(v.ok ? [] : v.errors), ...(await refWarnings(orgId, body.graph))];
