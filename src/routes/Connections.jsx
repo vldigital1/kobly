@@ -115,6 +115,16 @@ const KC_CSS = `
 @keyframes kc-scan { 50% { top: calc(100% - 16px); } }
 .kc-step { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-sm); color: var(--text-body); }
 .kc-step i { font-style: normal; flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #25D366, #128C7E); }
+.kc-ig-btn { display: flex; align-items: center; justify-content: center; gap: 10px; height: 46px; border: 0; border-radius: 12px; cursor: pointer; font: 600 15px var(--font-sans); color: #fff;
+  background: linear-gradient(90deg, #feda75 -30%, #fa7e1e 10%, #d62976 45%, #962fbf 80%, #4f5bd5 120%); box-shadow: 0 8px 24px -10px rgba(214, 41, 118, .7); transition: transform .15s, filter .15s; }
+.kc-ig-btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06); }
+.kc-ig-btn:disabled { opacity: .55; cursor: not-allowed; }
+.kc-ig-btn > span:first-child { border-radius: 7px; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+.kc-ig-feats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kc-ig-feats span { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 10px; font-size: var(--text-xs); color: var(--text-body); background: rgba(225, 48, 108, .07); border: 1px solid rgba(225, 48, 108, .18); }
+.kc-ig-feats svg { color: #f472b6; flex: none; }
+.kc-link { background: none; border: 0; padding: 2px; cursor: pointer; color: var(--text-muted); font: 500 var(--text-xs) var(--font-sans); text-decoration: underline; text-underline-offset: 3px; align-self: center; }
+.kc-link:hover { color: var(--text-strong); }
 .kc-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; cursor: pointer; background: rgba(var(--fg-rgb), .025); border: 1px solid rgba(var(--fg-rgb), .06); font-size: var(--text-sm); color: var(--text-body); }
 .kc-switch { position: relative; width: 40px; height: 22px; flex: none; border-radius: 999px; border: 1px solid rgba(var(--fg-rgb), .14); background: rgba(var(--fg-rgb), .08); cursor: pointer; padding: 0; transition: all .2s; }
 .kc-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #cbd5e1; transition: all .2s cubic-bezier(.3,1.4,.5,1); }
@@ -356,14 +366,17 @@ function ConnCard({ c, flowsActive, onQr, onAct, onRename, onManage, onPause, on
   );
 }
 
-// Instagram Direct e Messenger: login com Facebook numa janelinha, escolha das páginas e do que conectar.
+// Instagram: "Entrar com Instagram" (login direto, sem página do Facebook) — ou, como opção, login com Facebook
+// (página + Instagram ligado + Messenger) numa janelinha, escolha das páginas e do que conectar.
 function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
-  const [st, setSt] = useState({ step: 'start', enabled: null, pages: [], user: null });
+  const [st, setSt] = useState({ step: 'start', enabled: null, igEnabled: null, pages: [], user: null });
+  const [viaFb, setViaFb] = useState(want === 'messenger');
+  const mode = useRef('fb');
   const [pick, setPick] = useState([]);
   const [kinds, setKinds] = useState(() => new Set(['instagram', 'messenger']));
   const [busy, setBusy] = useState(false);
   const popup = useRef(null);
-  useEffect(() => { KoblyApi.metaChannels('oauth_status', {}, empresaId).then((r) => setSt((s) => ({ ...s, enabled: !!(r && r.enabled) }))); }, [empresaId]);
+  useEffect(() => { KoblyApi.metaChannels('oauth_status', {}, empresaId).then((r) => setSt((s) => ({ ...s, enabled: !!(r && r.enabled), igEnabled: !!(r && r.ig_enabled) }))); }, [empresaId]);
   const loadPages = useCallback(async () => {
     const r = await KoblyApi.metaChannels('oauth_pages', {}, empresaId);
     if (r.error) { notify('danger', r.error); return; }
@@ -374,17 +387,19 @@ function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
     function onMsg(e) {
       if (!e.data || e.data.kobly !== 'meta-msg' || e.source !== popup.current) return;
       setBusy(false); popup.current = null;
-      if (e.data.ok) loadPages(); else notify('warning', e.data.message);
+      if (!e.data.ok) { notify('warning', e.data.message); return; }
+      if (mode.current === 'ig') { notify('success', 'Instagram conectado! O Direct, os comentários e os stories já chegam na Kobly.'); onDone(); } else loadPages();
     }
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [loadPages, notify]);
-  async function login() {
+  }, [loadPages, notify, onDone]);
+  async function login(how = 'fb') {
+    mode.current = how;
     const w = window.open('', 'kobly-facebook-msg', 'width=600,height=720');
     if (!w) { notify('warning', 'O navegador bloqueou a janelinha. Libere pop-ups para a Kobly e tente de novo.'); return; }
-    w.document.title = 'Conectando ao Facebook…';
+    w.document.title = how === 'ig' ? 'Conectando ao Instagram…' : 'Conectando ao Facebook…';
     popup.current = w; setBusy(true);
-    const r = await KoblyApi.metaChannels('oauth_start', {}, empresaId);
+    const r = await KoblyApi.metaChannels(how === 'ig' ? 'ig_oauth_start' : 'oauth_start', {}, empresaId);
     if (r.error) { w.close(); popup.current = null; setBusy(false); notify('danger', r.error); return; }
     w.location.href = r.url;
     const t = setInterval(() => { if (w.closed) { clearInterval(t); if (popup.current === w) { popup.current = null; setBusy(false); } } }, 700);
@@ -402,7 +417,26 @@ function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
   const toggleKind = (k) => setKinds((s) => { const n = new Set(s); if (n.has(k)) { if (n.size > 1) n.delete(k); } else n.add(k); return n; });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {st.step === 'start' && (<>
+      {st.step === 'start' && !viaFb && (<>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <ChannelLogo kind="instagram" size={46} />
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Entre com o Instagram da empresa. Não precisa de página do Facebook: só a conta ser <b style={{ color: 'var(--text-strong)' }}>profissional</b> (Empresa ou Criador).</div>
+        </div>
+        <div className="kc-step"><i>1</i><span>Clique em <b>Entrar com Instagram</b> e entre com o usuário e a senha da conta.</span></div>
+        <div className="kc-step"><i>2</i><span>Toque em <b>Permitir</b> para a Kobly ler e responder o Direct e os comentários.</span></div>
+        <div className="kc-step"><i>3</i><span>Pronto: Direct, comentários e stories já chegam na Kobly e disparam os seus fluxos.</span></div>
+        <div className="kc-ig-feats">
+          {[['message-circle', 'Direct no Chat ao vivo'], ['messages-square', 'Comentário vira Direct'], ['circle-play', 'Resposta e menção em story'], ['user-check', 'Confere se segue o perfil']].map(([i, t]) => (
+            <span key={t}><Icon name={i} size={14} />{t}</span>
+          ))}
+        </div>
+        {st.igEnabled === false && <Banner tone="warning" title="Ainda não ativo neste servidor.">O administrador da Kobly precisa colocar o ID e a chave do app do Instagram no servidor.</Banner>}
+        <button type="button" className="kc-ig-btn" disabled={busy || st.igEnabled === false} onClick={() => login('ig')}>
+          {busy ? <Icon name="loader-circle" size={18} /> : <ChannelLogo kind="instagram" size={22} />}{busy ? 'Esperando o Instagram…' : 'Entrar com Instagram'}
+        </button>
+        <button type="button" className="kc-link" onClick={() => setViaFb(true)}>Prefere conectar pela página do Facebook (junto com o Messenger)?</button>
+      </>)}
+      {st.step === 'start' && viaFb && (<>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ display: 'flex' }}><ChannelLogo kind="instagram" size={46} /><span style={{ marginLeft: -10 }}><ChannelLogo kind="messenger" size={46} /></span></div>
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Entre com o Facebook que administra a página da empresa. O Instagram precisa ser <b style={{ color: 'var(--text-strong)' }}>profissional</b> e estar ligado a essa página.</div>
@@ -411,7 +445,8 @@ function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
         <div className="kc-step"><i>2</i><span>Marque a <b>página</b> e o <b>Instagram</b> da empresa e permita o acesso às mensagens.</span></div>
         <div className="kc-step"><i>3</i><span>De volta aqui, escolha o que conectar. Pronto: as conversas chegam no Chat ao vivo.</span></div>
         {st.enabled === false && <Banner tone="warning" title="Ainda não ativo neste servidor.">O administrador da Kobly precisa colocar as chaves do app do Facebook no servidor.</Banner>}
-        <Button variant="primary" iconLeft={busy ? 'loader-circle' : 'facebook'} disabled={busy || st.enabled === false} onClick={login}>{busy ? 'Esperando o Facebook…' : 'Conectar com Facebook'}</Button>
+        <Button variant="primary" iconLeft={busy ? 'loader-circle' : 'facebook'} disabled={busy || st.enabled === false} onClick={() => login('fb')}>{busy ? 'Esperando o Facebook…' : 'Conectar com Facebook'}</Button>
+        {want === 'instagram' && <button type="button" className="kc-link" onClick={() => setViaFb(false)}>Voltar para "Entrar com Instagram"</button>}
       </>)}
       {st.step === 'pages' && (<>
         <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Entrou como <b style={{ color: 'var(--text-strong)' }}>{st.user || 'você'}</b>. Escolha as páginas:</div>
@@ -436,7 +471,7 @@ function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
           ))}
         </div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <Button variant="ghost" onClick={login}>Entrar com outra conta</Button>
+          <Button variant="ghost" onClick={() => login('fb')}>Entrar com outra conta</Button>
           <Button variant="primary" iconLeft="plug" disabled={busy || !pick.length} onClick={connect}>{busy ? 'Conectando…' : 'Conectar'}</Button>
         </div>
       </>)}
@@ -532,7 +567,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
     ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, proxy: { mode: i.proxy_mode || 'uazapi', display: i.proxy_display, checked: i.proxy_checked_at }, history: { status: i.history_status, count: i.history_count, at: i.history_at, error: i.history_error }, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
     ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at }] : []),
     ...st.meta.map((c) => ({ key: c.id, kind: c.kind, name: c.kind === 'instagram' ? (c.username ? `@${c.username}` : c.name) : c.name, profile: c.kind === 'instagram' ? c.name : null,
-      sub: c.kind === 'instagram' ? 'Instagram Direct' : 'Messenger da página', pic: c.picture_url, status: c.status === 'connected' ? 'connected' : 'disconnected', when: c.created_at, reason: c.last_error })),
+      sub: c.kind === 'instagram' ? (c.auth === 'ig_login' ? 'Instagram · Direct, comentários e stories' : 'Instagram Direct (pela página)') : 'Messenger da página', pic: c.picture_url, status: c.status === 'connected' ? 'connected' : 'disconnected', when: c.created_at, reason: c.last_error })),
     ...st.tg.map((c) => ({ key: c.id, kind: 'telegram', name: c.label, sub: 'Bot de alertas da equipe', chat: c.default_chat_id, status: 'connected', when: c.created_at })),
   ];
   const cards = all.filter((c) => (filter === 'todos' || c.kind === filter) && (!q || `${c.name} ${c.profile || ''} ${c.phone || ''}`.toLowerCase().includes(q.toLowerCase())));

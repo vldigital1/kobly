@@ -25,7 +25,23 @@ export function startSim(graph, { lookups = {}, now = () => new Date(), tz } = {
     const first = trig.mode === 'keywords' && kw.length ? kw[0] : 'Oi';
     push(st, { kind: 'in', text: first });
     st.vars.ultima_mensagem = first; st.vars.resposta = first;
-    push(st, { kind: 'sys', icon: 'zap', text: trig.mode === 'keywords' && kw.length ? `Gatilho: mensagem com "${first}"` : 'Gatilho: qualquer mensagem' });
+    const via = { instagram: ' no Instagram Direct', messenger: ' no Messenger', any: '' }[trig.channel] ?? '';
+    push(st, { kind: 'sys', icon: 'zap', text: trig.mode === 'keywords' && kw.length ? `Gatilho: mensagem${via} com "${first}"` : `Gatilho: qualquer mensagem${via}` });
+  } else if (trig.source === 'ig_comment') {
+    const kw = (trig.keywords || []).filter(Boolean);
+    const first = trig.mode === 'keywords' && kw.length ? kw[0] : 'Amei! 😍';
+    st.vars.comentario = first; st.vars.ultima_mensagem = first;
+    push(st, { kind: 'sys', icon: 'instagram', text: `Gatilho: ${TEST_LEAD.nome.split(' ')[0]} comentou "${first}" ${trig.posts === 'selected' ? 'num post escolhido' : 'num post'}` });
+    const rs = (trig.replies || []).filter(Boolean);
+    if (rs.length) push(st, { kind: 'sys', icon: 'corner-down-right', text: `Resposta pública no comentário: "${rs[0]}"${rs.length > 1 ? ` (sorteia entre ${rs.length})` : ''}` });
+    push(st, { kind: 'sys', icon: 'send', text: 'A 1ª mensagem vai no Direct como resposta ao comentário' });
+  } else if (trig.source === 'ig_story') {
+    const mention = trig.story === 'mention';
+    const kw = (trig.keywords || []).filter(Boolean);
+    const first = mention ? '' : trig.mode === 'keywords' && kw.length ? kw[0] : 'Que lindo! 😍';
+    if (mention) push(st, { kind: 'sys', icon: 'instagram', text: `Gatilho: ${TEST_LEAD.nome.split(' ')[0]} marcou você num story` });
+    else { push(st, { kind: 'in', text: first }); push(st, { kind: 'sys', icon: 'instagram', text: 'Gatilho: resposta ao seu story' }); }
+    st.vars.ultima_mensagem = first; st.vars.story_url = 'https://instagram.com/stories/…';
   } else {
     const ev = (trig.events || [])[0] || 'Pix Gerado';
     st.evento.tipo = ev;
@@ -36,7 +52,7 @@ export function startSim(graph, { lookups = {}, now = () => new Date(), tz } = {
 }
 
 function push(st, item) { st.log.push({ id: st.log.length + 1, at: st.now(), ...item }); }
-function ctxOf(st) { return { lead: st.lead, evento: st.evento, vars: st.vars, tags: st.tags, comprou: st.comprou, janelaAberta: true, agora: st.now(), tz: st.tz }; }
+function ctxOf(st) { return { lead: st.lead, evento: st.evento, vars: st.vars, tags: st.tags, comprou: st.comprou, janelaAberta: true, segue: true, agora: st.now(), tz: st.tz }; }
 const txt = (st, s) => render(String(s ?? ''), ctxOf(st));
 
 // segue a saída; sem ligação → fim
@@ -173,6 +189,7 @@ function ruleText(st, r) {
     case 'tag': return `${r.op === 'not_has' ? 'não tem' : 'tem'} etiqueta ${((st.lookups.tags || []).find((t) => t.id === r.tag_id) || {}).nome || ''}`;
     case 'purchased': return 'comprou';
     case 'window_open': return 'janela 24 h aberta';
+    case 'ig_follows': return `${r.op === 'not_follows' ? 'não segue' : 'segue'} o perfil (no teste: segue)`;
     default: return r.kind;
   }
 }

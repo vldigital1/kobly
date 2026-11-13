@@ -77,7 +77,7 @@ function Rich({ text }) {
   });
 }
 const SYS_ICON = { zap: 'zap', clock: 'clock', keyboard: 'keyboard', 'git-branch': 'git-branch', tag: 'tag', bell: 'bell', target: 'target', flag: 'flag', mail: 'mail', bot: 'bot', 'credit-card': 'credit-card',
-  receipt: 'receipt', split: 'split', 'flag-triangle-right': 'flag-triangle-right', 'calendar-clock': 'calendar-clock', pencil: 'pencil', 'git-merge': 'git-merge', webhook: 'webhook', 'phone-call': 'phone-call', hand: 'hand', check: 'check' };
+  receipt: 'receipt', split: 'split', 'flag-triangle-right': 'flag-triangle-right', 'calendar-clock': 'calendar-clock', pencil: 'pencil', 'git-merge': 'git-merge', webhook: 'webhook', 'phone-call': 'phone-call', hand: 'hand', check: 'check', instagram: 'instagram', 'corner-down-right': 'corner-down-right', send: 'send' };
 
 function Item({ it, active }) {
   const t = <span className="t">{hora(it.at)}{it.kind !== 'in' && <Icon name="check-check" size={14} style={{ color: '#53bdeb' }} />}</span>;

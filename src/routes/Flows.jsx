@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, DataTable, Icon, IconButton, Input, PageHeader, Select } from '@/ds';
-import { starterGraph } from '@/lib/flowGraph.js';
+import { starterGraph, summaryOf } from '@/lib/flowGraph.js';
 import { useAsync } from '@/lib/hooks.jsx';
 import { EmptyState, ErrorState, Modal, SkeletonTable } from '@/lib/ui.jsx';
 import { fmtDateTime, useTargetOrg } from '@/lib/workspace.jsx';
@@ -190,7 +190,7 @@ function KoblyFlows() {
               { key: 'nome', header: 'Fluxo', render: (r) => (
                 <button onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'start', fontFamily: 'var(--font-sans)' }}>
                   <span style={{ display: 'block', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{r.nome}</span>
-                  <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{r.gatilho && r.gatilho.source === 'message' ? ((r.gatilho.mode || 'any') === 'any' ? 'Mensagem no WhatsApp' : `Mensagem: ${(r.gatilho.keywords || []).slice(0, 2).join(', ')}${(r.gatilho.keywords || []).length > 2 ? '…' : ''}`) : (r.eventos || []).join(', ') || 'gatilho não definido'} · salvo {fmtDateTime(r.last_saved_at)}</span>
+                  <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{r.gatilho && ['message', 'ig_comment', 'ig_story'].includes(r.gatilho.source) ? summaryOf('trigger', r.gatilho) : (r.eventos || []).join(', ') || 'gatilho não definido'} · salvo {fmtDateTime(r.last_saved_at)}</span>
                 </button>
               ) },
               { key: 'status', header: 'Situação', render: (r) => (

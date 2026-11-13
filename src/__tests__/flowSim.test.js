@@ -42,6 +42,20 @@ describe('simulador do fluxo', () => {
     expect(st.done).toBe(true);
   });
 
+  it('Instagram: comentário mostra a resposta pública e a regra "segue o perfil"', () => {
+    const g = { version: 1, start: 'ini', nodes: [
+      { ref: 'ini', type: 'trigger', data: { source: 'ig_comment', mode: 'keywords', keywords: ['eu quero'], replies: ['Te chamei no Direct!'] }, next: { default: 'c' } },
+      { ref: 'c', type: 'condition', data: { match: 'all', rules: [{ kind: 'ig_follows', op: 'follows' }] }, next: { yes: 't', no: 'fim' } },
+      { ref: 't', type: 'send_text', data: { text: 'Link: {{comentario}}' }, next: { sent: 'fim' } },
+      { ref: 'fim', type: 'end', data: {}, next: {} },
+    ] };
+    const st = startSim(g);
+    expect(st.log[0].text).toBe('Gatilho: Maria comentou "eu quero" num post');
+    expect(st.log.some((x) => /Resposta pública no comentário: "Te chamei no Direct!"/.test(x.text))).toBe(true);
+    expect(st.log.find((x) => x.kind === 'out').text).toBe('Link: eu quero');
+    expect(st.done).toBe(true);
+  });
+
   it('saída sem ligação encerra com aviso; laço sem espera é interrompido', () => {
     const solto = { version: 1, start: 'ini', nodes: [{ ref: 'ini', type: 'trigger', data: { events: ['Pix Gerado'] }, next: { default: 'a' } }, { ref: 'a', type: 'send_text', data: { text: 'x' }, next: {} }] };
     const st = startSim(solto);

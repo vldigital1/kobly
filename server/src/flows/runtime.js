@@ -41,6 +41,8 @@ export function buttonSuffix(components, ctaLink) {
 }
 export const delaySeconds = (d, rnd = Math.random) => { const [a, b] = delaySecondsRange(d); return Math.round(a + rnd() * (b - a)); };
 
+// Gatilho por mensagem: o canal do gatilho (whatsapp | instagram | messenger | any; antigo = whatsapp) vale para esta mensagem?
+export const chanOk = (d, channel) => { const c = (d && d.channel) || 'whatsapp'; return c === 'any' || c === channel; };
 // Gatilho por mensagem: o texto do lead casa com o gatilho? (sem acento e sem diferença de maiúsculas)
 export function keywordHit(trigger, text) {
   const d = trigger || {};
@@ -177,7 +179,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     let lead = (await pool.query(`select id, automation_paused from public.leads where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 order by updated_at desc limit 1`, [orgId, tail])).rows[0];
     if (!lead) {
       // contato novo: vira lead só se algum fluxo começa por mensagem (senão fica só na caixa de entrada)
-      if (!(await messageFlows(orgId)).length) return true;
+      if (!(await messageFlows(orgId)).some((r) => chanOk(nodeOf(r.graph, r.graph.start).data, 'whatsapp'))) return true;
       const nome = String(((contacts || [])[0] || {}).profile?.name || '').trim().slice(0, 120) || null;
       lead = (await pool.query(`insert into public.leads (organization_id, nome, telefone, utm) values ($1, $2, $3, '{"utm_source":"whatsapp"}'::jsonb) returning id, automation_paused`, [orgId, nome, from])).rows[0];
     }
@@ -192,33 +194,67 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     if (!resumed && !lead.automation_paused) await startForMessage(orgId, lead.id, text);
     return true;
   }
-  // fluxos ativos cujo Gatilho é "mensagem no WhatsApp"
-  async function messageFlows(orgId) {
+  // fluxos ativos cujo Gatilho é mensagem (WhatsApp/Instagram/Messenger), story ou comentário no Instagram
+  async function messageFlows(orgId, sources = ['message']) {
     const { rows } = await pool.query(`select c.id as campaign_id, f.id as flow_id, v.id as version_id, v.graph
         from public.campaigns c join public.campaign_flows f on f.campaign_id = c.id join public.flow_graph_versions v on v.flow_id = f.id and v.is_active
        where c.organization_id = $1 and c.status_campanha = 'Ativa'`, [orgId]);
-    return rows.filter((r) => { const s = nodeOf(r.graph, r.graph.start); return s && s.type === 'trigger' && s.data && s.data.source === 'message'; });
+    return rows.filter((r) => { const s = nodeOf(r.graph, r.graph.start); return s && s.type === 'trigger' && s.data && sources.includes(s.data.source); });
   }
-  async function startForMessage(orgId, leadId, text) {
+  async function startForMessage(orgId, leadId, text, { channel = 'whatsapp', story = null, storyUrl = null } = {}) {
     const started = [];
-    for (const r of await messageFlows(orgId)) {
+    for (const r of await messageFlows(orgId, ['message', 'ig_story'])) {
       const start = nodeOf(r.graph, r.graph.start);
-      if (!keywordHit(start.data, text)) continue;
+      const d = start.data;
+      if (d.source === 'ig_story') { // resposta ou menção num story do Instagram
+        if (channel !== 'instagram' || !story || !((d.story || 'any') === 'any' || d.story === story)) continue;
+        if (story === 'reply' && !keywordHit(d, text)) continue;
+      } else {
+        if (story === 'mention' || !chanOk(d, channel) || !keywordHit(d, text)) continue;
+      }
       // "qualquer texto": só na primeira conversa do lead com este fluxo (senão toda mensagem recomeçaria o fluxo)
-      if ((start.data.mode || 'any') === 'any' && (await pool.query(`select 1 from public.flow_executions where campaign_id = $1 and lead_id = $2 limit 1`, [r.campaign_id, leadId])).rowCount) continue;
+      if (d.source === 'message' && (d.mode || 'any') === 'any' && (await pool.query(`select 1 from public.flow_executions where campaign_id = $1 and lead_id = $2 limit 1`, [r.campaign_id, leadId])).rowCount) continue;
       const ins = await pool.query(`insert into public.flow_executions (organization_id, campaign_id, flow_id, graph_version_id, lead_id, current_ref, stop_on_purchase, variables)
         values ($1,$2,$3,$4,$5,$6,false,$7::jsonb) on conflict (campaign_id, lead_id) where status in ('running','waiting') do nothing returning id`,
-        [orgId, r.campaign_id, r.flow_id, r.version_id, leadId, start.ref, JSON.stringify({ evento_tipo: 'Mensagem recebida', ultima_mensagem: String(text || '').slice(0, 4096), mensagem_inicial: String(text || '').slice(0, 4096) })]);
+        [orgId, r.campaign_id, r.flow_id, r.version_id, leadId, start.ref, JSON.stringify({ evento_tipo: d.source === 'ig_story' ? (story === 'mention' ? 'Menção no story' : 'Resposta ao story') : 'Mensagem recebida',
+          canal: channel, ultima_mensagem: String(text || '').slice(0, 4096), mensagem_inicial: String(text || '').slice(0, 4096), ...(storyUrl ? { story_url: storyUrl } : {}) })]);
       if (ins.rows[0]) started.push(r.campaign_id);
     }
     if (started.length) kick();
     return started;
   }
+  // Comentário num post/Reels do Instagram: inicia os fluxos do gatilho "Comentário" e devolve as respostas públicas
+  async function onComment({ orgId, leadId, text, mediaId, commentId }) {
+    const lead = (await pool.query(`select id, automation_paused from public.leads where id = $1 and organization_id = $2`, [leadId, orgId])).rows[0];
+    if (!lead) return { started: [], replies: [] };
+    const started = [], replies = [];
+    for (const r of await messageFlows(orgId, ['ig_comment'])) {
+      const start = nodeOf(r.graph, r.graph.start);
+      const d = start.data;
+      if ((d.posts || 'all') === 'selected' && !(d.media_ids || []).includes(String(mediaId || ''))) continue;
+      if (!keywordHit(d, text)) continue;
+      if (lead.automation_paused) continue; // uma pessoa está atendendo no chat ao vivo
+      const ins = await pool.query(`insert into public.flow_executions (organization_id, campaign_id, flow_id, graph_version_id, lead_id, current_ref, stop_on_purchase, variables)
+        values ($1,$2,$3,$4,$5,$6,false,$7::jsonb) on conflict (campaign_id, lead_id) where status in ('running','waiting') do nothing returning id`,
+        [orgId, r.campaign_id, r.flow_id, r.version_id, leadId, start.ref, JSON.stringify({ evento_tipo: 'Comentário no Instagram', canal: 'instagram', comentario: String(text || '').slice(0, 2200),
+          ultima_mensagem: String(text || '').slice(0, 2200), post_id: String(mediaId || ''), comentario_id: String(commentId || '') })]);
+      if (!ins.rows[0]) continue;
+      started.push(r.campaign_id);
+      for (const x of (Array.isArray(d.replies) ? d.replies : [])) if (String(x || '').trim()) replies.push(String(x).trim());
+    }
+    if (started.length) kick();
+    return { started, replies: [...new Set(replies)] };
+  }
   // Instagram Direct / Messenger: a mensagem já foi guardada e ligada ao lead; só retoma o fluxo que esperava resposta
-  async function onInboundLead({ leadId, text }) {
-    const lead = (await pool.query(`select id, automation_paused from public.leads where id = $1`, [leadId])).rows[0];
+  // Instagram Direct / Messenger: a mensagem já foi guardada e ligada ao lead; retoma o fluxo que esperava resposta
+  // ou inicia os fluxos do gatilho de mensagem/story deste canal
+  async function onInboundLead({ orgId = null, leadId, text, channel = 'instagram', story = null, storyUrl = null }) {
+    const lead = (await pool.query(`select id, organization_id, automation_paused from public.leads where id = $1`, [leadId])).rows[0];
     if (!lead) return false;
-    return resumeFor(lead, { type: 'text', text: { body: text } }, String(text || '').slice(0, 4096));
+    const t = String(text || '').slice(0, 4096);
+    const resumed = story === 'mention' ? false : await resumeFor(lead, { type: 'text', text: { body: t } }, t);
+    if (!resumed && !lead.automation_paused) await startForMessage(orgId || lead.organization_id, lead.id, t, { channel, story, storyUrl });
+    return true;
   }
   async function resumeFor(lead, message, text) {
     if (lead.automation_paused) return true; // uma pessoa está atendendo no chat ao vivo (não inicia nada)
@@ -415,7 +451,7 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
       case 'send_buttons': {
         if (ctx.lead.whatsapp_opt_out) return { stop: 'cancelled', detail: 'lead pediu para não receber WhatsApp' };
         if (!ctx.lead.dest) return { exit: 'failed', detail: 'lead sem telefone' };
-        const livre = node.type === 'send_media' && whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id, ctx.lead.dest) : false;
+        const livre = (node.type === 'send_media' || String(ctx.lead.dest).startsWith('ig:')) && whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(ex.organization_id, ctx.lead.dest) : false;
         if (!livre && !isWindowOpen(ctx.lead.whatsapp_last_inbound_at, ctx.agora)) {
           const fechada = node.type === 'send_media' && nextOf(node, 'window_closed') ? 'window_closed' : 'failed';
           return { exit: fechada, detail: 'janela de 24 h fechada (mídia e botões só com conversa aberta; use um modelo antes)' };
@@ -590,7 +626,12 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
           return { exit: 'error', detail: String(e.message).slice(0, 200) };
         }
       }
-      case 'condition': return { exit: evalCondition(d, await factsFor(ex, ctx)) ? 'yes' : 'no' };
+      case 'condition': {
+        const facts = await factsFor(ex, ctx);
+        // "Segue o perfil" (Instagram): pergunta ao Instagram só quando a regra existe
+        if ((d.rules || []).some((r) => r.kind === 'ig_follows')) facts.segue = ctx.lead && ctx.lead.ig_user_id && whatsapp.igFollows ? await whatsapp.igFollows(ex.organization_id, ctx.lead.ig_user_id) : null;
+        return { exit: evalCondition(d, facts) ? 'yes' : 'no' };
+      }
       case 'set_var': { ctx.vars[d.name] = applySetVar(d, ctx); return { exit: 'default', detail: `${d.name}=${String(ctx.vars[d.name]).slice(0, 60)}` }; }
       case 'tag': {
         const ids = (a) => (Array.isArray(a) ? a : []).filter((x) => /^[0-9a-f-]{36}$/i.test(String(x)));
@@ -816,5 +857,5 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     return r.rowCount > 0;
   }
 
-  return { startForEvent, startForLead, startForMessage, onInbound, onInboundLead, onPaymentConfirmed, onCallDone, tick, kick, process, runNode, loadGraph, processDeletions };
+  return { startForEvent, startForLead, startForMessage, onInbound, onInboundLead, onComment, onPaymentConfirmed, onCallDone, tick, kick, process, runNode, loadGraph, processDeletions };
 }

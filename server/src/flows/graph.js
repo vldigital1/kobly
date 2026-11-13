@@ -71,6 +71,7 @@ export const CONDITION_KINDS = {
   var: ['eq', 'neq', 'contains', 'not_contains', 'gt', 'gte', 'lt', 'lte', 'empty', 'not_empty'],
   purchased: [],
   window_open: [],
+  ig_follows: ['follows', 'not_follows'],
   weekday: [],
   time_between: [],
   country: [],
@@ -100,7 +101,13 @@ function checkData(node, err, warn = err) {
   const at = `${labelOf(node)}`;
   switch (node.type) {
     case 'trigger':
-      if (d.source === 'message') { // mensagem no WhatsApp: qualquer texto ou palavras-chave
+      if (['message', 'ig_comment', 'ig_story'].includes(d.source)) { // mensagem (WhatsApp/Instagram/Messenger), comentário ou story: qualquer texto ou palavras-chave
+        if (d.source === 'message' && d.channel !== undefined && !['whatsapp', 'instagram', 'messenger', 'any'].includes(d.channel)) err(`${at}: canal inválido.`);
+        if (d.source === 'ig_story' && d.story !== undefined && !['any', 'reply', 'mention'].includes(d.story)) err(`${at}: escolha resposta, menção ou os dois.`);
+        if (d.source === 'ig_comment') {
+          if (d.posts === 'selected' && !(Array.isArray(d.media_ids) && d.media_ids.length && d.media_ids.length <= 50 && d.media_ids.every((x) => /^[0-9]{3,30}$/.test(String(x))))) err(`${at}: escolha ao menos um post ou marque "qualquer post".`);
+          if (d.replies !== undefined && !(Array.isArray(d.replies) && d.replies.length <= 10 && d.replies.every((x) => typeof x === 'string' && x.length <= 2000))) err(`${at}: até 10 respostas públicas de até 2000 letras.`);
+        }
         if (!['any', 'keywords'].includes(d.mode || 'any')) err(`${at}: escolha "qualquer texto" ou "palavras específicas".`);
         if (d.mode === 'keywords') {
           const kw = Array.isArray(d.keywords) ? d.keywords : [];

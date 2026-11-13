@@ -73,6 +73,14 @@ const fakeApi = {
   listIntegrations: async () => [{ id: 'int-1', provider: 'xpag', label: 'México', sandbox: true, status: 'connected' }],
   listPixels: async () => [{ id: 'px-1', label: 'Pixel principal', pixel_id: '1234567890' }],
   listChannels: async () => [{ id: 'tg-1', label: '@vendas_bot', default_chat_id: '-1001234567890' }],
+  // posts do Instagram (gatilho "Comentário"): miniaturas desenhadas aqui mesmo
+  listIgMedia: async () => {
+    await new Promise((r) => setTimeout(r, 300));
+    const cores = [['#f58529', '#dd2a7b'], ['#8134af', '#515bd4'], ['#22c55e', '#0ea5e9'], ['#f59e0b', '#ef4444'], ['#ec4899', '#8b5cf6'], ['#14b8a6', '#6366f1'], ['#fb7185', '#fbbf24'], ['#0ea5e9', '#a855f7']];
+    const thumb = ([a, b], t) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/><text x="50" y="56" font-family="sans-serif" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">${t}</text></svg>`)}`;
+    const nomes = ['PROMO', 'NATAL', 'AULA 1', 'DICAS', 'BÔNUS', 'LIVE', 'RECEITA', 'COMBO'];
+    return { media: nomes.map((t, i) => ({ id: `1790${i}`, caption: `Post ${t}`, type: i % 3 === 0 ? 'reel' : 'image', thumb: thumb(cores[i], t) })) };
+  },
 };
 
 function Preview() {

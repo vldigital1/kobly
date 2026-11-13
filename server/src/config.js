@@ -32,6 +32,9 @@ export function loadConfig(env = process.env) {
     // Instagram Direct e Messenger (mesmo app do Facebook Ads): configuração do login e senha do webhook
     metaMsgConfigId: env.META_MSG_CONFIG_ID || '',
     metaMsgVerifyToken: env.META_MSG_VERIFY_TOKEN || '',
+    // "Entrar com Instagram" (login direto, sem página do Facebook): ID e chave secreta do app do Instagram (caso de uso Instagram)
+    instagramAppId: env.INSTAGRAM_APP_ID || '',
+    instagramAppSecret: env.INSTAGRAM_APP_SECRET || '',
     asaasApiKey: env.ASAAS_API_KEY || '',
     asaasEnv: env.ASAAS_ENV === 'production' ? 'production' : 'sandbox',
     asaasWebhookToken: env.ASAAS_WEBHOOK_TOKEN || '',

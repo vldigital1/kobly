@@ -8,7 +8,7 @@ export const TIPOS_EVENTO = ['Abandono de carrinho', 'Pix Gerado', 'Boleto Gerad
 
 // group: seção da paleta. exits: [saída, rótulo]. dynamic: saídas que vêm dos dados (opções / saídas da IA).
 export const BLOCKS = {
-  trigger: { label: 'Gatilho', group: null, icon: 'play', tone: 'accent', hint: 'O que inicia o fluxo: um evento do checkout ou uma mensagem no WhatsApp',
+  trigger: { label: 'Gatilho', group: null, icon: 'play', tone: 'accent', hint: 'O que inicia o fluxo: mensagem (WhatsApp, Instagram ou Messenger), comentário ou story no Instagram, ou evento do checkout',
     exits: [['default', 'Próximo']], make: () => ({ events: ['Pix Gerado'] }) },
   send_template: { label: 'Modelo do WhatsApp', group: 'Mensagens', icon: 'file-text', tone: 'green', hint: 'Modelo aprovado pela Meta. Funciona mesmo com a janela de 24 h fechada.',
     exits: [['sent', 'Enviado']], make: () => ({ template_id: '', vars: [] }) },
@@ -160,11 +160,23 @@ export function fromCanvas(nodes, edges, start = 'ini') {
 export function summaryOf(type, d, lookups = {}) {
   switch (type) {
     case 'trigger': {
+      const kw = d.keywords || [];
+      const how = d.match === 'equals' ? 'igual a' : d.match === 'starts' ? 'começa com' : 'contém';
+      const words = kw.length ? `"${kw[0]}"${kw.length > 1 ? ` +${kw.length - 1}` : ''}` : '';
       if (d.source === 'message') {
-        if ((d.mode || 'any') === 'any') return 'Mensagem no WhatsApp: qualquer texto';
-        const kw = d.keywords || [];
-        const how = d.match === 'equals' ? 'igual a' : d.match === 'starts' ? 'começa com' : 'contém';
-        return kw.length ? `Mensagem ${how} "${kw[0]}"${kw.length > 1 ? ` +${kw.length - 1}` : ''}` : 'Adicione as palavras-chave';
+        const via = { instagram: 'Instagram Direct', messenger: 'Messenger', any: 'Mensagem (todos os canais)' }[d.channel] || 'Mensagem no WhatsApp';
+        if ((d.mode || 'any') === 'any') return `${via}: qualquer texto`;
+        return kw.length ? `${d.channel && d.channel !== 'whatsapp' ? `${via} ` : 'Mensagem '}${how} ${words}` : 'Adicione as palavras-chave';
+      }
+      if (d.source === 'ig_comment') {
+        const onde = d.posts === 'selected' ? `${(d.media_ids || []).length} post(s)` : 'qualquer post';
+        if ((d.mode || 'any') === 'any') return `Comentário em ${onde}`;
+        return kw.length ? `Comentário ${how} ${words} · ${onde}` : 'Adicione as palavras-chave';
+      }
+      if (d.source === 'ig_story') {
+        if (d.story === 'mention') return 'Marcou você no story';
+        const o = d.story === 'reply' ? 'Resposta ao story' : 'Resposta ou menção no story';
+        return (d.mode || 'any') === 'keywords' && kw.length ? `${o} ${how} ${words}` : o;
       }
       return (d.events || []).join(', ') || 'Escolha o evento';
     }

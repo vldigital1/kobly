@@ -91,6 +91,8 @@ export function evalRule(r, ctx) {
       }
     }
     case 'purchased': return !!ctx.comprou;
+    // Instagram: segue o perfil da empresa? (sem resposta do Instagram, nenhuma das duas é verdadeira)
+    case 'ig_follows': return r.op === 'not_follows' ? ctx.segue === false : ctx.segue === true;
     case 'window_open': return !!ctx.janelaAberta;
     case 'weekday': return r.days.includes(localParts(ctx.agora || new Date(), ctx.tz).weekday);
     case 'time_between': {

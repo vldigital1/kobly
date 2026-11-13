@@ -22,6 +22,7 @@ const defaultApi = {
   listChannels: () => KoblyApi.notifyChannels('list').then((r) => r.channels || []),
   listAgents: () => KoblyApi.workspaceSettings('get').then((r) => r.agents || []),
   uploadMedia: (file) => KoblyApi.uploadFlowMedia(file),
+  listIgMedia: (emp) => KoblyApi.metaChannels('ig_media', {}, emp),
   tts: (text) => KoblyApi.voice('tts', { text }),
   listEmails: () => KoblyApi.getFlowOptions().then((r) => r.emails || []),
   listBrands: () => KoblyApi.listBrands(),
@@ -133,6 +134,28 @@ const FLOW_CSS = `
 .kf-check input[type=checkbox]:checked::after { content: ''; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
 .kf-react { width: 44px; height: 40px; border-radius: 11px; font-size: 20px; cursor: pointer; background: rgba(var(--fg-rgb), .04); border: 1px solid rgba(var(--fg-rgb), .1); }
 .kf-react.on { border-color: #ff7a1a; background: rgba(255,98,1,.18); box-shadow: 0 0 14px rgba(255,98,1,.3); }
+.kf-chanrow { display: flex; gap: 6px; flex-wrap: wrap; }
+.kf-chan { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; cursor: pointer; font: 500 12.5px var(--font-sans); color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .1); }
+.kf-chan:hover { color: var(--text-strong); }
+.kf-chan.on { color: var(--text-strong); border-color: #ff7a1a; background: rgba(255,98,1,.12); }
+.kf-chan-whatsapp.on svg { color: #25D366; }
+.kf-chan-instagram.on svg { color: #f472b6; }
+.kf-chan-messenger.on svg { color: #60a5fa; }
+.kf-iggrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-height: 260px; overflow-y: auto; padding: 2px; }
+.kf-igpost { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; padding: 0; cursor: pointer; border: 2px solid transparent; background: rgba(var(--fg-rgb), .05); }
+.kf-igpost img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
+.kf-igpost:hover img { transform: scale(1.05); }
+.kf-igpost.on { border-color: #ff7a1a; }
+.kf-igpost.on img { filter: brightness(.75); }
+.kf-igph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--text-subtle); }
+.kf-igtag { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 6px; font: 600 9.5px var(--font-sans); color: #fff; background: rgba(0,0,0,.55); }
+.kf-igcheck { position: absolute; top: 5px; right: 5px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; border: 2px solid rgba(255,255,255,.85); background: rgba(0,0,0,.25); }
+.kf-igpost.on .kf-igcheck { background: #ff6201; border-color: #ff6201; }
+.kf-igempty { display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 12px; font-size: var(--text-xs); color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px dashed rgba(var(--fg-rgb), .15); }
+.kf-reply { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; font-size: var(--text-sm); color: var(--text-body); background: rgba(225,48,108,.07); border: 1px solid rgba(225,48,108,.18); }
+.kf-reply span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.kf-reply svg { color: #f472b6; flex: none; }
+.kf-reply button { background: none; border: 0; cursor: pointer; color: var(--text-subtle); font-size: 16px; line-height: 1; }
 .kf-cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kf-card2 { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; border-radius: 14px; cursor: pointer; font-family: var(--font-sans); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .1); color: var(--text-muted); font-size: 12px; }
 .kf-card2 b { color: var(--text-strong); font-size: 14px; }
@@ -666,9 +689,9 @@ function TagSelect({ value, onChange, tags }) {
   return <Select value={value || ''} onChange={(e) => onChange(e.target.value)} options={[{ value: '', label: 'Selecione uma etiqueta…' }, ...tags.map((t) => ({ value: t.id, label: `● ${t.nome}` }))]} />;
 }
 
-// ---- Gatilho: evento do checkout ou mensagem no WhatsApp -----------------------------------
-function TriggerFields({ d, set }) {
-  const src = d.source === 'message' ? 'message' : 'checkout';
+// ---- Gatilho: mensagem (WhatsApp/Instagram/Messenger), Instagram (comentário/story) ou evento do checkout ----
+const IG_KINDS = ['ig_comment', 'ig_story'];
+function KeywordFields({ d, set, anyLabel = 'Qualquer texto', anyHint = 'Começa na primeira mensagem do contato.', kwHint = 'Começa quando a mensagem tiver uma das palavras.', title = 'O lead envia uma mensagem e a mensagem contém…', placeholder = 'Adicionar… (ex.: quero saber mais)' }) {
   const [kw, setKw] = useState('');
   const add = () => {
     const parts = kw.split(/\n/).map((x) => x.trim()).filter(Boolean);
@@ -676,43 +699,142 @@ function TriggerFields({ d, set }) {
     set({ keywords: [...new Set([...(d.keywords || []), ...parts])].slice(0, 50) }); setKw('');
   };
   return (<>
-    <Segmented value={src} onChange={(v) => set(v === 'message' ? { source: 'message', mode: d.mode || 'keywords', match: d.match || 'contains', keywords: d.keywords || [] } : { source: undefined, events: (d.events && d.events.length) ? d.events : ['Pix Gerado'] })}
-      options={[{ value: 'message', label: 'Mensagem no WhatsApp', icon: 'message-circle' }, { value: 'checkout', label: 'Evento do checkout', icon: 'shopping-cart' }]} />
-    {src === 'checkout' ? (<>
+    <Section title={title}>
+      <div className="kf-cards2">
+        {[['any', anyLabel, anyHint], ['keywords', 'Palavras específicas', kwHint]].map(([v, t, h]) => (
+          <button key={v} type="button" className={`kf-card2${(d.mode || 'keywords') === v ? ' on' : ''}`} onClick={() => set({ mode: v })}><b>{t}</b><span>{h}</span></button>
+        ))}
+      </div>
+    </Section>
+    {(d.mode || 'keywords') === 'keywords' && (<>
+      <Select label="Correspondência" value={d.match || 'contains'} onChange={(e) => set({ match: e.target.value })}
+        options={[{ value: 'contains', label: 'Contém' }, { value: 'equals', label: 'É igual a' }, { value: 'starts', label: 'Começa com' }]} />
+      <Section title="Palavras-chave">
+        {(d.keywords || []).length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(d.keywords || []).map((k) => (
+              <span key={k} className="kf-kw">{k}<button type="button" aria-label={`Remover ${k}`} onClick={() => set({ keywords: (d.keywords || []).filter((x) => x !== k) })}>×</button></span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="kf-ta" style={{ flex: 1, padding: '9px 12px' }} value={kw} placeholder={placeholder} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+          <IconButton icon="plus" aria-label="Adicionar palavra-chave" onClick={add} />
+        </div>
+        <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>Não diferencia maiúsculas nem acentos: "saber mas" também vale para "Saber MÁS".</div>
+      </Section>
+    </>)}
+  </>);
+}
+function TipRow({ children, icon = 'info', color = '#60a5fa' }) {
+  return (
+    <div className="kf-row" style={{ alignItems: 'flex-start' }}>
+      <Icon name={icon} size={16} style={{ color, marginTop: 2, flex: 'none' }} />
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.55 }}>{children}</div>
+    </div>
+  );
+}
+// posts e Reels do Instagram conectado, para escolher em quais o comentário vale
+function IgPostPicker({ value = [], onChange }) {
+  const { listIgMedia } = React.useContext(LookupsCtx);
+  const [st, setSt] = useState({ loading: true, media: [], error: null });
+  useEffect(() => {
+    let on = true;
+    (listIgMedia ? listIgMedia() : Promise.resolve({ media: [] })).then((r) => { if (on) setSt({ loading: false, media: (r && r.media) || [], error: r && r.error ? r.error : null }); })
+      .catch((e) => on && setSt({ loading: false, media: [], error: (e && e.message) || 'Não deu para carregar os posts.' }));
+    return () => { on = false; };
+  }, [listIgMedia]);
+  const toggle = (id) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id].slice(0, 50));
+  if (st.loading) return <div className="kf-igempty"><Icon name="loader-circle" size={16} />Carregando os seus posts…</div>;
+  if (st.error) return <div className="kf-igempty"><Icon name="instagram" size={16} />{st.error}</div>;
+  if (!st.media.length) return <div className="kf-igempty"><Icon name="instagram" size={16} />Nenhum post encontrado no Instagram conectado.</div>;
+  return (<>
+    <div className="kf-iggrid">
+      {st.media.map((m) => {
+        const on = value.includes(m.id);
+        return (
+          <button key={m.id} type="button" className={`kf-igpost${on ? ' on' : ''}`} onClick={() => toggle(m.id)} title={m.caption || ''} aria-pressed={on}>
+            {m.thumb ? <img src={m.thumb} alt="" loading="lazy" /> : <span className="kf-igph"><Icon name="image" size={18} /></span>}
+            {m.type === 'reel' && <span className="kf-igtag"><Icon name="clapperboard" size={11} />Reels</span>}
+            <span className="kf-igcheck">{on && <Icon name="check" size={13} />}</span>
+          </button>
+        );
+      })}
+    </div>
+    <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{value.length ? `${value.length} post${value.length > 1 ? 's' : ''} marcado${value.length > 1 ? 's' : ''}.` : 'Toque nos posts para marcar.'}</div>
+  </>);
+}
+function TriggerFields({ d, set }) {
+  const src = d.source === 'message' ? 'message' : IG_KINDS.includes(d.source) ? 'instagram' : 'checkout';
+  const toSrc = (v) => {
+    if (v === 'message') return set({ source: 'message', channel: d.channel || 'whatsapp', mode: d.mode || 'keywords', match: d.match || 'contains', keywords: d.keywords || [], events: undefined });
+    if (v === 'instagram') return set({ source: IG_KINDS.includes(d.source) ? d.source : 'ig_comment', mode: d.mode || 'keywords', match: d.match || 'contains', keywords: d.keywords || [], posts: d.posts || 'all', events: undefined });
+    return set({ source: undefined, channel: undefined, events: (d.events && d.events.length) ? d.events : ['Pix Gerado'] });
+  };
+  const [rp, setRp] = useState('');
+  const replies = d.replies || [];
+  const addReply = () => { const t = rp.trim(); if (!t) return; set({ replies: [...new Set([...replies, t])].slice(0, 10) }); setRp(''); };
+  return (<>
+    <Segmented value={src} onChange={toSrc}
+      options={[{ value: 'message', label: 'Mensagem', icon: 'message-circle' }, { value: 'instagram', label: 'Instagram', icon: 'instagram' }, { value: 'checkout', label: 'Checkout', icon: 'shopping-cart' }]} />
+    {src === 'checkout' && (<>
       <Section title="Inicia quando chegar um destes eventos do checkout">
         <Chips value={d.events || []} onChange={(events) => set({ events })} options={TIPOS_EVENTO.map((ev) => ({ value: ev, label: ev }))} />
       </Section>
       <Toggle label="Encerrar este fluxo se o lead comprar" hint="Para quem pagou não receber mais mensagens de recuperação." checked={d.stop_on_purchase ?? !(d.events || []).includes('Compra Aprovada')} onChange={(v) => set({ stop_on_purchase: v })} />
-    </>) : (<>
-      <Section title="O lead envia uma mensagem e a mensagem contém…">
-        <div className="kf-cards2">
-          {[['any', 'Qualquer texto', 'Começa na primeira mensagem do contato.'], ['keywords', 'Palavras específicas', 'Começa quando a mensagem tiver uma das palavras.']].map(([v, t, h]) => (
-            <button key={v} type="button" className={`kf-card2${(d.mode || 'keywords') === v ? ' on' : ''}`} onClick={() => set({ mode: v })}><b>{t}</b><span>{h}</span></button>
+    </>)}
+    {src === 'message' && (<>
+      <Section title="Por onde chega a mensagem">
+        <div className="kf-chanrow">
+          {[['whatsapp', 'WhatsApp', 'message-circle'], ['instagram', 'Instagram Direct', 'instagram'], ['messenger', 'Messenger', 'facebook'], ['any', 'Todos', 'layers']].map(([v, l, ic]) => (
+            <button key={v} type="button" className={`kf-chan kf-chan-${v}${(d.channel || 'whatsapp') === v ? ' on' : ''}`} onClick={() => set({ channel: v })}><Icon name={ic} size={15} />{l}</button>
           ))}
         </div>
       </Section>
-      {(d.mode || 'keywords') === 'keywords' && (<>
-        <Select label="Correspondência" value={d.match || 'contains'} onChange={(e) => set({ match: e.target.value })}
-          options={[{ value: 'contains', label: 'Contém' }, { value: 'equals', label: 'É igual a' }, { value: 'starts', label: 'Começa com' }]} />
-        <Section title="Palavras-chave">
-          {(d.keywords || []).length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {(d.keywords || []).map((k) => (
-                <span key={k} className="kf-kw">{k}<button type="button" aria-label={`Remover ${k}`} onClick={() => set({ keywords: (d.keywords || []).filter((x) => x !== k) })}>×</button></span>
-              ))}
+      <KeywordFields d={d} set={set} />
+      <TipRow>Se o lead estiver respondendo outro fluxo (Aguardar resposta), a mensagem vai para esse fluxo e não inicia este. Contato novo vira lead sozinho.</TipRow>
+    </>)}
+    {src === 'instagram' && (<>
+      <div className="kf-cards2">
+        {[['ig_comment', 'Comentário', 'Alguém comenta num post ou Reels: responde o comentário e chama no Direct.'], ['ig_story', 'Story', 'Alguém responde ou marca você num story.']].map(([v, t, h]) => (
+          <button key={v} type="button" className={`kf-card2${d.source === v ? ' on' : ''}`} onClick={() => set({ source: v })}><b>{t}</b><span>{h}</span></button>
+        ))}
+      </div>
+      {d.source === 'ig_comment' && (<>
+        <Section title="Em quais posts">
+          <div className="kf-cards2">
+            {[['all', 'Qualquer post ou Reels', 'Inclusive os que você publicar depois.'], ['selected', 'Posts específicos', 'Só nos posts que você marcar.']].map(([v, t, h]) => (
+              <button key={v} type="button" className={`kf-card2${(d.posts || 'all') === v ? ' on' : ''}`} onClick={() => set({ posts: v, media_ids: v === 'selected' ? (d.media_ids || []) : undefined })}><b>{t}</b><span>{h}</span></button>
+            ))}
+          </div>
+          {d.posts === 'selected' && <IgPostPicker value={d.media_ids || []} onChange={(media_ids) => set({ media_ids })} />}
+        </Section>
+        <KeywordFields d={d} set={set} title="O comentário contém…" anyLabel="Qualquer comentário" anyHint="Todo comentário nos posts escolhidos." kwHint="Só comentários com a palavra (ex.: EU QUERO)." placeholder="Adicionar… (ex.: eu quero)" />
+        <Section title="Resposta pública no comentário (opcional)">
+          {replies.map((t) => (
+            <div key={t} className="kf-reply"><Icon name="corner-down-right" size={14} /><span>{t}</span><button type="button" aria-label="Remover resposta" onClick={() => set({ replies: replies.filter((x) => x !== t) })}>×</button></div>
+          ))}
+          {replies.length < 10 && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="kf-ta" style={{ flex: 1, padding: '9px 12px' }} value={rp} maxLength={2000} placeholder="Ex.: Te mandei no Direct! 💌" onChange={(e) => setRp(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReply(); } }} />
+              <IconButton icon="plus" aria-label="Adicionar resposta" onClick={addReply} />
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="kf-ta" style={{ flex: 1, padding: '9px 12px' }} value={kw} placeholder="Adicionar… (ex.: quero saber mais)" onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-            <IconButton icon="plus" aria-label="Adicionar palavra-chave" onClick={add} />
-          </div>
-          <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>Não diferencia maiúsculas nem acentos: "saber mas" também vale para "Saber MÁS". Coloque o texto que vai pronto no seu anúncio.</div>
+          <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>Com várias, a Kobly sorteia uma a cada comentário (parece mais natural). Sem nenhuma, só chama no Direct.</div>
         </Section>
+        <TipRow icon="send" color="#f472b6">A <b>1ª mensagem</b> do fluxo chega no Direct como resposta ao comentário. Depois disso, o Instagram só deixa mandar outra quando a pessoa responder: use <b>Botões</b> ou <b>Aguardar resposta</b> logo em seguida (ex.: "Quer o link? → Quero!").</TipRow>
       </>)}
-      <div className="kf-row" style={{ alignItems: 'flex-start' }}>
-        <Icon name="info" size={16} style={{ color: '#60a5fa', marginTop: 2 }} />
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.55 }}>Se o lead estiver respondendo outro fluxo (Aguardar resposta), a mensagem vai para esse fluxo e não inicia este. Contato novo vira lead sozinho.</div>
-      </div>
+      {d.source === 'ig_story' && (<>
+        <Section title="Quando a pessoa">
+          <div className="kf-chanrow">
+            {[['any', 'Responde ou marca'], ['reply', 'Responde o story'], ['mention', 'Marca você no story']].map(([v, l]) => (
+              <button key={v} type="button" className={`kf-chan${(d.story || 'any') === v ? ' on' : ''}`} onClick={() => set({ story: v })}>{l}</button>
+            ))}
+          </div>
+        </Section>
+        {(d.story || 'any') !== 'mention' && <KeywordFields d={d} set={set} title="A resposta ao story contém…" anyLabel="Qualquer resposta" anyHint="Toda resposta aos seus stories." kwHint="Só respostas com a palavra." placeholder="Adicionar… (ex.: quero)" />}
+        <TipRow>A conversa abre no Direct: o fluxo pode mandar várias mensagens nas próximas 24 h. O link do story fica na variável <b>{'{{story_url}}'}</b>.</TipRow>
+      </>)}
     </>)}
   </>);
 }
@@ -720,7 +842,7 @@ function TriggerFields({ d, set }) {
 // ---- Condição (como no ZapData): cartões de regra, E / OU, criar etiqueta ---------------------------
 const RULE_META = {
   tag: ['tag', 'Tag'], var: ['braces', 'Variável'], country: ['globe', 'País'], purchased: ['shopping-bag', 'Comprou'],
-  window_open: ['message-square', 'Janela de 24 h aberta'], weekday: ['calendar', 'Dia da semana'], time_between: ['clock', 'Horário'],
+  window_open: ['message-square', 'Janela de 24 h aberta'], ig_follows: ['instagram', 'Segue o perfil'], weekday: ['calendar', 'Dia da semana'], time_between: ['clock', 'Horário'],
 };
 function ConditionFields({ d, set, tags, addTag }) {
   const { flowVars = [] } = React.useContext(LookupsCtx);
@@ -765,6 +887,10 @@ function ConditionFields({ d, set, tags, addTag }) {
             <Input label="Até" type="time" value={r.to || '18:00'} onChange={(e) => up(i, { to: e.target.value })} />
           </div>)}
           {r.kind === 'purchased' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Verdadeiro se o lead comprou (checkout ou cobrança do fluxo) desde que entrou neste fluxo.</div>}
+          {r.kind === 'ig_follows' && (<>
+            <Select label="A pessoa" value={r.op || 'follows'} onChange={(e) => up(i, { op: e.target.value })} options={[{ value: 'follows', label: 'SEGUE o seu perfil no Instagram' }, { value: 'not_follows', label: 'NÃO SEGUE o seu perfil' }]} />
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Só vale para quem conversa pelo Instagram. Use depois de a pessoa responder (o Instagram só informa com a conversa aberta). Ex.: "Siga o perfil e toque em Já segui".</div>
+          </>)}
           {r.kind === 'window_open' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Verdadeiro se o lead mandou mensagem nas últimas 24 h (API oficial).</div>}
         </div>
       );
@@ -779,6 +905,7 @@ function ConditionFields({ d, set, tags, addTag }) {
         {more && (
           <div className="kf-menu kf-glass">
             <button type="button" onClick={() => addRule({ kind: 'purchased' })}><Icon name="shopping-bag" size={14} />Comprou</button>
+            <button type="button" onClick={() => addRule({ kind: 'ig_follows', op: 'follows' })}><Icon name="instagram" size={14} />Segue o perfil (Instagram)</button>
             <button type="button" onClick={() => addRule({ kind: 'window_open' })}><Icon name="message-square" size={14} />Janela de 24 h aberta</button>
             <button type="button" onClick={() => addRule({ kind: 'weekday', days: [1, 2, 3, 4, 5] })}><Icon name="calendar" size={14} />Dia da semana</button>
             <button type="button" onClick={() => addRule({ kind: 'time_between', from: '09:00', to: '18:00' })}><Icon name="clock" size={14} />Horário</button>
@@ -907,7 +1034,7 @@ function MediaPreview({ d }) {
 // ---- Campos de cada bloco ---------------------------------------------------------
 const RULE_KINDS = [
   { value: 'var', label: 'Variável' }, { value: 'tag', label: 'Etiqueta' }, { value: 'purchased', label: 'Comprou' },
-  { value: 'window_open', label: 'Janela de 24 h aberta' }, { value: 'weekday', label: 'Dia da semana' }, { value: 'time_between', label: 'Horário' }, { value: 'country', label: 'País (DDI)' },
+  { value: 'window_open', label: 'Janela de 24 h aberta' }, { value: 'ig_follows', label: 'Segue o perfil (Instagram)' }, { value: 'weekday', label: 'Dia da semana' }, { value: 'time_between', label: 'Horário' }, { value: 'country', label: 'País (DDI)' },
 ];
 const VAR_OPS = [['eq', 'é igual a'], ['neq', 'é diferente de'], ['contains', 'contém'], ['not_contains', 'não contém'], ['gt', 'maior que'], ['gte', 'maior ou igual'], ['lt', 'menor que'], ['lte', 'menor ou igual'], ['empty', 'está vazia'], ['not_empty', 'não está vazia']].map(([value, label]) => ({ value, label }));
 
@@ -1266,6 +1393,8 @@ function Editor({ campaign, onBack, api, notify }) {
   // e-mails: recarrega a lista depois de criar/editar/copiar
   const flowVars = useMemo(() => flowVarsOf(nodes), [nodes]);
   const addTag = (t) => setLookups((l) => ({ ...l, tags: [...(l.tags || []).filter((x) => x.id !== t.id), t].sort((a, b) => String(a.nome).localeCompare(String(b.nome))) }));
+  // posts do Instagram conectado (gatilho "Comentário"); uma referência estável para não recarregar a cada tecla
+  const listIgMedia = useCallback(() => (api.listIgMedia ? api.listIgMedia(campaign.empresaId) : Promise.resolve({ media: [] })), [api, campaign.empresaId]);
   const createTag = async (nome) => {
     if (!api.createTag) return { error: 'Criar etiqueta indisponível aqui.' };
     try { const t = await api.createTag(nome, campaign.empresaId); notify('success', `Etiqueta "${t.nome}" criada.`); return t; } catch (e) { return { error: (e && e.message) || 'Não deu para criar a etiqueta.' }; }
@@ -1361,7 +1490,7 @@ function Editor({ campaign, onBack, api, notify }) {
   );
 
   return (
-    <LookupsCtx.Provider value={{ ...lookups, metrics, uploadMedia: api.uploadMedia, tts: api.tts, openEmail, copyEmail, flowVars, campaignId: campaign.id, createTag, addTag }}>
+    <LookupsCtx.Provider value={{ ...lookups, metrics, listIgMedia, uploadMedia: api.uploadMedia, tts: api.tts, openEmail, copyEmail, flowVars, campaignId: campaign.id, createTag, addTag }}>
       <style>{FLOW_CSS}</style>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 520, gap: 10 }}>
         {/* barra superior */}

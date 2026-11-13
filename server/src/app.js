@@ -93,7 +93,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     onInbound: (a) => flows.onInbound(a) });
   // Instagram Direct e Messenger: endereço ig:<id> / fb:<id> no lugar do telefone
   const metaChannels = createMetaChannels({ pool, secretKey: secretKeyBuf, fetchImpl, graphBase: config.metaAdsGraphBase, appId: config.metaAdsAppId, appSecret: config.metaAdsAppSecret,
-    configId: config.metaMsgConfigId, verifyToken: config.metaMsgVerifyToken, publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl, onInbound: (a) => flows.onInboundLead(a) });
+    configId: config.metaMsgConfigId, verifyToken: config.metaMsgVerifyToken, publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl, onInbound: (a) => flows.onInboundLead(a),
+    igAppId: config.instagramAppId, igAppSecret: config.instagramAppSecret, onComment: (a) => flows.onComment(a) });
   const viaMeta = (a) => !!channelAddress(a && a.to);
   // Envio de texto: API oficial quando a empresa tem; senão o número conectado por QR Code.
   const officialConnected = async (orgId) => (await pool.query(`select 1 from public.whatsapp_accounts where organization_id = $1 and status = 'connected'`, [orgId])).rowCount > 0;
@@ -118,10 +119,13 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     avatarOf: (orgId, phone) => uazapi.avatarOf(orgId, phone),
     ringCall: (orgId, phone, seconds) => uazapi.ringCall(orgId, phone, seconds),
     // sem a API oficial, o WhatsApp comum não tem janela de 24 h
-    freeTextAllowed: async (orgId, to) => !channelAddress(to) && !(await officialConnected(orgId)) && uazapi.hasConnected(orgId),
+    // Instagram: comentário ainda sem resposta privada também deixa mandar (a 1ª mensagem vai como resposta ao comentário)
+    freeTextAllowed: async (orgId, to) => (channelAddress(to) ? metaChannels.commentReplyPending(orgId, to) : !(await officialConnected(orgId)) && uazapi.hasConnected(orgId)),
     sendTemplateTo: (orgId, a) => (viaMeta(a) ? Promise.reject(Object.assign(new Error('Instagram e Messenger não usam modelos do WhatsApp.'), { code: 'unsupported' })) : whatsapp.sendTemplateTo(orgId, a)),
     sendInteractiveTo: (orgId, a) => (viaMeta(a) ? metaChannels.sendInteractiveTo(orgId, a) : whatsapp.sendInteractiveTo(orgId, a)),
     typingFor: (orgId, a) => (viaMeta(a) || !whatsapp.typingFor ? Promise.resolve() : whatsapp.typingFor(orgId, a)),
+    // regra "Segue o perfil" da Condição (Instagram)
+    igFollows: (orgId, igUserId) => metaChannels.followsBusiness(orgId, igUserId),
   };
   const flowEmail = createFlowEmail({ pool, apiKey: config.resendApiKey, platformFrom: config.mailFrom, sendingDomain: config.resendSendingDomain, unsubSecret: config.unsubscribeSecret, publicBaseUrl: config.publicBaseUrl || '', fetchImpl });
   const voiceAgents = createVoiceAgents({ pool, secretKey: secretKeyBuf, fetchImpl, elevenBase: config.elevenlabsBase || undefined, publicBaseUrl: config.publicBaseUrl || '' });
@@ -308,6 +312,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
       // Volta do login "Conectar com Facebook" (Facebook Ads): o "state" assinado diz de qual empresa é.
       if (path === '/oauth/google/callback' && req.method === 'GET') {
         const html = await googleAds.oauthCallback(Object.fromEntries(url.searchParams));
+        res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Referrer-Policy', 'no-referrer'); return res.end(html);
+      }
+      if (path === '/oauth/instagram/callback' && req.method === 'GET') {
+        const html = await metaChannels.igOauthCallback(Object.fromEntries(url.searchParams));
         res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Cache-Control', 'no-store');
         res.setHeader('Referrer-Policy', 'no-referrer'); return res.end(html);
       }
