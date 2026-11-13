@@ -125,6 +125,7 @@ const KC_CSS = `
 .kc-ig-feats svg { color: #f472b6; flex: none; }
 .kc-link { background: none; border: 0; padding: 2px; cursor: pointer; color: var(--text-muted); font: 500 var(--text-xs) var(--font-sans); text-decoration: underline; text-underline-offset: 3px; align-self: center; }
 .kc-link:hover { color: var(--text-strong); }
+.kc-step.ig i { background: linear-gradient(135deg, #fa7e1e, #d62976 55%, #962fbf); }
 .kc-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; cursor: pointer; background: rgba(var(--fg-rgb), .025); border: 1px solid rgba(var(--fg-rgb), .06); font-size: var(--text-sm); color: var(--text-body); }
 .kc-switch { position: relative; width: 40px; height: 22px; flex: none; border-radius: 999px; border: 1px solid rgba(var(--fg-rgb), .14); background: rgba(var(--fg-rgb), .08); cursor: pointer; padding: 0; transition: all .2s; }
 .kc-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #cbd5e1; transition: all .2s cubic-bezier(.3,1.4,.5,1); }
@@ -422,9 +423,9 @@ function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
           <ChannelLogo kind="instagram" size={46} />
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Entre com o Instagram da empresa. Não precisa de página do Facebook: só a conta ser <b style={{ color: 'var(--text-strong)' }}>profissional</b> (Empresa ou Criador).</div>
         </div>
-        <div className="kc-step"><i>1</i><span>Clique em <b>Entrar com Instagram</b> e entre com o usuário e a senha da conta.</span></div>
-        <div className="kc-step"><i>2</i><span>Toque em <b>Permitir</b> para a Kobly ler e responder o Direct e os comentários.</span></div>
-        <div className="kc-step"><i>3</i><span>Pronto: Direct, comentários e stories já chegam na Kobly e disparam os seus fluxos.</span></div>
+        <div className="kc-step ig"><i>1</i><span>Clique em <b>Entrar com Instagram</b> e entre com o usuário e a senha da conta.</span></div>
+        <div className="kc-step ig"><i>2</i><span>Toque em <b>Permitir</b> para a Kobly ler e responder o Direct e os comentários.</span></div>
+        <div className="kc-step ig"><i>3</i><span>Pronto: Direct, comentários e stories já chegam na Kobly e disparam os seus fluxos.</span></div>
         <div className="kc-ig-feats">
           {[['message-circle', 'Direct no Chat ao vivo'], ['messages-square', 'Comentário vira Direct'], ['circle-play', 'Resposta e menção em story'], ['user-check', 'Confere se segue o perfil']].map(([i, t]) => (
             <span key={t}><Icon name={i} size={14} />{t}</span>
@@ -697,7 +698,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
         )}
       </Modal>
 
-      <Modal open={!!flow && flow.kind === 'meta'} onClose={() => setFlow(null)} title={flow && flow.want === 'messenger' ? 'Conectar Messenger' : 'Conectar Instagram'} subtitle="Conversas do Direct e da página do Facebook no Chat ao vivo." width={540}>
+      <Modal open={!!flow && flow.kind === 'meta'} onClose={() => setFlow(null)} title={flow && flow.want === 'messenger' ? 'Conectar Messenger' : 'Conectar Instagram'} subtitle={flow && flow.want === 'messenger' ? 'Conversas da página do Facebook no Chat ao vivo.' : 'Direct, comentários e stories na Kobly, com fluxos e IA.'} width={540}>
         {flow && flow.kind === 'meta' && <MetaConnect empresaId={empresaId} want={flow.want} notify={notify} onClose={() => setFlow(null)} onDone={() => { setFlow(null); load(); }} />}
       </Modal>
 
@@ -718,4 +719,4 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   );
 }
 
-export { KoblyConnections };
+export { KoblyConnections, MetaConnect, KC_CSS };

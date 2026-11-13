@@ -797,7 +797,7 @@ function TriggerFields({ d, set }) {
     {src === 'instagram' && (<>
       <div className="kf-cards2">
         {[['ig_comment', 'Comentário', 'Alguém comenta num post ou Reels: responde o comentário e chama no Direct.'], ['ig_story', 'Story', 'Alguém responde ou marca você num story.']].map(([v, t, h]) => (
-          <button key={v} type="button" className={`kf-card2${d.source === v ? ' on' : ''}`} onClick={() => set({ source: v })}><b>{t}</b><span>{h}</span></button>
+          <button key={v} type="button" className={`kf-card2${d.source === v ? ' on' : ''}`} onClick={() => set({ source: v, ...(v === 'ig_story' && !(d.keywords || []).length ? { mode: 'any' } : {}) })}><b>{t}</b><span>{h}</span></button>
         ))}
       </div>
       {d.source === 'ig_comment' && (<>
