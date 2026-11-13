@@ -17,14 +17,17 @@ function metaToHttp(e) {
   return new AuthError(502, 'meta_error', `Erro da Meta: ${e.message}`);
 }
 
-export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAppSecret }) {
+// Cadastro incorporado (um clique): appId/appSecret = app da Kobly; esConfigId = configuração do "Login do Facebook para
+// Empresas" com o cadastro do WhatsApp; appVerifyToken = senha do webhook do app (/webhooks/whatsapp-app).
+export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAppSecret, appId = '', appSecret = '', esConfigId = '', appVerifyToken = '', graphVersion = 'v21.0' }) {
   const view = (row) => row && ({
     id: row.id, organization_id: row.organization_id, waba_id: row.waba_id, phone_number_id: row.phone_number_id,
     display_phone: row.display_phone, verified_name: row.verified_name, quality_rating: row.quality_rating,
     messaging_limit: row.messaging_limit, status: row.status, last_error: row.last_error, connected_at: row.connected_at,
     webhook_url: `${publicBaseUrl}/webhooks/whatsapp/${row.webhook_public_id}`, verify_token: row.verify_token,
-    has_app_secret: !!row.app_secret_enc,
+    has_app_secret: !!row.app_secret_enc, embedded: !!row.embedded,
   });
+  const embeddedOn = () => !!(appId && appSecret && esConfigId && secretKey);
 
   // Resolve a organização alvo e confere que o usuário PODE mexer nela (mesma regra da RLS do banco).
   async function resolveOrg(user, orgId) {
@@ -58,7 +61,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
   const needKey = () => { if (!secretKey) throw new AuthError(503, 'whatsapp_unconfigured', 'O WhatsApp ainda não foi configurado neste ambiente (chave de segurança ausente).'); };
   const tokenOf = (row) => { needKey(); return decrypt(row.token_enc, secretKey); };
 
-  async function connect(ctx, { waba_id, phone_number_id, access_token, app_secret }) {
+  async function connect(ctx, { waba_id, phone_number_id, access_token, app_secret }, embedded = false) {
     requireManager(ctx);
     needKey();
     const waba = String(waba_id || '').trim(); const pid = String(phone_number_id || '').trim(); const tok = String(access_token || '').trim();
@@ -73,18 +76,40 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     if (dup.rows[0]) throw new AuthError(409, 'phone_in_use', 'Este número já está conectado em outra empresa.');
     const verify = existing ? existing.verify_token : randomBytes(18).toString('base64url');
     const args = [ctx.orgId, waba, pid, info.display_phone_number || null, info.verified_name || null, info.quality_rating || null, info.messaging_limit_tier || null,
-      verify, encrypt(tok, secretKey), app_secret ? encrypt(String(app_secret).trim(), secretKey) : null];
+      verify, encrypt(tok, secretKey), app_secret ? encrypt(String(app_secret).trim(), secretKey) : null, embedded];
     const { rows } = await pool.query(
-      `insert into public.whatsapp_accounts (organization_id, waba_id, phone_number_id, display_phone, verified_name, quality_rating, messaging_limit, status, last_error, verify_token, token_enc, app_secret_enc, connected_at)
-       values ($1,$2,$3,$4,$5,$6,$7,'connected',null,$8,$9,$10, now())
+      `insert into public.whatsapp_accounts (organization_id, waba_id, phone_number_id, display_phone, verified_name, quality_rating, messaging_limit, status, last_error, verify_token, token_enc, app_secret_enc, connected_at, embedded)
+       values ($1,$2,$3,$4,$5,$6,$7,'connected',null,$8,$9,$10, now(), $11)
        on conflict (organization_id) do update set waba_id = excluded.waba_id, phone_number_id = excluded.phone_number_id, display_phone = excluded.display_phone,
          verified_name = excluded.verified_name, quality_rating = excluded.quality_rating, messaging_limit = excluded.messaging_limit, status = 'connected', last_error = null,
-         token_enc = excluded.token_enc, app_secret_enc = coalesce(excluded.app_secret_enc, public.whatsapp_accounts.app_secret_enc), connected_at = now()
+         token_enc = excluded.token_enc, app_secret_enc = case when excluded.embedded then null else coalesce(excluded.app_secret_enc, public.whatsapp_accounts.app_secret_enc) end, connected_at = now(), embedded = excluded.embedded
        returning *`, args);
     // assina a conta para receber os avisos (falha aqui não desfaz a conexão; vira aviso)
     let webhookWarning = null;
     try { await graph.subscribeApp(waba, tok); } catch (e) { webhookWarning = 'Conectado, mas não consegui assinar os avisos de entrega automaticamente. Configure o webhook no painel da Meta com a URL abaixo.'; }
     return { account: view(rows[0]), webhookWarning };
+  }
+
+  // ---- Um clique: "Conectar com Facebook" (Cadastro incorporado da Meta) ------------------
+  function embeddedConfig() {
+    return embeddedOn() ? { enabled: true, app_id: appId, config_id: esConfigId, graph_version: graphVersion } : { enabled: false };
+  }
+  // a tela manda o código do login + os IDs que a janela da Meta devolveu (conta e número escolhidos pelo cliente)
+  async function embeddedConnect(ctx, { code, waba_id, phone_number_id }) {
+    requireManager(ctx);
+    if (!embeddedOn()) throw new AuthError(503, 'embedded_off', 'A conexão com um clique ainda não foi ativada no servidor da Kobly.');
+    if (!/^[A-Za-z0-9_\-#.]{10,2048}$/.test(String(code || ''))) throw new AuthError(422, 'validation_failed', 'O login da Meta não devolveu o código. Tente de novo.');
+    let tok;
+    try { tok = (await graph.exchangeCode(appId, appSecret, String(code))).access_token; }
+    catch (e) { throw new AuthError(400, 'embedded_code', 'A Meta não confirmou o login (o código vale poucos minutos). Clique em "Conectar com Facebook" de novo.'); }
+    if (!tok) throw new AuthError(400, 'embedded_code', 'A Meta não devolveu o acesso. Tente de novo.');
+    // número novo precisa ser ativado na Cloud API (PIN de 6 dígitos da verificação em duas etapas); se já estiver ativo, segue
+    let registerWarning = null;
+    const pin = String(100000 + (randomBytes(4).readUInt32BE(0) % 900000));
+    try { await graph.registerPhone(String(phone_number_id || ''), tok, pin); }
+    catch (e) { if (!/already|registrad/i.test(String(e.message || ''))) registerWarning = `O número foi conectado, mas a Meta não confirmou a ativação: ${e.message}`; }
+    const r = await connect(ctx, { waba_id, phone_number_id, access_token: tok }, true);
+    return { ...r, registerWarning };
   }
 
   async function status(ctx, { refresh } = {}) {
@@ -215,6 +240,23 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
   }
   function timingEq(a, b) { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); }
 
+  // Webhook do app da Kobly (contas conectadas com um clique): um endereço para todas; a conta é achada pelo número/WABA
+  function verifyAppWebhook(mode, token, challenge) {
+    return mode === 'subscribe' && appVerifyToken && token && timingEq(token, appVerifyToken) ? String(challenge ?? '') : null;
+  }
+  async function receiveAppWebhook(rawBody, signatureHeader) {
+    if (!appSecret) return { status: 403, reason: 'app da Kobly sem segredo' };
+    const expected = 'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex');
+    if (!signatureHeader || !timingEq(signatureHeader, expected)) return { status: 403, reason: 'assinatura inválida' };
+    let payload; try { payload = JSON.parse(rawBody.toString()); } catch { return { status: 200, ignored: 'json' }; }
+    const stats = { statuses: 0, templates: 0, optOuts: 0 };
+    for (const entry of payload.entry || []) {
+      const { rows } = await pool.query(`select * from public.whatsapp_accounts where waba_id = $1`, [String(entry.id || '')]);
+      for (const row of rows) await processEntry(row, entry, stats);
+    }
+    return { status: 200, ...stats };
+  }
+
   async function receiveWebhook(publicId, rawBody, signatureHeader) {
     const { rows } = await pool.query(`select * from public.whatsapp_accounts where webhook_public_id::text = $1`, [publicId]);
     const row = rows[0];
@@ -226,7 +268,12 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     if (!signatureHeader || !timingEq(signatureHeader, expected)) return { status: 403, reason: 'assinatura inválida' };
     let payload; try { payload = JSON.parse(rawBody.toString()); } catch { return { status: 200, ignored: 'json' }; }
     const stats = { statuses: 0, templates: 0, optOuts: 0 };
-    for (const entry of payload.entry || []) for (const ch of entry.changes || []) {
+    for (const entry of payload.entry || []) await processEntry(row, entry, stats);
+    return { status: 200, ...stats };
+  }
+
+  async function processEntry(row, entry, stats) {
+    for (const ch of entry.changes || []) {
       const v = ch.value || {};
       if (ch.field === 'messages') {
         if (v.metadata && v.metadata.phone_number_id && v.metadata.phone_number_id !== row.phone_number_id) continue; // outro número
@@ -250,7 +297,6 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
           [row.id, v.current_quality_rating || null, v.current_limit || null]);
       }
     }
-    return { status: 200, ...stats };
   }
 
   const STATUS = { delivered: 'entregue', read: 'lido', failed: 'falha' };
@@ -277,5 +323,5 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     return r.rowCount;
   }
 
-  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, sendMediaTo, sendInteractiveTo, reactTo, typingFor, setInboundHandler, verifyWebhook, receiveWebhook, view, SAFE_COLS };
+  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, sendMediaTo, sendInteractiveTo, reactTo, typingFor, setInboundHandler, verifyWebhook, receiveWebhook, verifyAppWebhook, receiveAppWebhook, embeddedConfig, embeddedConnect, view, SAFE_COLS };
 }

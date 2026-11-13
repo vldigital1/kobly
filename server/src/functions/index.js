@@ -12,7 +12,7 @@ export const atendentePode = (fn, action) => Object.prototype.hasOwnProperty.cal
 // Travas do plano (só com BILLING_ENFORCE ligado): recurso que o plano precisa ter e vagas de conexão.
 // Só as ações que criam ou ligam algo; ver e desligar continuam livres.
 const GATES = {
-  'whatsapp-account': { connect: { feature: 'canais', slots: 1 } },
+  'whatsapp-account': { connect: { feature: 'canais', slots: 1 }, embedded_connect: { feature: 'canais', slots: 1 } },
   'meta-channels': { oauth_start: { feature: 'canais' }, connect: { feature: 'canais', slots: (b) => (Array.isArray(b.page_ids) ? b.page_ids.length : 1) * (Array.isArray(b.kinds) && b.kinds.length ? b.kinds.length : 2) } },
   'uazapi': { create: { slots: 1 } },
   'ai-keys': { connect: { feature: 'ia' }, activate: { feature: 'ia' } },
@@ -46,6 +46,8 @@ export function createFunctions(ctx) {
     switch (body.action) {
       case 'status': return io.send(res, 200, await wa.status(org, { refresh: !!body.refresh }));
       case 'connect': return io.send(res, 200, await wa.connect(org, body));
+      case 'embedded_config': return io.send(res, 200, wa.embeddedConfig());
+      case 'embedded_connect': return io.send(res, 200, await wa.embeddedConnect(org, body));
       case 'disconnect': return io.send(res, 200, await wa.disconnect(org));
       case 'sync_templates': return io.send(res, 200, await wa.syncTemplates(org));
       case 'create_template': return io.send(res, 200, await wa.createTemplate(org, body));

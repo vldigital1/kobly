@@ -1,6 +1,6 @@
 // Aba WhatsApp (API oficial da Meta). Cada empresa conecta o PRÓPRIO número: os disparos
 // saem do WhatsApp dela. A API oficial só inicia conversa com MODELOS aprovados pela Meta.
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { KoblyApi } from '@/api/mockApi.js';
 import { Badge, Banner, Button, Card, Icon, Input, Select, Spinner } from '@/ds';
 import { useAsync } from '@/lib/hooks.jsx';
@@ -22,7 +22,103 @@ function CopyRow({ label, value }) {
   );
 }
 
-function ConnectForm({ empresaId, onDone }) {
+// SDK do Facebook (só para o "Conectar com Facebook" do WhatsApp): carregado uma vez, quando a tela abre
+let fbSdk = null;
+function loadFbSdk(appId, version) {
+  if (fbSdk) return fbSdk;
+  fbSdk = new Promise((resolve, reject) => {
+    if (window.FB) { window.FB.init({ appId, autoLogAppEvents: true, xfbml: false, version }); resolve(window.FB); return; }
+    window.fbAsyncInit = () => { window.FB.init({ appId, autoLogAppEvents: true, xfbml: false, version }); resolve(window.FB); };
+    const s = document.createElement('script');
+    s.src = 'https://connect.facebook.net/en_US/sdk.js'; s.async = true; s.defer = true; s.crossOrigin = 'anonymous';
+    s.onerror = () => { fbSdk = null; reject(new Error('Não deu para abrir o login do Facebook. Desative o bloqueador de anúncios para a Kobly e tente de novo.')); };
+    document.body.appendChild(s);
+  });
+  return fbSdk;
+}
+
+// "Conectar com Facebook": cadastro incorporado da Meta. O cliente entra no Facebook, escolhe (ou cria) a conta do
+// WhatsApp Business e o número, confirma por SMS e volta. A Kobly recebe o código + os IDs e faz o resto.
+function EmbeddedConnect({ cfg, empresaId, onDone, onManual }) {
+  const store = useKobly();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const got = useRef({ code: null, ids: null });
+  const finish = useCallback(async () => {
+    const { code, ids } = got.current;
+    if (!code || !ids) return;
+    got.current = { code: null, ids: null };
+    const r = await KoblyApi.whatsappAccount('embedded_connect', { code, waba_id: ids.waba_id, phone_number_id: ids.phone_number_id }, empresaId);
+    setBusy(false);
+    if (r.error) { setErr(r.error); return; }
+    store.notify('success', 'WhatsApp conectado!');
+    if (r.registerWarning) store.notify('warning', r.registerWarning);
+    onDone(r);
+  }, [empresaId, onDone, store]);
+  useEffect(() => {
+    function onMsg(e) {
+      if (!/(^|\.)facebook\.com$/.test(new URL(e.origin).hostname)) return;
+      let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+      if (!d || d.type !== 'WA_EMBEDDED_SIGNUP') return;
+      if (String(d.event || '').startsWith('FINISH') && d.data && d.data.waba_id && d.data.phone_number_id) { got.current.ids = { waba_id: String(d.data.waba_id), phone_number_id: String(d.data.phone_number_id) }; finish(); }
+      else if (d.event === 'FINISH_ONLY_WABA') { setBusy(false); setErr('A conta foi criada, mas nenhum número foi escolhido. Clique de novo e escolha o número.'); }
+      else if (d.event === 'CANCEL') { setBusy(false); setErr(d.data && d.data.error_message ? `A Meta avisou: ${d.data.error_message}` : 'Você fechou a janela antes de terminar. Nada foi conectado.'); }
+    }
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [finish]);
+  async function start() {
+    setErr(null); setBusy(true);
+    let FB;
+    try { FB = await loadFbSdk(cfg.app_id, cfg.graph_version); } catch (e) { setBusy(false); setErr(e.message); return; }
+    FB.login((resp) => {
+      const code = resp && resp.authResponse && resp.authResponse.code;
+      if (!code) { if (!got.current.ids) { setBusy(false); setErr((e) => e || 'Login cancelado. Nada foi conectado.'); } return; }
+      got.current.code = code; finish();
+    }, { config_id: cfg.config_id, response_type: 'code', override_default_response_type: true, extras: { setup: {}, featureType: '', sessionInfoVersion: '3' } });
+  }
+  return (
+    <Card icon="message-circle" title="Conectar o WhatsApp da sua empresa" subtitle="API oficial da Meta, com o seu número. Leva uns 2 minutos e não precisa copiar nada.">
+      <div className="wam-es">
+        <div className="wam-steps">
+          {[['1', 'Clique em', 'Conectar com Facebook', 'e entre com o Facebook que administra a empresa.'],
+            ['2', 'Escolha (ou crie) a', 'conta do WhatsApp Business', 'e o número que vai enviar as mensagens.'],
+            ['3', 'Confirme o número com o', 'código por SMS', 'ou ligação. Pronto: a Kobly ativa tudo sozinha.']].map(([n, a, b, c]) => (
+            <div key={n} className="wam-step"><i>{n}</i><span>{a} <b>{b}</b> {c}</span></div>
+          ))}
+        </div>
+        <Banner tone="info" title="Antes de começar">O número não pode estar em uso no app comum do WhatsApp (nem no WhatsApp Business do celular). Use um número novo ou apague a conta do WhatsApp nele antes.</Banner>
+        {err && <Banner tone="danger">{err}</Banner>}
+        <button type="button" className="wam-fb" disabled={busy} onClick={start}>
+          {busy ? <Spinner size={16} /> : <Icon name="facebook" size={18} />}{busy ? 'Esperando a Meta…' : 'Conectar com Facebook'}
+        </button>
+        <button type="button" className="wam-link" onClick={onManual}>Já tenho o token e os IDs: conectar manualmente</button>
+      </div>
+      <style>{`
+.wam-es { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
+.wam-steps { display: flex; flex-direction: column; gap: 10px; }
+.wam-step { display: flex; gap: 10px; align-items: flex-start; font-size: var(--text-sm); color: var(--text-body); }
+.wam-step i { font-style: normal; flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #25D366, #128C7E); }
+.wam-fb { display: flex; align-items: center; justify-content: center; gap: 10px; height: 46px; border: 0; border-radius: 12px; cursor: pointer; font: 600 15px var(--font-sans); color: #fff; background: #1877F2; box-shadow: 0 8px 24px -10px rgba(24, 119, 242, .8); transition: transform .15s, filter .15s; }
+.wam-fb:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); }
+.wam-fb:disabled { opacity: .6; cursor: progress; }
+.wam-link { background: none; border: 0; padding: 2px; cursor: pointer; color: var(--text-muted); font: 500 var(--text-xs) var(--font-sans); text-decoration: underline; text-underline-offset: 3px; align-self: center; }
+.wam-link:hover { color: var(--text-strong); }
+`}</style>
+    </Card>
+  );
+}
+
+export function ConnectForm({ empresaId, onDone }) {
+  const cfg = useAsync(() => KoblyApi.whatsappAccount('embedded_config', {}, empresaId), [empresaId]);
+  const [manual, setManual] = useState(false);
+  if (cfg.status === 'loading') return <Banner tone="info" title="Carregando…"><Spinner size={13} /></Banner>;
+  const es = cfg.data && !cfg.data.error && cfg.data.enabled ? cfg.data : null;
+  if (es && !manual) return <EmbeddedConnect cfg={es} empresaId={empresaId} onDone={onDone} onManual={() => setManual(true)} />;
+  return <ManualConnectForm empresaId={empresaId} onDone={onDone} onBack={es ? () => setManual(false) : null} />;
+}
+
+function ManualConnectForm({ empresaId, onDone, onBack }) {
   const store = useKobly();
   const [f, setF] = useState({ waba_id: '', phone_number_id: '', access_token: '', app_secret: '' });
   const [busy, setBusy] = useState(false);
@@ -49,7 +145,10 @@ function ConnectForm({ empresaId, onDone }) {
         <Input label="Token de acesso permanente" type="password" value={f.access_token} onChange={set('access_token')} placeholder="EAAG…" />
         <Input label="Segredo do app (opcional, recomendado)" type="password" value={f.app_secret} onChange={set('app_secret')} placeholder="usado para validar os avisos de entrega" />
         {err && <Banner tone="danger">{err}</Banner>}
-        <div><Button variant="primary" iconLeft="plug" disabled={!ready || busy} onClick={connect}>{busy ? 'Conferindo na Meta…' : 'Conectar'}</Button></div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button variant="primary" iconLeft="plug" disabled={!ready || busy} onClick={connect}>{busy ? 'Conferindo na Meta…' : 'Conectar'}</Button>
+          {onBack && <Button variant="ghost" onClick={onBack}>Voltar para "Conectar com Facebook"</Button>}
+        </div>
       </div>
     </Card>
   );
@@ -143,12 +242,16 @@ export function WhatsappMetaTab({ empresaId }) {
             <Badge tone={qTone}>{qLabel}</Badge>
             {a.messaging_limit && <Badge tone="neutral">Limite: {a.messaging_limit.replace('TIER_', '').replace('K', ' mil/dia')}</Badge>}
           </div>
+          {a.embedded ? (
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="check-circle-2" size={14} />Conectado com um clique: avisos de entrega, respostas e descadastro já chegam sozinhos.</div>
+          ) : (<>
           <Banner tone="info" title="Avisos de entrega (opcional)">
             Para ver “entregue/lido” e receber pedidos de descadastro (SAIR), cadastre este endereço no painel da Meta (WhatsApp → Configuração → Webhook) e assine “messages”.
           </Banner>
           <CopyRow label="URL de retorno (callback)" value={a.webhook_url} />
           <CopyRow label="Token de verificação" value={a.verify_token} />
           {!a.has_app_secret && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><Icon name="info" size={14} /> Sem o segredo do app, os avisos de entrega não podem ser validados e são recusados. Conecte de novo informando o segredo.</div>}
+          </>)}
         </div>
       </Card>
 

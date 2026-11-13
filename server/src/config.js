@@ -34,6 +34,8 @@ export function loadConfig(env = process.env) {
     metaMsgVerifyToken: env.META_MSG_VERIFY_TOKEN || '',
     // "Entrar com Instagram" (login direto, sem página do Facebook): ID e chave secreta do app do Instagram (caso de uso Instagram)
     instagramAppId: env.INSTAGRAM_APP_ID || '',
+    // WhatsApp oficial com um clique (Cadastro incorporado): ID da configuração do Login do Facebook para Empresas com o cadastro do WhatsApp
+    metaWaConfigId: env.META_WA_CONFIG_ID || '',
     instagramAppSecret: env.INSTAGRAM_APP_SECRET || '',
     asaasApiKey: env.ASAAS_API_KEY || '',
     asaasEnv: env.ASAAS_ENV === 'production' ? 'production' : 'sandbox',

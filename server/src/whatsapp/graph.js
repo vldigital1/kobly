@@ -11,7 +11,7 @@ export function createGraph({ base = 'https://graph.facebook.com/v21.0', fetchIm
     try {
       res = await fetchImpl(url, {
         method,
-        headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
         body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -29,6 +29,9 @@ export function createGraph({ base = 'https://graph.facebook.com/v21.0', fetchIm
     getPhoneNumber: (phoneNumberId, token) =>
       call('GET', `/${encodeURIComponent(phoneNumberId)}`, token, null, { fields: 'display_phone_number,verified_name,quality_rating,messaging_limit_tier,code_verification_status' }),
     getWaba: (wabaId, token) => call('GET', `/${encodeURIComponent(wabaId)}`, token, null, { fields: 'id,name' }),
+    // Cadastro incorporado (um clique): troca o código do login pelo token da empresa e ativa o número na Cloud API
+    exchangeCode: (clientId, clientSecret, code) => call('GET', '/oauth/access_token', null, null, { client_id: clientId, client_secret: clientSecret, code }),
+    registerPhone: (phoneNumberId, token, pin) => call('POST', `/${encodeURIComponent(phoneNumberId)}/register`, token, { messaging_product: 'whatsapp', pin }),
     async listTemplates(wabaId, token) {
       const out = []; let after;
       for (let i = 0; i < 20; i++) { // teto de páginas

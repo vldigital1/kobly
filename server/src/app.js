@@ -70,6 +70,9 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     pool, graph: graph || createGraph({ base: config.metaGraphBase }),
     secretKey: config.secretKey ? parseKey(config.secretKey) : null,
     publicBaseUrl: config.publicBaseUrl || '', globalAppSecret: config.metaAppSecret || null,
+    // um clique: app da Kobly (o mesmo do Facebook Ads); avisos em /webhooks/whatsapp-app com a mesma senha do webhook do Instagram
+    appId: config.metaAdsAppId || '', appSecret: config.metaAdsAppSecret || '', esConfigId: config.metaWaConfigId || '', appVerifyToken: config.metaMsgVerifyToken || '',
+    graphVersion: (/\/(v[0-9.]+)\/?$/.exec(config.metaGraphBase || '') || [null, 'v21.0'])[1],
   });
   const secretKeyBuf = config.secretKey ? parseKey(config.secretKey) : null;
   // IA: chave de cada empresa (BYOK); a da plataforma só como reserva se AI_PLATFORM_FALLBACK=true
@@ -237,6 +240,18 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     const path = url.pathname.replace(/\/+$/, '') || '/';
     try {
       if (path === '/rest/v1' || path.startsWith('/rest/v1/')) return await proxyRest(req, res, url);
+      // WhatsApp conectado com um clique: um webhook só para o app da Kobly (a conta é achada pela WABA)
+      if (path === '/webhooks/whatsapp-app') {
+        if (req.method === 'GET') {
+          const challenge = whatsapp.verifyAppWebhook(url.searchParams.get('hub.mode'), url.searchParams.get('hub.verify_token'), url.searchParams.get('hub.challenge'));
+          res.statusCode = challenge === null ? 403 : 200; res.setHeader('Content-Type', 'text/plain'); return res.end(challenge === null ? 'forbidden' : challenge);
+        }
+        if (req.method === 'POST') {
+          const r = await whatsapp.receiveAppWebhook(await readBody(req, MAX_PROXY_BODY), req.headers['x-hub-signature-256']);
+          const { status: st, ...counts } = r;
+          return send(res, st, st === 200 ? { ok: true, ...counts } : { code: 'rejected' });
+        }
+      }
       const wm = /^\/webhooks\/whatsapp\/([0-9a-f-]{36})$/.exec(path);
       if (wm) {
         if (req.method === 'GET') {
