@@ -40,6 +40,8 @@ async function fakeFetch(url, init = {}) {
   if (u.pathname.endsWith('/me/messages')) { const b = JSON.parse(init.body); sent.push(b); return ok({ recipient_id: 'x', message_id: `m_out_${sent.length}` }); }
   if (u.pathname.endsWith('/replies')) { replies.push({ comment: u.pathname.split('/').at(-2), message: new URLSearchParams(init.body).get('message') }); return ok({ id: 'r1' }); }
   if (u.pathname.endsWith('/me/media')) return ok({ data: [{ id: '1801', caption: 'Promo de Natal', media_type: 'VIDEO', media_product_type: 'REELS', thumbnail_url: 'https://x.test/t.jpg', permalink: 'https://instagram.com/p/1', timestamp: '2026-11-10T10:00:00+0000' }] });
+  if (u.pathname.endsWith(`/cm_semarroba_${stamp}`)) return ok({ username: 'quem.so.comentou', id: `cm_semarroba_${stamp}` });
+  if (u.pathname.endsWith(`/stranger-${stamp}`)) return ok({}); // quem só comentou: o Instagram não devolve o perfil
   if (u.pathname.endsWith(`/${FAN}`)) {
     if (u.searchParams.get('fields') === 'is_user_follow_business') return ok({ is_user_follow_business: follows });
     return ok({ name: 'Carla Fã', username: 'carla.fa', profile_pic: 'https://x.test/c.jpg' });
@@ -150,4 +152,10 @@ test('token de 60 dias é renovado sozinho quando faltam menos de 10 dias', { sk
   assert.ok(new Date(r.token_expires_at) > new Date(Date.now() + 50 * 86400000));
   await mc.handle(ctx(), {}, { action: 'ig_media' });
   assert.equal(refreshed, 1, 'não renova de novo');
+});
+
+test('comentário sem @ no aviso: a Kobly pergunta o @ e o contato (sem perfil) aparece com o @, não como "Contato"', { skip }, async () => {
+  await hook({ object: 'instagram', entry: [{ id: IG, time: 1, changes: [{ field: 'comments', value: { id: `cm_semarroba_${stamp}`, text: 'eu quero', from: { id: `stranger-${stamp}` }, media: { id: '1801' } } }] }] });
+  const l = (await pool.query(`select nome, ig_username from public.leads where organization_id = $1 and ig_user_id = $2`, [A.orgId, `stranger-${stamp}`])).rows[0];
+  assert.equal(l.nome, '@quem.so.comentou'); assert.equal(l.ig_username, 'quem.so.comentou');
 });

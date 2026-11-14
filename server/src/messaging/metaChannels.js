@@ -280,7 +280,12 @@ export function createMetaChannels({ pool, secretKey, fetchImpl = globalThis.fet
     const ev = await pool.query(`insert into public.ig_comment_events (organization_id, meta_channel_id, comment_id, media_id, body) values ($1,$2,$3,$4,$5) on conflict (comment_id) do nothing returning id`,
       [ch.organization_id, ch.id, String(v.id), v.media && v.media.id ? String(v.media.id) : null, String(v.text || '').slice(0, 2200)]);
     if (!ev.rowCount) return; // reentrega
-    const leadId = await leadFor(ch, fromId, from.username || null);
+    // o Instagram nem sempre manda o @ no aviso: pergunta pelo próprio comentário
+    let uname = from.username || null;
+    if (!uname) uname = (await api(ch, `/${v.id}`, { fields: 'username' }).catch(() => ({}))).username || null;
+    const leadId = await leadFor(ch, fromId, uname);
+    // contato criado antes sem nome (só comentou, nunca escreveu no Direct): passa a mostrar o @
+    if (uname) await pool.query(`update public.leads set nome = '@' || $2::text, ig_username = coalesce(ig_username, $2::text) where id = $1 and (nome is null or nome = '')`, [leadId, uname]);
     await pool.query(`update public.leads set ig_comment_id = $2, ig_comment_at = now() where id = $1`, [leadId, String(v.id)]);
     let r = { started: [], replies: [] };
     if (onComment) r = (await onComment({ orgId: ch.organization_id, leadId, text: String(v.text || ''), mediaId: v.media && v.media.id ? String(v.media.id) : null, commentId: String(v.id) })
