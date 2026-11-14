@@ -48,29 +48,6 @@ const SUPPORTED_EVENTS = [
   { event: 'deposit_requested', label: 'Depósito solicitado', description: 'Solicitação de depósito bancário' },
 ];
 
-// ── Hotmart: aceito nativamente (sem tradução), mapeamento informativo ──
-const HOTMART_EVENTS = [
-  { event: 'PURCHASE_APPROVED / PURCHASE_COMPLETE', trigger: 'Compra Aprovada' },
-  { event: 'PURCHASE_CANCELED / PURCHASE_EXPIRED', trigger: 'Compra cancelada' },
-  { event: 'PURCHASE_REFUNDED', trigger: 'Compra Reembolsada' },
-  { event: 'PURCHASE_CHARGEBACK', trigger: 'Chargeback' },
-  { event: 'PURCHASE_BILLET_PRINTED', trigger: 'Boleto Gerado' },
-  { event: 'PURCHASE_OUT_OF_SHOPPING_CART', trigger: 'Abandono de carrinho (nome a confirmar no 1º teste)' },
-  { event: 'SUBSCRIPTION_CANCELLATION', trigger: 'Cancelamento de Assinatura' },
-];
-
-// ── NexusPayt (família Payt): aceito nativamente, mapeamento informativo status → gatilho ──
-const NEXUSPAYT_EVENTS = [
-  { event: 'paid', trigger: 'Compra Aprovada' },
-  { event: 'refused', trigger: 'Compra Recusada' },
-  { event: 'refunded', trigger: 'Compra Reembolsada' },
-  { event: 'chargeback', trigger: 'Chargeback' },
-  { event: 'canceled', trigger: 'Compra cancelada' },
-  { event: 'lost_cart', trigger: 'Abandono de carrinho' },
-  { event: 'subscription_canceled', trigger: 'Cancelamento de Assinatura' },
-  { event: 'waiting_payment', trigger: 'Pix Gerado / Boleto Gerado (conforme o método)' },
-];
-
 // Tempo relativo curto ("agora", "há 12s", "há 3min") pra sessão de teste ao vivo.
 function timeAgo(iso) {
   if (!iso) return '';
@@ -82,16 +59,6 @@ function timeAgo(iso) {
   if (m < 60) return `há ${m}min`;
   return `há ${Math.round(m / 60)}h`;
 }
-
-const EXAMPLE_PAYLOAD = `{
-  "event": "cart_abandoned",
-  "email": "lead@email.com",
-  "name": "Nome do Lead",
-  "product": "Produto Exemplo",
-  "value": 197.00,
-  "payment_method": "pix",
-  "external_id": "tx_123456"
-}`;
 
 // ── Aba 1: Postback URL ──
 // Segurança de UM webhook (migração 0073): sem isso, quem tiver a URL consegue enviar eventos falsos.
@@ -414,53 +381,6 @@ function PostbackTab({ data, empresaId }) {
           </Button>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
             O evento cai na sua conta como se viesse do checkout — vira lead, dispara campanhas ativas com o gatilho correspondente e aparece na sessão ao vivo abaixo.
-          </div>
-        </div>
-      </Card>
-
-      {/* Hotmart nativo */}
-      <Card title="Hotmart" subtitle="Cole a mesma URL acima em Ferramentas → Webhook (versão 2.0.0) — o payload nativo da Hotmart é aceito sem adaptação">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {HOTMART_EVENTS.map((ev) => (
-            <div key={ev.event} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--accent)', minWidth: 260 }}>{ev.event}</code>
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>→ {ev.trigger}</div>
-            </div>
-          ))}
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            Eventos fora dessa lista são recebidos e ignorados sem erro — não derrubam o postback.
-          </div>
-        </div>
-      </Card>
-
-      {/* NexusPayt nativo */}
-      <Card title="NexusPayt" subtitle="Cole a mesma URL acima no campo de Postback/Webhook da NexusPayt — o payload nativo da família Payt é aceito sem adaptação">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {NEXUSPAYT_EVENTS.map((ev) => (
-            <div key={ev.event} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--accent)', minWidth: 260 }}>{ev.event}</code>
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>→ {ev.trigger}</div>
-            </div>
-          ))}
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            <code>waiting_payment</code> vira "Pix Gerado" ou "Boleto Gerado" conforme o método de pagamento do pedido. Status fora dessa lista são recebidos e ignorados sem erro — não derrubam o postback.
-          </div>
-        </div>
-      </Card>
-
-      {/* Exemplo de payload */}
-      <Card title="Exemplo de payload (outras plataformas)" subtitle="Copie e adapte para sua plataforma">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <pre style={{
-            background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-sm)', padding: 12, margin: 0,
-            fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-body)',
-            overflow: 'auto', whiteSpace: 'pre-wrap',
-          }}>
-            {EXAMPLE_PAYLOAD}
-          </pre>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            Campos opcionais: <code>name</code>, <code>product</code>, <code>value</code>, <code>payment_method</code>, <code>external_id</code>
           </div>
         </div>
       </Card>
