@@ -178,8 +178,9 @@ export function createFlowRuntime({ pool, whatsapp, email = null, llm = null, pa
     const tail = from.slice(-10); // casa com ou sem DDI e com/sem o 9 (mesma regra do descadastro)
     let lead = (await pool.query(`select id, automation_paused from public.leads where organization_id = $1 and right(regexp_replace(coalesce(telefone,''), '\\D', '', 'g'), 10) = $2 order by updated_at desc limit 1`, [orgId, tail])).rows[0];
     if (!lead) {
-      // contato novo: vira lead só se algum fluxo começa por mensagem (senão fica só na caixa de entrada)
-      if (!(await messageFlows(orgId)).some((r) => chanOk(nodeOf(r.graph, r.graph.start).data, 'whatsapp'))) return true;
+      // contato novo: na API oficial (accountId) sempre vira lead, senão a conversa não aparece no Chat ao vivo;
+      // nos demais caminhos só vira lead se algum fluxo começa por mensagem
+      if (!accountId && !(await messageFlows(orgId)).some((r) => chanOk(nodeOf(r.graph, r.graph.start).data, 'whatsapp'))) return true;
       const nome = String(((contacts || [])[0] || {}).profile?.name || '').trim().slice(0, 120) || null;
       lead = (await pool.query(`insert into public.leads (organization_id, nome, telefone, utm) values ($1, $2, $3, '{"utm_source":"whatsapp"}'::jsonb) returning id, automation_paused`, [orgId, nome, from])).rows[0];
     }

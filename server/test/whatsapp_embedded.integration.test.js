@@ -73,4 +73,7 @@ test('webhook do app: senha confere, assinatura do app da Kobly, mensagem cai na
   assert.equal(r.status, 200);
   const m = (await pool.query(`select m.body, a.organization_id from public.whatsapp_inbound_messages m join public.whatsapp_accounts a on a.id = m.account_id where m.wa_message_id = $1`, [`wamid.emb${stamp}`])).rows[0];
   assert.equal(m.body, 'Oi, quero saber o preço'); assert.equal(m.organization_id, A.orgId);
+  // empresa sem fluxo por mensagem: o contato novo vira lead e a conversa aparece no Chat ao vivo
+  const l = (await pool.query(`select l.id, l.nome, l.telefone from public.whatsapp_inbound_messages m join public.leads l on l.id = m.lead_id where m.wa_message_id = $1`, [`wamid.emb${stamp}`])).rows[0];
+  assert.ok(l, 'mensagem ligada a um lead'); assert.equal(l.nome, 'Cliente Teste'); assert.equal(l.telefone, '5511988887777');
 });
