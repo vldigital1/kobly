@@ -6,6 +6,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/ajuda",
+      "destination": "/ajuda/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

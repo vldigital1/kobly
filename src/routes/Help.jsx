@@ -1,53 +1,43 @@
-import { useState } from 'react';
-import { KoblyApi } from '@/api/mockApi.js';
-import { Button, Card, Icon } from '@/ds';
-import { PageIntro, useAsync } from '@/lib/hooks.jsx';
-import { ErrorState, SkeletonRow } from '@/lib/ui.jsx';
+import { useEffect, useRef, useState } from 'react';
+import { Banner, Spinner } from '@/ds';
 import { useKobly } from '@/store/store.jsx';
 
-// Kobly — Central de ajuda (suporte). FAQ + acesso a vídeos + abrir chamado. KoblyHelp
+// Kobly — Central de ajuda dentro do painel. É a mesma central da página pública (/ajuda): artigos passo a passo,
+// Academy (trilhas) e perguntas frequentes, vindos de /ajuda/conteudo.json. "Abrir um chamado" leva para Chamados. KoblyHelp
 
-function FaqItem({ item, open, onToggle }) {
-  return (
-    <div style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-      <button onClick={onToggle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', textAlign: 'start', cursor: 'pointer', border: 'none', background: 'transparent', padding: '16px 4px', fontFamily: 'var(--font-sans)' }}>
-        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>{item.q}</span>
-        <Icon name="plus" size={18} style={{ color: open ? 'var(--accent)' : 'var(--text-muted)', flex: 'none', transition: 'transform var(--dur-fast) var(--ease-out), color var(--dur-fast)', transform: open ? 'rotate(45deg)' : 'rotate(0deg)' }} />
-      </button>
-      {open && <p style={{ margin: '0 4px 16px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 'var(--lh-normal)', maxWidth: 720, animation: 'kbly-fade var(--dur-fast) ease both' }}>{item.a}</p>}
-    </div>
-  );
-}
+const themeOfPanel = () => (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
 
 function KoblyHelp() {
   const store = useKobly();
-  const a = useAsync(() => KoblyApi.getHelp(), []);
-  const [open, setOpen] = useState(0);
-  if (a.status === 'error') return <ErrorState message={a.error} onRetry={a.reload} />;
-  if (a.status === 'loading') return (
-    <Card title="Perguntas frequentes">
-      {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
-    </Card>
-  );
-
+  const ref = useRef(null);
+  const nav = useRef(store.navigate); nav.current = store.navigate; // monta a central uma vez só
+  const [st, setSt] = useState('loading');
+  useEffect(() => {
+    let alive = true, obs = null;
+    if (!document.getElementById('kbh-css')) {
+      const link = document.createElement('link');
+      link.id = 'kbh-css'; link.rel = 'stylesheet'; link.href = '/ajuda/ajuda.css';
+      document.head.appendChild(link);
+    }
+    // o motor fica na pasta public (é o mesmo da página /ajuda): baixa e carrega na hora, fora do empacotamento
+    fetch('/ajuda/ajuda.js', { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error('ajuda.js'); return r.text(); })
+      .then((code) => { const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' })); return import(/* @vite-ignore */ url).finally(() => URL.revokeObjectURL(url)); })
+      .then((m) => m.mountHelp(ref.current, { embed: true, theme: themeOfPanel(), onChamado: () => nav.current('chamados') }))
+      .then((h) => {
+        if (!alive) return;
+        setSt('ok');
+        // acompanha a troca de tema claro/escuro do painel
+        obs = new MutationObserver(() => h.setTheme(themeOfPanel()));
+        obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      })
+      .catch(() => alive && setSt('error'));
+    return () => { alive = false; if (obs) obs.disconnect(); };
+  }, []);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <PageIntro>Perguntas frequentes e canais de atendimento. Não achou o que procurava? Abra um chamado.</PageIntro>
-      <div className="kbly-grid-main" style={{ gap: 16 }}>
-        <Card title="Perguntas frequentes">
-          <div>
-            {a.data.faq.map((item, i) => <FaqItem key={i} item={item} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)} />)}
-          </div>
-        </Card>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Card title="Precisa de ajuda?" icon="life-buoy">
-            <p style={{ margin: '0 0 14px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 'var(--lh-normal)' }}>
-              Fale com a gente pelo chat de suporte — o assistente responde na hora e você pode escalar para um atendente quando precisar.
-            </p>
-            <Button variant="primary" iconLeft="messages-square" fullWidth onClick={() => store.navigate('chamados')}>Abrir um chamado</Button>
-          </Card>
-        </div>
-      </div>
+    <div>
+      {st === 'loading' && <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', padding: 12 }}><Spinner size={14} /> Abrindo a central de ajuda…</div>}
+      {st === 'error' && <Banner tone="danger" title="Não deu para abrir a central de ajuda.">Confira a internet e tente de novo, ou abra em <a href="/ajuda" target="_blank" rel="noopener">app.koblay.io/ajuda</a>.</Banner>}
+      <div ref={ref} />
     </div>
   );
 }
