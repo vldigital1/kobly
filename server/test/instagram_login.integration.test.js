@@ -19,7 +19,7 @@ const IG = `178${stamp}`.slice(0, 17);
 const FAN = `igsid${stamp}`;
 let pool, mc, flows;
 const A = {}, sent = [], replies = [], subscribed = [];
-let follows = true, refreshed = 0;
+let follows = true, refreshed = 0, lateProfile = false;
 
 async function fakeFetch(url, init = {}) {
   const u = new URL(String(url));
@@ -41,6 +41,7 @@ async function fakeFetch(url, init = {}) {
   if (u.pathname.endsWith('/replies')) { replies.push({ comment: u.pathname.split('/').at(-2), message: new URLSearchParams(init.body).get('message') }); return ok({ id: 'r1' }); }
   if (u.pathname.endsWith('/me/media')) return ok({ data: [{ id: '1801', caption: 'Promo de Natal', media_type: 'VIDEO', media_product_type: 'REELS', thumbnail_url: 'https://x.test/t.jpg', permalink: 'https://instagram.com/p/1', timestamp: '2026-11-10T10:00:00+0000' }] });
   if (u.pathname.endsWith(`/cm_semarroba_${stamp}`)) return ok({ username: 'quem.so.comentou', id: `cm_semarroba_${stamp}` });
+  if (u.pathname.endsWith(`/late-${stamp}`)) return ok(lateProfile ? { name: 'Esposa Teste', username: 'esposa.t', profile_pic: 'https://x.test/e.jpg' } : {});
   if (u.pathname.endsWith(`/stranger-${stamp}`)) return ok({}); // quem só comentou: o Instagram não devolve o perfil
   if (u.pathname.endsWith(`/${FAN}`)) {
     if (u.searchParams.get('fields') === 'is_user_follow_business') return ok({ is_user_follow_business: follows });
@@ -158,4 +159,15 @@ test('comentário sem @ no aviso: a Kobly pergunta o @ e o contato (sem perfil) 
   await hook({ object: 'instagram', entry: [{ id: IG, time: 1, changes: [{ field: 'comments', value: { id: `cm_semarroba_${stamp}`, text: 'eu quero', from: { id: `stranger-${stamp}` }, media: { id: '1801' } } }] }] });
   const l = (await pool.query(`select nome, ig_username from public.leads where organization_id = $1 and ig_user_id = $2`, [A.orgId, `stranger-${stamp}`])).rows[0];
   assert.equal(l.nome, '@quem.so.comentou'); assert.equal(l.ig_username, 'quem.so.comentou');
+});
+
+test('contato criado pela mensagem do celular (sem perfil) ganha nome e foto quando a pessoa responde', { skip }, async () => {
+  const echo = { object: 'instagram', entry: [{ id: IG, messaging: [{ sender: { id: IG }, recipient: { id: `late-${stamp}` }, timestamp: Date.now(), message: { mid: `m_late_echo_${stamp}`, text: 'Comente quero', is_echo: true } }] }] };
+  await hook(echo);
+  let l = (await pool.query(`select nome, avatar_url from public.leads where organization_id = $1 and ig_user_id = $2`, [A.orgId, `late-${stamp}`])).rows[0];
+  assert.equal(l.nome, null); assert.equal(l.avatar_url, null);
+  lateProfile = true; // agora ela escreveu: o Instagram libera o perfil
+  await hook({ object: 'instagram', entry: [{ id: IG, messaging: [{ sender: { id: `late-${stamp}` }, recipient: { id: IG }, timestamp: Date.now(), message: { mid: `m_late_in_${stamp}`, text: 'Sim' } }] }] });
+  l = (await pool.query(`select nome, avatar_url, ig_username from public.leads where organization_id = $1 and ig_user_id = $2`, [A.orgId, `late-${stamp}`])).rows[0];
+  assert.equal(l.nome, 'Esposa Teste'); assert.equal(l.avatar_url, 'https://x.test/e.jpg'); assert.equal(l.ig_username, 'esposa.t');
 });

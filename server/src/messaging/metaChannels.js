@@ -254,10 +254,19 @@ export function createMetaChannels({ pool, secretKey, fetchImpl = globalThis.fet
     });
   }
   // contato: acha pelo id do Instagram/Messenger (ou pelo @ do Instagram); senão cria com nome e foto do perfil
-  async function leadFor(ch, userId, username = null) {
+  // enrich: a pessoa acabou de escrever, então o Instagram já entrega nome e foto; completa o contato criado antes sem perfil
+  async function leadFor(ch, userId, username = null, enrich = false) {
     const col = ch.kind === 'instagram' ? 'ig_user_id' : 'fb_psid';
-    const found = (await pool.query(`select id from public.leads where organization_id = $1 and ${col} = $2`, [ch.organization_id, userId])).rows[0];
-    if (found) return found.id;
+    const found = (await pool.query(`select id, nome, avatar_url from public.leads where organization_id = $1 and ${col} = $2`, [ch.organization_id, userId])).rows[0];
+    if (found) {
+      if (enrich && (!found.nome || !found.avatar_url)) {
+        const prof = await api(ch, `/${userId}`, { fields: ch.kind === 'instagram' ? 'name,username,profile_pic' : 'first_name,last_name,profile_pic' }).catch(() => ({}));
+        const nome = ch.kind === 'instagram' ? (prof.name || (prof.username ? `@${prof.username}` : null)) : [prof.first_name, prof.last_name].filter(Boolean).join(' ') || null;
+        await pool.query(`update public.leads set nome = coalesce(nullif(nome, ''), $2::text), ig_username = coalesce(ig_username, $3::text), avatar_url = coalesce(avatar_url, $4::text), avatar_at = case when avatar_url is null and $4::text is not null then now() else avatar_at end where id = $1`,
+          [found.id, nome, prof.username || null, httpsOr(prof.profile_pic)]);
+      }
+      return found.id;
+    }
     if (username && ch.kind === 'instagram') {
       const byName = (await pool.query(`update public.leads set ig_user_id = $3 where id = (select id from public.leads where organization_id = $1 and lower(ig_username) = lower($2) and ig_user_id is distinct from $3 limit 1)
         and not exists (select 1 from public.leads where organization_id = $1 and ig_user_id = $3) returning id`, [ch.organization_id, username, userId]).catch(() => ({ rows: [] }))).rows[0];
@@ -317,7 +326,7 @@ export function createMetaChannels({ pool, secretKey, fetchImpl = globalThis.fet
         const echo = !!m.is_echo;
         const other = String(echo ? (ev.recipient && ev.recipient.id) : (ev.sender && ev.sender.id) || '');
         if (!other || other === ch.external_id) continue;
-        const leadId = await leadFor(ch, other);
+        const leadId = await leadFor(ch, other, null, !echo); // echo = a empresa escreveu pelo celular: a pessoa ainda não tem perfil liberado
         const att = (m.attachments || [])[0];
         const story = att && att.type === 'story_mention' ? 'mention' : m.reply_to && m.reply_to.story ? 'reply' : null;
         const storyUrl = story === 'mention' ? httpsOr(att.payload && att.payload.url) : story === 'reply' ? httpsOr(m.reply_to.story.url) : null;
