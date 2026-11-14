@@ -101,6 +101,9 @@ function checkData(node, err, warn = err) {
   const at = `${labelOf(node)}`;
   switch (node.type) {
     case 'trigger':
+      // conexões por onde o fluxo vale (vazio = todas): "uazapi:<id>", "oficial:<id>", "instagram:<id>", "messenger:<id>"
+      if (d.connections !== undefined && !(Array.isArray(d.connections) && d.connections.length <= 100
+        && d.connections.every((k) => /^(uazapi|oficial|instagram|messenger):[0-9a-f-]{36}$/i.test(String(k))))) err(`${at}: conexões inválidas.`);
       if (['message', 'ig_comment', 'ig_story'].includes(d.source)) { // mensagem (WhatsApp/Instagram/Messenger), comentário ou story: qualquer texto ou palavras-chave
         if (d.source === 'message' && d.channel !== undefined && !['whatsapp', 'instagram', 'messenger', 'any'].includes(d.channel)) err(`${at}: canal inválido.`);
         if (d.source === 'ig_story' && d.story !== undefined && !['any', 'reply', 'mention'].includes(d.story)) err(`${at}: escolha resposta, menção ou os dois.`);

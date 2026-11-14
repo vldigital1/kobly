@@ -20,6 +20,9 @@ const DE = {
   humano: { label: 'Equipe', mine: true, icon: 'user', color: 'var(--pastel-green)' },
   celular: { label: 'Celular', mine: true, icon: 'smartphone', color: 'var(--pastel-blue)' },
 };
+// redes do Chat ao vivo: todas juntas ou uma só; dentro de cada uma, dá para escolher a conexão (chip, número oficial, conta, Página)
+const REDES = [['', 'Todas', null], ['whatsapp', 'WhatsApp', 'qr'], ['instagram', 'Instagram', 'instagram'], ['messenger', 'Messenger', 'messenger']];
+const CONN_LOGO = { uazapi: 'qr', oficial: 'oficial', instagram: 'instagram', messenger: 'messenger' };
 const FILTROS = [['todas', 'Todas'], ['aguardando', 'Não respondidas'], ['fluxo', 'Em fluxo'], ['humano', 'Com humano'], ['arquivadas', 'Arquivadas']];
 const TIPO = { image: ['image', 'Foto'], audio: ['mic', 'Áudio'], video: ['video', 'Vídeo'], document: ['file-text', 'Arquivo'], sticker: ['smile', 'Figurinha'] };
 const EMOJIS = {
@@ -71,6 +74,19 @@ const KH_CSS = `
 .kh-f:hover { background: var(--wa-btn); }
 .kh-f.on { color: var(--pastel-orange); background: rgba(255,98,1,.28); }
 .kh-f .n { margin-left: 5px; opacity: .75; }
+.kh-redes { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: var(--wa-in); }
+.kh-rede { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 6px; border-radius: 9px; border: 0; cursor: pointer; background: transparent; color: var(--wa-icon); font: 500 13px var(--font-sans); white-space: nowrap; transition: background .15s, color .15s; }
+.kh-rede:hover { color: var(--wa-text); }
+.kh-rede.on { background: var(--wa-panel); color: var(--wa-text); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.kh-rede .n { font-size: 11px; padding: 0 6px; border-radius: 999px; background: #25d366; color: #0b141a; font-weight: 700; }
+.kh-top { container-type: inline-size; }
+.kh-rede .t { overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 380px) { .kh-rede:not(.on) .t { display: none; } .kh-rede:not(.on) { flex: 0 0 38px; } }
+.kh-connsel { position: relative; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 10px; background: var(--wa-in); color: var(--wa-text); font-size: 13px; }
+.kh-connsel select { flex: 1; min-width: 0; appearance: none; -webkit-appearance: none; background: transparent; border: 0; outline: none; color: inherit; font: inherit; cursor: pointer; padding-right: 18px; }
+.kh-connsel select option { background: var(--wa-panel); color: var(--wa-text); }
+.kh-connsel .chev { position: absolute; right: 10px; pointer-events: none; color: var(--wa-muted); }
+.kh-conn { display: inline-flex; align-items: center; gap: 4px; max-width: 140px; font-size: 11px; color: var(--wa-muted); background: var(--wa-in); border-radius: 6px; padding: 1px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
 .kh-list { flex: 1; min-height: 0; overflow-y: auto; }
 .kh-item { display: flex; gap: 12px; width: 100%; text-align: left; padding: 0 14px; border: 0; cursor: pointer; font-family: var(--font-sans); background: transparent; align-items: center; }
 .kh-item:hover { background: var(--wa-in); }
@@ -571,7 +587,9 @@ function KoblyChats() {
   const { orgId, picker, canEdit } = useTargetOrg();
   const [q, setQ] = useState('');
   const [filtro, setFiltro] = useState('todas');
-  const [list, setList] = useState({ loading: true, error: null, items: [], arquivadas: 0 });
+  const [rede, setRede] = useState('');
+  const [conexao, setConexao] = useState('');
+  const [list, setList] = useState({ loading: true, error: null, items: [], arquivadas: 0, conexoes: [] });
   const [sel, setSel] = useState(null);
   const [avatars, setAvatars] = useState({});
   const asked = useRef(new Set());
@@ -586,11 +604,11 @@ function KoblyChats() {
   useEffect(() => { const f = () => { setWide(window.innerWidth > 900); setRoomy(window.innerWidth >= 1600); }; f(); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f); }, []);
 
   const load = useCallback(async (quiet = false) => {
-    if (!orgId) { setList({ loading: false, error: null, items: [], arquivadas: 0 }); return; }
+    if (!orgId) { setList({ loading: false, error: null, items: [], arquivadas: 0, conexoes: [] }); return; }
     if (!quiet) setList((s) => ({ ...s, loading: true }));
-    const r = await KoblyApi.inbox('list', { q, filtro }, orgId);
-    setList({ loading: false, error: r && r.error, items: (r && r.conversations) || [], arquivadas: (r && r.arquivadas) || 0 });
-  }, [orgId, q, filtro]);
+    const r = await KoblyApi.inbox('list', { q, filtro, rede, conexao }, orgId);
+    setList((s) => ({ loading: false, error: r && r.error, items: (r && r.conversations) || [], arquivadas: (r && r.arquivadas) || 0, conexoes: (r && r.conexoes) || s.conexoes || [] }));
+  }, [orgId, q, filtro, rede, conexao]);
   useEffect(() => { const t = setTimeout(() => load(), q ? 300 : 0); return () => clearTimeout(t); }, [load, q]);
   useEffect(() => { const t = setInterval(() => load(true), POLL_MS); return () => clearInterval(t); }, [load]);
   useEffect(() => {
@@ -607,6 +625,11 @@ function KoblyChats() {
     KoblyApi.inbox('avatars', { lead_ids: miss }, orgId).then((r) => { if (r && r.avatars) setAvatars((a) => ({ ...a, ...r.avatars })); }).catch(() => {});
   }, [list.items, orgId]);
   const naoResp = useMemo(() => list.items.filter((c) => c.ultima_de === 'lead').length, [list.items]);
+  // nome de cada conexão para a etiqueta da conversa; só aparece quando a empresa tem mais de uma
+  const connByKey = useMemo(() => Object.fromEntries((list.conexoes || []).map((c) => [c.key, c])), [list.conexoes]);
+  const connsDaRede = useMemo(() => (list.conexoes || []).filter((c) => !rede || c.rede === rede), [list.conexoes, rede]);
+  const muitas = (list.conexoes || []).length > 1;
+  function escolherRede(id) { setRede(id); setConexao((k) => (k && connByKey[k] && id && connByKey[k].rede !== id ? '' : k)); }
 
   const listPane = (
     <div className="kh-col l">
@@ -616,14 +639,32 @@ function KoblyChats() {
           <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 19, color: 'var(--wa-text)' }}>Conversas</div><div style={{ fontSize: 12, color: 'var(--wa-muted)' }}>{naoResp ? `${naoResp} esperando resposta` : 'Tudo respondido'}</div></div>
         </div>
         <div className="kh-search"><Icon name="search" size={16} style={{ color: 'var(--wa-muted)' }} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Pesquisar nome, telefone ou e-mail" />{q && <button type="button" className="kh-ic" style={{ width: 24, height: 24 }} onClick={() => setQ('')} aria-label="Limpar busca"><Icon name="x" size={14} /></button>}</div>
+        <div className="kh-redes" role="tablist" aria-label="Rede">
+          {REDES.map(([id, label, logo]) => (
+            <button key={id || 'todas'} type="button" role="tab" aria-selected={rede === id} title={label} className={`kh-rede${rede === id ? ' on' : ''}`} onClick={() => escolherRede(id)}>
+              {logo ? <ChannelLogo kind={logo} size={16} /> : <Icon name="layers" size={15} />}<span className="t">{label}</span>
+            </button>
+          ))}
+        </div>
+        {connsDaRede.length > 1 && (
+          <label className="kh-connsel">
+            {conexao && connByKey[conexao] ? <ChannelLogo kind={CONN_LOGO[connByKey[conexao].kind]} size={16} /> : <Icon name="plug" size={15} style={{ color: 'var(--wa-muted)' }} />}
+            <select value={conexao} onChange={(e) => setConexao(e.target.value)} aria-label="Conexão">
+              <option value="">{rede ? `Todas as conexões de ${REDES.find((r) => r[0] === rede)[1]}` : 'Todas as conexões'} ({connsDaRede.length})</option>
+              {connsDaRede.map((c) => <option key={c.key} value={c.key}>{c.nome} · {c.detalhe}{c.conectado ? '' : ' (desconectado)'}</option>)}
+            </select>
+            <Icon name="chevron-down" size={15} className="chev" />
+          </label>
+        )}
         <div className="kh-filters">{FILTROS.map(([id, label]) => <button key={id} type="button" className={`kh-f${filtro === id ? ' on' : ''}`} onClick={() => setFiltro(id)}>{label}{id === 'arquivadas' && list.arquivadas > 0 && <span className="n">{list.arquivadas}</span>}</button>)}</div>
       </div>
       <div className="kh-list">
         {list.loading && !list.items.length ? <div style={{ padding: 20, color: 'var(--wa-muted)' }}>Carregando…</div>
-          : list.items.length === 0 ? <div style={{ padding: 28, textAlign: 'center', color: 'var(--wa-muted)', fontSize: 14 }}>{orgId ? (filtro === 'todas' ? 'Quando alguém mandar mensagem para o seu WhatsApp, a conversa aparece aqui.' : 'Nenhuma conversa neste filtro.') : 'Escolha a conta do cliente acima.'}</div>
+          : list.items.length === 0 ? <div style={{ padding: 28, textAlign: 'center', color: 'var(--wa-muted)', fontSize: 14 }}>{orgId ? (filtro === 'todas' && !rede && !conexao ? 'Quando alguém mandar mensagem para o seu WhatsApp, Instagram ou Messenger, a conversa aparece aqui.' : 'Nenhuma conversa neste filtro.') : 'Escolha a conta do cliente acima.'}</div>
           : list.items.map((c) => {
             const t = TIPO[c.ultima_tipo];
             const de = DE[c.ultima_de];
+            const cx = muitas && c.conn_kind && connByKey[`${c.conn_kind}:${c.conn_id}`];
             return (
               <button key={c.lead_id} type="button" className={`kh-item${sel === c.lead_id ? ' on' : ''}`} onClick={() => setSel(c.lead_id)}>
                 <Avatar name={nomeOf(c)} src={c.avatar_url || avatars[c.lead_id]} channel={c.chat_channel} />
@@ -632,6 +673,7 @@ function KoblyChats() {
                     <span className="kh-name">{nomeOf(c)}</span>
                     <span style={{ fontSize: 12, color: c.nao_lidas ? '#25d366' : 'var(--wa-muted)', flex: 'none' }}>{rel(c.ultima_em)}</span>
                   </div>
+                  {cx && <div style={{ marginTop: 2 }}><span className="kh-conn" title={`Conexão: ${cx.nome} · ${cx.detalhe}`}><ChannelLogo kind={CONN_LOGO[cx.kind]} size={11} />{cx.nome}</span></div>}
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
                     <div className="kh-prev" style={{ flex: 1 }}>
                       {de && de.mine && <Icon name="check-check" size={15} style={{ color: '#53bdeb', flex: 'none' }} />}

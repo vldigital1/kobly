@@ -154,7 +154,7 @@ function ManualConnectForm({ empresaId, onDone, onBack }) {
   );
 }
 
-function NewTemplate({ empresaId, onClose, onCreated }) {
+function NewTemplate({ empresaId, accountId, onClose, onCreated }) {
   const store = useKobly();
   const [f, setF] = useState({ name: '', category: 'MARKETING', body: '', ex: '', url: '' });
   const [busy, setBusy] = useState(false);
@@ -164,7 +164,7 @@ function NewTemplate({ empresaId, onClose, onCreated }) {
     setBusy(true); setErr(null);
     const examples = f.ex.split('|').map((x) => x.trim()).filter(Boolean);
     const buttons = f.url.trim() ? [{ type: 'URL', text: 'Finalizar compra', url: f.url.trim(), example: 'abc' }] : [];
-    const r = await KoblyApi.whatsappAccount('create_template', { name: f.name, category: f.category, body: f.body, examples, buttons, language: 'pt_BR' }, empresaId);
+    const r = await KoblyApi.whatsappAccount('create_template', { account_id: accountId, name: f.name, category: f.category, body: f.body, examples, buttons, language: 'pt_BR' }, empresaId);
     setBusy(false);
     if (r.error) { setErr(r.error); return; }
     store.notify('success', 'Modelo enviado para análise da Meta');
@@ -188,9 +188,12 @@ function NewTemplate({ empresaId, onClose, onCreated }) {
   );
 }
 
-export function WhatsappMetaTab({ empresaId }) {
+// Uma empresa pode ter vários números oficiais: escolhe um em cima e tudo abaixo (modelos, teste, desconectar) vale para ele.
+export function WhatsappMetaTab({ empresaId, accountId = null, startAdding = false }) {
   const store = useKobly();
-  const acc = useAsync(() => KoblyApi.whatsappAccount('status', {}, empresaId), [empresaId]);
+  const [selId, setSelId] = useState(accountId);
+  const [adding, setAdding] = useState(startAdding); // "Nova conexão" com um número já conectado: abre direto para conectar outro
+  const acc = useAsync(() => KoblyApi.whatsappAccount('status', selId ? { account_id: selId } : {}, empresaId), [empresaId, selId]);
   const tpls = useAsync(() => KoblyApi.listWhatsappTemplates(), [empresaId]);
   const [busy, setBusy] = useState('');
   const [creating, setCreating] = useState(false);
@@ -204,9 +207,11 @@ export function WhatsappMetaTab({ empresaId }) {
   if (acc.status === 'error' || (d && d.error)) return <Banner tone="danger">{(d && d.error) || acc.error}</Banner>;
   if (!d.account) return <ConnectForm empresaId={empresaId} onDone={() => { acc.reload(); tpls.reload(); }} />;
 
-  const a = d.account;
+  const accounts = d.accounts && d.accounts.length ? d.accounts : [d.account];
+  const a = accounts.find((x) => x.id === selId) || d.account;
   const [qTone, qLabel] = QUALITY[a.quality_rating] || QUALITY.UNKNOWN;
-  const list = tpls.data || [];
+  // modelos são de cada número (a Meta aprova por conta do WhatsApp Business)
+  const list = (tpls.data || []).filter((t) => !t.account_id || t.account_id === a.id);
   const approved = list.filter((t) => t.status === 'APPROVED');
 
   async function run(key, fn, okMsg) {
@@ -215,12 +220,13 @@ export function WhatsappMetaTab({ empresaId }) {
     if (okMsg) store.notify('success', okMsg(r));
     return r;
   }
-  async function refresh() { await run('refresh', () => KoblyApi.whatsappAccount('status', { refresh: true }, empresaId)); acc.reload(); }
-  async function sync() { const r = await run('sync', () => KoblyApi.whatsappAccount('sync_templates', {}, empresaId), (x) => `${x.synced} modelo(s) sincronizado(s)`); if (!r.error) tpls.reload(); }
+  async function refresh() { await run('refresh', () => KoblyApi.whatsappAccount('status', { refresh: true, account_id: a.id }, empresaId)); acc.reload(); }
+  async function sync() { const r = await run('sync', () => KoblyApi.whatsappAccount('sync_templates', { account_id: a.id }, empresaId), (x) => `${x.synced} modelo(s) sincronizado(s)`); if (!r.error) tpls.reload(); }
   async function disconnect() {
-    if (!(await askConfirm('Desconectar o WhatsApp desta empresa? As campanhas com WhatsApp param de enviar até conectar de novo.'))) return;
-    const r = await run('desconectar', () => KoblyApi.whatsappAccount('disconnect', {}, empresaId), () => 'WhatsApp desconectado');
-    if (!r.error) { acc.reload(); tpls.reload(); }
+    const quem = a.display_phone || a.verified_name || 'este número';
+    if (!(await askConfirm(`Desconectar ${quem}? Os fluxos que usam este número param de enviar por ele até conectar de novo.`))) return;
+    const r = await run('desconectar', () => KoblyApi.whatsappAccount('disconnect', { account_id: a.id }, empresaId), () => 'Número desconectado');
+    if (!r.error) { setSelId(null); acc.reload(); tpls.reload(); }
   }
   async function sendTest() {
     setResult(null);
@@ -230,8 +236,34 @@ export function WhatsappMetaTab({ empresaId }) {
   }
   const sel = list.find((t) => t.id === testTpl);
 
+  if (adding) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div><Button variant="ghost" iconLeft="arrow-left" onClick={() => setAdding(false)}>Voltar para os números conectados</Button></div>
+      <ConnectForm empresaId={empresaId} onDone={() => { setAdding(false); setSelId(null); acc.reload(); tpls.reload(); }} />
+    </div>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <Card icon="smartphone" title="Números da API Oficial" subtitle={accounts.length > 1 ? `${accounts.length} números conectados. Escolha um para ver os modelos e enviar testes.` : 'Conecte quantos números quiser: cada fluxo escolhe por qual deles fala.'}
+        action={<Button size="sm" variant="secondary" iconLeft="plus" onClick={() => setAdding(true)}>Conectar outro número</Button>}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {accounts.map((x) => {
+            const on = x.id === a.id;
+            return (
+              <button key={x.id} type="button" onClick={() => setSelId(x.id)} aria-pressed={on}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 'var(--radius-md)', cursor: 'pointer', textAlign: 'left', font: 'inherit',
+                  border: `1px solid ${on ? 'var(--accent)' : 'var(--border-default)'}`, background: on ? 'var(--accent-soft, rgba(255,98,1,.08))' : 'var(--surface-raised)', color: 'var(--text-strong)' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: x.status === 'connected' ? 'var(--status-success-fg)' : 'var(--status-danger-fg)' }} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 'var(--fw-semibold)', fontSize: 'var(--text-sm)' }}>{x.verified_name || 'WhatsApp Oficial'}</span>
+                  <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{x.display_phone || 'número sem nome'}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
       <Card icon="message-circle" title="WhatsApp da empresa" subtitle="Envios pela API oficial da Meta, a partir do número conectado."
         action={<div style={{ display: 'flex', gap: 8 }}><Button size="sm" variant="ghost" iconLeft="refresh-cw" disabled={busy === 'refresh'} onClick={refresh}>Atualizar</Button><Button size="sm" variant="ghost" iconLeft="unplug" disabled={busy === 'desconectar'} onClick={disconnect}>Desconectar</Button></div>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -272,7 +304,7 @@ export function WhatsappMetaTab({ empresaId }) {
           </div>
         )}
       </Card>
-      {creating && <NewTemplate empresaId={empresaId} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); tpls.reload(); }} />}
+      {creating && <NewTemplate empresaId={empresaId} accountId={a.id} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); tpls.reload(); }} />}
 
       <Card icon="send" title="Enviar teste" subtitle="Dispara um modelo aprovado para o seu número.">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560 }}>

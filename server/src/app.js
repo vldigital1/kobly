@@ -99,20 +99,34 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     configId: config.metaMsgConfigId, verifyToken: config.metaMsgVerifyToken, publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl, onInbound: (a) => flows.onInboundLead(a),
     igAppId: config.instagramAppId, igAppSecret: config.instagramAppSecret, onComment: (a) => flows.onComment(a) });
   const viaMeta = (a) => !!channelAddress(a && a.to);
-  // Envio de texto: API oficial quando a empresa tem; senão o número conectado por QR Code.
+  // Por qual conexão do WhatsApp falar com um número: a escolhida (a.via = { kind: 'oficial' | 'uazapi', id }, vinda do fluxo
+  // ou do Chat ao vivo); senão a da última mensagem que a pessoa mandou (a conversa continua no mesmo número); senão a API
+  // oficial quando a empresa tem e, por último, o número conectado por QR Code.
   const officialConnected = async (orgId) => (await pool.query(`select 1 from public.whatsapp_accounts where organization_id = $1 and status = 'connected'`, [orgId])).rowCount > 0;
+  async function waRoute(orgId, a) {
+    const v = (a && a.via) || null;
+    if (v && v.kind === 'uazapi' && v.id) return { kind: 'uazapi', instanceId: v.id };
+    if (v && v.kind === 'oficial' && v.id) return { kind: 'oficial', accountId: v.id };
+    const phone = String((a && a.to) || '').replace(/\D/g, '');
+    if (phone.length >= 8) {
+      const r = (await pool.query(`select account_id, instance_id from public.whatsapp_inbound_messages where organization_id = $1 and right(from_phone, 10) = right($2, 10)
+        and (account_id is not null or instance_id is not null) order by received_at desc limit 1`, [orgId, phone])).rows[0];
+      if (r && r.instance_id && await uazapi.hasConnected(orgId)) return { kind: 'uazapi', instanceId: r.instance_id };
+      if (r && r.account_id) return { kind: 'oficial', accountId: r.account_id };
+    }
+    return { kind: 'auto' };
+  }
+  // envia pela rota: QR Code direto; oficial com o número certo; sem rota, oficial e, se não houver, QR Code
+  async function waSend(orgId, a, method) {
+    const route = await waRoute(orgId, a);
+    if (route.kind === 'uazapi') return uazapi[method](orgId, { ...a, instanceId: route.instanceId });
+    try { return await whatsapp[method](orgId, { ...a, accountId: route.accountId || null }); }
+    catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi[method](orgId, a); throw e; }
+  }
   const waRouted = {
     ...whatsapp,
-    async sendTextTo(orgId, a) {
-      if (viaMeta(a)) return metaChannels.sendTextTo(orgId, a);
-      try { return await whatsapp.sendTextTo(orgId, a); }
-      catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendTextTo(orgId, a); throw e; }
-    },
-    async sendMediaTo(orgId, a) {
-      if (viaMeta(a)) return metaChannels.sendMediaTo(orgId, a);
-      try { return await whatsapp.sendMediaTo(orgId, a); }
-      catch (e) { if (e.code === 'not_connected' && await uazapi.hasConnected(orgId)) return uazapi.sendMediaTo(orgId, a); throw e; }
-    },
+    sendTextTo: (orgId, a) => (viaMeta(a) ? metaChannels.sendTextTo(orgId, a) : waSend(orgId, a, 'sendTextTo')),
+    sendMediaTo: (orgId, a) => (viaMeta(a) ? metaChannels.sendMediaTo(orgId, a) : waSend(orgId, a, 'sendMediaTo')),
     // reagir com emoji à mensagem do lead: pelo canal em que ela chegou
     reactTo: async (orgId, a) => (viaMeta(a) ? { ok: false } : String(a.messageId || '').startsWith('uaz:') ? uazapi.reactTo(orgId, a) : whatsapp.reactTo(orgId, a)),
     // apagar para todos só existe no WhatsApp por QR Code (a API oficial da Meta não apaga)
@@ -123,9 +137,18 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     ringCall: (orgId, phone, seconds) => uazapi.ringCall(orgId, phone, seconds),
     // sem a API oficial, o WhatsApp comum não tem janela de 24 h
     // Instagram: comentário ainda sem resposta privada também deixa mandar (a 1ª mensagem vai como resposta ao comentário)
-    freeTextAllowed: async (orgId, to) => (channelAddress(to) ? metaChannels.commentReplyPending(orgId, to) : !(await officialConnected(orgId)) && uazapi.hasConnected(orgId)),
+    // conversa que veio por um chip de QR Code também não tem janela, mesmo que a empresa tenha a API oficial
+    freeTextAllowed: async (orgId, to, via = null) => {
+      if (channelAddress(to)) return metaChannels.commentReplyPending(orgId, to);
+      if ((await waRoute(orgId, { to, via })).kind === 'uazapi') return true;
+      return !(await officialConnected(orgId)) && uazapi.hasConnected(orgId);
+    },
     sendTemplateTo: (orgId, a) => (viaMeta(a) ? Promise.reject(Object.assign(new Error('Instagram e Messenger não usam modelos do WhatsApp.'), { code: 'unsupported' })) : whatsapp.sendTemplateTo(orgId, a)),
-    sendInteractiveTo: (orgId, a) => (viaMeta(a) ? metaChannels.sendInteractiveTo(orgId, a) : whatsapp.sendInteractiveTo(orgId, a)),
+    sendInteractiveTo: async (orgId, a) => {
+      if (viaMeta(a)) return metaChannels.sendInteractiveTo(orgId, a);
+      const route = await waRoute(orgId, a);
+      return whatsapp.sendInteractiveTo(orgId, { ...a, accountId: route.accountId || null });
+    },
     typingFor: (orgId, a) => (viaMeta(a) || !whatsapp.typingFor ? Promise.resolve() : whatsapp.typingFor(orgId, a)),
     // regra "Segue o perfil" da Condição (Instagram)
     igFollows: (orgId, igUserId) => metaChannels.followsBusiness(orgId, igUserId),

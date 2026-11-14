@@ -1,4 +1,5 @@
-// WhatsApp oficial (Meta Cloud API), uma conta por organização.
+// WhatsApp oficial (Meta Cloud API): uma empresa pode ter vários números. Cada envio sai pelo número escolhido
+// ou, se nenhum foi escolhido, pelo mesmo número em que a pessoa escreveu por último.
 import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
 import { MetaError } from './graph.js';
@@ -54,9 +55,24 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
   }
   const requireManager = (ctx) => { if (ctx.role === 'Suporte') throw new AuthError(403, 'forbidden', 'Seu perfil não pode alterar a conexão do WhatsApp.'); };
 
-  async function accountRow(orgId) {
-    const { rows } = await pool.query(`select * from public.whatsapp_accounts where organization_id = $1`, [orgId]);
+  // um número específico (accountId) ou o principal da empresa (o primeiro conectado)
+  async function accountRow(orgId, accountId = null) {
+    const { rows } = accountId
+      ? await pool.query(`select * from public.whatsapp_accounts where organization_id = $1 and id::text = $2`, [orgId, String(accountId)])
+      : await pool.query(`select * from public.whatsapp_accounts where organization_id = $1 order by (status = 'connected') desc, connected_at nulls last, created_at limit 1`, [orgId]);
     return rows[0] || null;
+  }
+  const accountsOf = async (orgId) => (await pool.query(`select * from public.whatsapp_accounts where organization_id = $1 order by connected_at nulls last, created_at`, [orgId])).rows;
+  // número para falar com alguém: o escolhido; senão o da última mensagem que a pessoa mandou (mesma conversa); senão o principal
+  async function accountFor(orgId, { accountId = null, to = null } = {}) {
+    if (accountId) { const r = await accountRow(orgId, accountId); if (r) return r; }
+    const phone = String(to || '').replace(/\D/g, '');
+    if (phone.length >= 8) {
+      const r = (await pool.query(`select a.* from public.whatsapp_inbound_messages m join public.whatsapp_accounts a on a.id = m.account_id
+        where m.organization_id = $1 and right(m.from_phone, 10) = right($2, 10) order by m.received_at desc limit 1`, [orgId, phone])).rows[0];
+      if (r) return r;
+    }
+    return accountRow(orgId);
   }
   const needKey = () => { if (!secretKey) throw new AuthError(503, 'whatsapp_unconfigured', 'O WhatsApp ainda não foi configurado neste ambiente (chave de segurança ausente).'); };
   const tokenOf = (row) => { needKey(); return decrypt(row.token_enc, secretKey); };
@@ -70,7 +86,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     let info;
     try { info = await graph.getPhoneNumber(pid, tok); await graph.getWaba(waba, tok); }
     catch (e) { throw metaToHttp(e); }
-    const existing = await accountRow(ctx.orgId);
+    const existing = (await pool.query(`select * from public.whatsapp_accounts where organization_id = $1 and phone_number_id = $2`, [ctx.orgId, pid])).rows[0];
     // um mesmo número não pode estar em duas empresas
     const dup = await pool.query(`select organization_id from public.whatsapp_accounts where phone_number_id = $1 and organization_id <> $2`, [pid, ctx.orgId]);
     if (dup.rows[0]) throw new AuthError(409, 'phone_in_use', 'Este número já está conectado em outra empresa.');
@@ -80,7 +96,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     const { rows } = await pool.query(
       `insert into public.whatsapp_accounts (organization_id, waba_id, phone_number_id, display_phone, verified_name, quality_rating, messaging_limit, status, last_error, verify_token, token_enc, app_secret_enc, connected_at, embedded)
        values ($1,$2,$3,$4,$5,$6,$7,'connected',null,$8,$9,$10, now(), $11)
-       on conflict (organization_id) do update set waba_id = excluded.waba_id, phone_number_id = excluded.phone_number_id, display_phone = excluded.display_phone,
+       on conflict (phone_number_id) do update set waba_id = excluded.waba_id, display_phone = excluded.display_phone,
          verified_name = excluded.verified_name, quality_rating = excluded.quality_rating, messaging_limit = excluded.messaging_limit, status = 'connected', last_error = null,
          token_enc = excluded.token_enc, app_secret_enc = case when excluded.embedded then null else coalesce(excluded.app_secret_enc, public.whatsapp_accounts.app_secret_enc) end, connected_at = now(), embedded = excluded.embedded
        returning *`, args);
@@ -112,27 +128,30 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     return { ...r, registerWarning };
   }
 
-  async function status(ctx, { refresh } = {}) {
-    let row = await accountRow(ctx.orgId);
-    if (!row) return { connected: false, account: null };
-    if (refresh) {
-      try {
-        const info = await graph.getPhoneNumber(row.phone_number_id, tokenOf(row));
-        const r = await pool.query(`update public.whatsapp_accounts set display_phone=$2, verified_name=$3, quality_rating=$4, messaging_limit=$5, status='connected', last_error=null where id=$1 returning *`,
-          [row.id, info.display_phone_number || row.display_phone, info.verified_name || row.verified_name, info.quality_rating || row.quality_rating, info.messaging_limit_tier || row.messaging_limit]);
-        row = r.rows[0];
-      } catch (e) {
-        const he = metaToHttp(e);
-        const r = await pool.query(`update public.whatsapp_accounts set status='error', last_error=$2 where id=$1 returning *`, [row.id, he.message]);
-        row = r.rows[0];
-      }
+  async function refreshRow(row) {
+    try {
+      const info = await graph.getPhoneNumber(row.phone_number_id, tokenOf(row));
+      return (await pool.query(`update public.whatsapp_accounts set display_phone=$2, verified_name=$3, quality_rating=$4, messaging_limit=$5, status='connected', last_error=null where id=$1 returning *`,
+        [row.id, info.display_phone_number || row.display_phone, info.verified_name || row.verified_name, info.quality_rating || row.quality_rating, info.messaging_limit_tier || row.messaging_limit])).rows[0];
+    } catch (e) {
+      const he = metaToHttp(e);
+      return (await pool.query(`update public.whatsapp_accounts set status='error', last_error=$2 where id=$1 returning *`, [row.id, he.message])).rows[0];
     }
-    return { connected: row.status === 'connected', account: view(row) };
+  }
+  // account = o número escolhido (account_id) ou o principal; accounts = todos os números oficiais da empresa
+  async function status(ctx, { refresh, account_id } = {}) {
+    let rows = await accountsOf(ctx.orgId);
+    if (!rows.length) return { connected: false, account: null, accounts: [] };
+    if (refresh) rows = await Promise.all(rows.map((r) => (!account_id || r.id === account_id ? refreshRow(r) : r)));
+    const row = (account_id && rows.find((r) => r.id === account_id)) || rows.find((r) => r.status === 'connected') || rows[0];
+    return { connected: row.status === 'connected', account: view(row), accounts: rows.map(view) };
   }
 
-  async function disconnect(ctx) {
+  // desconecta um número (account_id) ou, sem ele, todos os números oficiais da empresa
+  async function disconnect(ctx, { account_id } = {}) {
     requireManager(ctx);
-    await pool.query(`delete from public.whatsapp_accounts where organization_id = $1`, [ctx.orgId]);
+    if (account_id) await pool.query(`delete from public.whatsapp_accounts where organization_id = $1 and id::text = $2`, [ctx.orgId, String(account_id)]);
+    else await pool.query(`delete from public.whatsapp_accounts where organization_id = $1`, [ctx.orgId]);
     return { ok: true };
   }
 
@@ -146,8 +165,8 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
       [row.organization_id, row.id, t.name, t.language, t.category || 'MARKETING', t.status || 'PENDING', t.id || null, JSON.stringify(t.components || []), body, countVariables(body), t.rejected_reason && t.rejected_reason !== 'NONE' ? t.rejected_reason : null]);
   }
 
-  async function syncTemplates(ctx) {
-    const row = await accountRow(ctx.orgId);
+  async function syncTemplates(ctx, { account_id } = {}) {
+    const row = await accountRow(ctx.orgId, account_id || null);
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     let list;
     try { list = await graph.listTemplates(row.waba_id, tokenOf(row)); } catch (e) { throw metaToHttp(e); }
@@ -157,7 +176,7 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
 
   async function createTemplate(ctx, input) {
     requireManager(ctx);
-    const row = await accountRow(ctx.orgId);
+    const row = await accountRow(ctx.orgId, input.account_id || null);
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     let req;
     try { req = buildTemplateRequest(input); } catch (e) { throw new AuthError(422, e.code || 'validation_failed', e.message); }
@@ -168,26 +187,27 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
   }
 
   // Envia um modelo a UM número. Usado no teste e (depois) pelo motor de campanhas.
+  // o modelo pertence a um número: sai sempre por ele
   async function sendTemplateTo(orgId, { to, template_id, variables = [], button_suffix }) {
-    const row = await accountRow(orgId);
-    if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const phone = normalizePhone(to);
     if (!phone) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDD + número.');
     const { rows } = await pool.query(`select * from public.whatsapp_templates where id = $1 and organization_id = $2`, [template_id, orgId]);
     const tpl = rows[0];
     if (!tpl) throw new AuthError(404, 'template_not_found', 'Modelo não encontrado.');
+    const row = await accountRow(orgId, tpl.account_id);
+    if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     if (tpl.status !== 'APPROVED') throw new AuthError(409, 'template_not_approved', `Este modelo está "${tpl.status}". Só modelos aprovados pela Meta podem ser enviados.`);
     let components;
     try { components = buildSendComponents(tpl, variables, button_suffix); } catch (e) { throw new AuthError(422, e.code || 'validation_failed', e.message); }
     try {
       const out = await graph.sendTemplate(row.phone_number_id, tokenOf(row), { to: phone, name: tpl.name, language: tpl.language, components });
-      return { ok: true, id: (out.messages && out.messages[0] && out.messages[0].id) || null, to: phone };
+      return { ok: true, id: (out.messages && out.messages[0] && out.messages[0].id) || null, to: phone, accountId: row.id };
     } catch (e) { throw metaToHttp(e); }
   }
 
   // Texto livre a UM número (motor de fluxos). Quem chama confere a janela de 24 h antes.
-  async function sendTextTo(orgId, { to, text, replyTo = null, linkPreview = true }) {
-    const row = await accountRow(orgId);
+  async function sendTextTo(orgId, { to, text, replyTo = null, linkPreview = true, accountId = null }) {
+    const row = await accountFor(orgId, { accountId, to });
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const phone = normalizePhone(to);
     if (!phone) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDD + número.');
@@ -195,35 +215,36 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     if (!body.trim()) throw new AuthError(422, 'empty_text', 'Mensagem vazia.');
     try {
       const out = await graph.sendText(row.phone_number_id, tokenOf(row), { to: phone, text: body, previewUrl: linkPreview !== false, replyTo: officialId(replyTo) });
-      return { ok: true, id: (out.messages && out.messages[0] && out.messages[0].id) || null, to: phone };
+      return { ok: true, id: (out.messages && out.messages[0] && out.messages[0].id) || null, to: phone, accountId: row.id };
     } catch (e) { throw metaToHttp(e); }
   }
 
-  async function sendWith(orgId, to, fn) {
-    const row = await accountRow(orgId);
+  async function sendWith(orgId, to, fn, accountId = null) {
+    const row = await accountFor(orgId, { accountId, to });
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const phone = normalizePhone(to);
     if (!phone) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDD + número.');
     try {
       const out = await fn(row, phone);
-      return { ok: true, id: (out && out.messages && out.messages[0] && out.messages[0].id) || null, to: phone };
+      return { ok: true, id: (out && out.messages && out.messages[0] && out.messages[0].id) || null, to: phone, accountId: row.id };
     } catch (e) { throw metaToHttp(e); }
   }
   // ids de mensagem do WhatsApp por QR Code começam com "uaz:" e não valem na API oficial
   const officialId = (id) => (id && !String(id).startsWith('uaz:') ? String(id) : null);
-  const sendMediaTo = (orgId, { to, kind, url, caption, filename, replyTo = null }) =>
-    sendWith(orgId, to, (row, phone) => graph.sendMedia(row.phone_number_id, tokenOf(row), { to: phone, kind, link: url, caption, filename, replyTo: officialId(replyTo) }));
+  const sendMediaTo = (orgId, { to, kind, url, caption, filename, replyTo = null, accountId = null }) =>
+    sendWith(orgId, to, (row, phone) => graph.sendMedia(row.phone_number_id, tokenOf(row), { to: phone, kind, link: url, caption, filename, replyTo: officialId(replyTo) }), accountId);
   // Reagir com emoji à mensagem do lead (só funciona com o id da API oficial)
-  async function reactTo(orgId, { to, messageId, emoji }) {
+  async function reactTo(orgId, { to, messageId, emoji, accountId = null }) {
     if (!officialId(messageId)) throw new AuthError(400, 'not_connected', 'Mensagem de outro canal.');
-    return sendWith(orgId, to, (row, phone) => graph.sendReaction(row.phone_number_id, tokenOf(row), { to: phone, messageId: officialId(messageId), emoji }));
+    return sendWith(orgId, to, (row, phone) => graph.sendReaction(row.phone_number_id, tokenOf(row), { to: phone, messageId: officialId(messageId), emoji }), accountId);
   }
-  const sendInteractiveTo = (orgId, { to, interactive }) =>
-    sendWith(orgId, to, (row, phone) => graph.sendInteractive(row.phone_number_id, tokenOf(row), { to: phone, interactive }));
+  const sendInteractiveTo = (orgId, { to, interactive, accountId = null }) =>
+    sendWith(orgId, to, (row, phone) => graph.sendInteractive(row.phone_number_id, tokenOf(row), { to: phone, interactive }), accountId);
   // "digitando..." é só cosmético: qualquer falha é ignorada.
   async function typingFor(orgId, messageId) {
     if (!messageId) return false;
-    const row = await accountRow(orgId);
+    // "digitando" sai pelo número que recebeu a mensagem
+    const row = (await pool.query(`select a.* from public.whatsapp_inbound_messages m join public.whatsapp_accounts a on a.id = m.account_id where m.organization_id = $1 and m.wa_message_id = $2`, [orgId, String(messageId)])).rows[0] || await accountRow(orgId);
     if (!row) return false;
     try { await graph.typing(row.phone_number_id, tokenOf(row), messageId); return true; } catch { return false; }
   }
@@ -323,5 +344,5 @@ export function createWhatsapp({ pool, graph, secretKey, publicBaseUrl, globalAp
     return r.rowCount;
   }
 
-  return { resolveOrg, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, sendMediaTo, sendInteractiveTo, reactTo, typingFor, setInboundHandler, verifyWebhook, receiveWebhook, verifyAppWebhook, receiveAppWebhook, embeddedConfig, embeddedConnect, view, SAFE_COLS };
+  return { resolveOrg, accountsOf, connect, status, disconnect, syncTemplates, createTemplate, sendTemplateTo, sendTextTo, sendMediaTo, sendInteractiveTo, reactTo, typingFor, setInboundHandler, verifyWebhook, receiveWebhook, verifyAppWebhook, receiveAppWebhook, embeddedConfig, embeddedConnect, view, SAFE_COLS };
 }

@@ -44,12 +44,12 @@ export function createFunctions(ctx) {
     const { org } = await authedOrg(req, body, 'whatsapp-account');
     await gate('whatsapp-account', body, org);
     switch (body.action) {
-      case 'status': return io.send(res, 200, await wa.status(org, { refresh: !!body.refresh }));
+      case 'status': return io.send(res, 200, await wa.status(org, { refresh: !!body.refresh, account_id: body.account_id || null }));
       case 'connect': return io.send(res, 200, await wa.connect(org, body));
       case 'embedded_config': return io.send(res, 200, wa.embeddedConfig());
       case 'embedded_connect': return io.send(res, 200, await wa.embeddedConnect(org, body));
-      case 'disconnect': return io.send(res, 200, await wa.disconnect(org));
-      case 'sync_templates': return io.send(res, 200, await wa.syncTemplates(org));
+      case 'disconnect': return io.send(res, 200, await wa.disconnect(org, { account_id: body.account_id || null }));
+      case 'sync_templates': return io.send(res, 200, await wa.syncTemplates(org, { account_id: body.account_id || null }));
       case 'create_template': return io.send(res, 200, await wa.createTemplate(org, body));
       case 'send_test': return io.send(res, 200, await wa.sendTemplateTo(org.orgId, { to: body.to, template_id: body.template_id, variables: body.variables || [], button_suffix: body.button_suffix }));
       default: throw new AuthError(400, 'bad_action', 'Ação desconhecida.');

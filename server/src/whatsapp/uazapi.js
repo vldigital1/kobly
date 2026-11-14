@@ -432,7 +432,19 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     return { status: 200 };
   }
 
-  async function connectedRow(orgId) {
+  // número conectado para falar com alguém: o escolhido (instanceId); senão o da última mensagem que a pessoa mandou
+  // (a conversa continua no mesmo chip); senão o conectado mais recente
+  async function connectedRow(orgId, { instanceId = null, to = null } = {}) {
+    if (instanceId) {
+      const r = (await pool.query(`select * from public.whatsapp_uazapi_instances where organization_id = $1 and id::text = $2 and status = 'connected'`, [orgId, String(instanceId)])).rows[0];
+      if (r) return r;
+    }
+    const phone = digits(to || '');
+    if (phone.length >= 8) {
+      const r = (await pool.query(`select i.* from public.whatsapp_inbound_messages m join public.whatsapp_uazapi_instances i on i.id = m.instance_id
+        where m.organization_id = $1 and i.status = 'connected' and right(m.from_phone, 10) = right($2, 10) order by m.received_at desc limit 1`, [orgId, phone])).rows[0];
+      if (r) return r;
+    }
     return (await pool.query(`select * from public.whatsapp_uazapi_instances where organization_id = $1 and status = 'connected' order by connected_at desc nulls last limit 1`, [orgId])).rows[0] || null;
   }
   const msgIdOf = (r) => r.messageid || r.id || (r.message && r.message.messageid) || null;
@@ -440,8 +452,8 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
   const uazId = (id) => (id && String(id).startsWith('uaz:') ? String(id).slice(4) : null);
   // opções do bloco do fluxo: responder a mensagem do lead, marcar como encaminhada, prévia de link
   const extras = ({ replyTo, forwarded, linkPreview }) => ({ ...(uazId(replyTo) ? { replyid: uazId(replyTo) } : {}), ...(forwarded ? { forward: true } : {}), ...(linkPreview !== undefined ? { linkPreview: !!linkPreview } : {}) });
-  async function sendTextTo(orgId, { to, text, replyTo = null, forwarded = false, linkPreview }) {
-    const row = secretKey ? await connectedRow(orgId) : null;
+  async function sendTextTo(orgId, { to, text, replyTo = null, forwarded = false, linkPreview, instanceId = null }) {
+    const row = secretKey ? await connectedRow(orgId, { instanceId, to }) : null;
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const number = digits(to);
     if (number.length < 10) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDI + DDD + número.');
@@ -449,8 +461,8 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     return { ok: true, id: msgIdOf(r), to: number, channel: 'uazapi', instanceId: row.id };
   }
   // Mídia por link público: POST /send/media { number, type, file, text, docName }
-  async function sendMediaTo(orgId, { to, kind, url, caption, filename, ptt = true, viewOnce = false, replyTo = null, forwarded = false }) {
-    const row = secretKey ? await connectedRow(orgId) : null;
+  async function sendMediaTo(orgId, { to, kind, url, caption, filename, ptt = true, viewOnce = false, replyTo = null, forwarded = false, instanceId = null }) {
+    const row = secretKey ? await connectedRow(orgId, { instanceId, to }) : null;
     if (!row) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     const number = digits(to);
     if (number.length < 10) throw new AuthError(422, 'bad_phone', 'Número inválido. Use DDI + DDD + número.');
@@ -462,8 +474,8 @@ export function createUazapi({ pool, secretKey, base = '', adminToken = '', envC
     return { ok: true, id: msgIdOf(r), to: number, channel: 'uazapi', instanceId: row.id };
   }
   // Reage com emoji a uma mensagem do lead: POST /message/react { number, text, id }
-  async function reactTo(orgId, { to, messageId, emoji }) {
-    const row = secretKey ? await connectedRow(orgId) : null;
+  async function reactTo(orgId, { to, messageId, emoji, instanceId = null }) {
+    const row = secretKey ? await connectedRow(orgId, { instanceId, to }) : null;
     if (!row || !uazId(messageId)) throw new AuthError(400, 'not_connected', 'Conecte o WhatsApp primeiro.');
     await call(await serverOf(row), '/message/react', { method: 'POST', token: tokenOf(row), body: { number: digits(to), text: String(emoji || '👍').slice(0, 8), id: uazId(messageId) } });
     return { ok: true };

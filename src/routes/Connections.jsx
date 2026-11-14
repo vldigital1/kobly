@@ -481,7 +481,7 @@ function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
 
 function KoblyConnections({ empresaId, notify = () => {} }) {
   const store = useKobly();
-  const [st, setSt] = useState({ loading: true, uaz: [], uazOn: false, flows: 0, oficial: null, tg: [], meta: [], error: null });
+  const [st, setSt] = useState({ loading: true, uaz: [], uazOn: false, flows: 0, oficiais: [], tg: [], meta: [], error: null });
   const [filter, setFilter] = useState('todos');
   const [q, setQ] = useState('');
   const [picker, setPicker] = useState(false);
@@ -496,7 +496,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   const load = useCallback(async () => {
     const [u, o, t, m] = await Promise.all([KoblyApi.uazapi('list', {}, empresaId), KoblyApi.whatsappAccount('status', {}, empresaId), KoblyApi.notifyChannels('list', {}, empresaId),
       KoblyApi.metaChannels('list', {}, empresaId).catch(() => ({}))]);
-    setSt({ loading: false, uaz: u.instances || [], uazOn: !!u.configured, flows: u.flows_active || 0, oficial: (o && o.account) || null, tg: t.channels || [], meta: (m && m.channels) || [], error: u.error || t.error || null });
+    setSt({ loading: false, uaz: u.instances || [], uazOn: !!u.configured, flows: u.flows_active || 0, oficiais: (o && o.accounts && o.accounts.length ? o.accounts : o && o.account ? [o.account] : []), tg: t.channels || [], meta: (m && m.channels) || [], error: u.error || t.error || null });
   }, [empresaId]);
   useEffect(() => { load(); }, [load]);
   // enquanto puxa o histórico do WhatsApp, atualiza o andamento
@@ -565,7 +565,8 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
   // todas as conexões no mesmo formato de cartão
   const all = [
     ...st.uaz.map((i) => ({ key: i.id, kind: 'qr', name: i.label, profile: i.profile_name, sub: 'WhatsApp comum', pic: i.profile_pic_url, business: i.is_business, pause: i.pause_flows_on_disconnect, proxy: { mode: i.proxy_mode || 'uazapi', display: i.proxy_display, checked: i.proxy_checked_at }, history: { status: i.history_status, count: i.history_count, at: i.history_at, error: i.history_error }, phone: i.phone, status: i.status, when: i.connected_at, seen: i.last_seen_at, reason: i.disconnect_reason })),
-    ...(st.oficial ? [{ key: 'oficial', kind: 'oficial', name: st.oficial.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(st.oficial.display_phone || '').replace(/\D/g, ''), status: st.oficial.status === 'connected' ? 'connected' : 'disconnected', when: st.oficial.connected_at }] : []),
+    // cada número da API Oficial é um cartão (a empresa pode ter vários)
+    ...st.oficiais.map((x) => ({ key: `oficial:${x.id}`, accountId: x.id, kind: 'oficial', name: x.verified_name || 'WhatsApp Oficial', sub: 'API Oficial da Meta', phone: String(x.display_phone || '').replace(/\D/g, ''), status: x.status === 'connected' ? 'connected' : 'disconnected', when: x.connected_at })),
     ...st.meta.map((c) => ({ key: c.id, kind: c.kind, name: c.kind === 'instagram' ? (c.username ? `@${c.username}` : c.name) : c.name, profile: c.kind === 'instagram' ? c.name : null,
       sub: c.kind === 'instagram' ? (c.auth === 'ig_login' ? 'Instagram · Direct, comentários e stories' : 'Instagram Direct (pela página)') : 'Messenger da página', pic: c.picture_url, status: c.status === 'connected' ? 'connected' : 'disconnected', when: c.created_at, reason: c.last_error })),
     ...st.tg.map((c) => ({ key: c.id, kind: 'telegram', name: c.label, sub: 'Bot de alertas da equipe', chat: c.default_chat_id, status: 'connected', when: c.created_at })),
@@ -617,7 +618,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {cards.map((c) => (
           <ConnCard key={c.key} c={c} flowsActive={st.flows} navigate={store.navigate} onAct={act}
-            onQr={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })} onRename={() => setEdit({ id: c.key, tab: 'conexao', label: c.name, origLabel: c.name, connected: c.status === 'connected', name: c.profile || '', origName: c.profile || '', pic: c.pic, image: null, removeImage: false })} onPause={(on) => setPause(c, on)} onProxy={() => setProxy({ id: c.key, name: c.name, mode: c.proxy ? c.proxy.mode : 'uazapi', display: c.proxy && c.proxy.display })} onManage={() => setFlow({ kind: 'oficial', step: 'manage' })} />
+            onQr={() => setFlow({ kind: 'qr', step: 'qr', id: c.key })} onRename={() => setEdit({ id: c.key, tab: 'conexao', label: c.name, origLabel: c.name, connected: c.status === 'connected', name: c.profile || '', origName: c.profile || '', pic: c.pic, image: null, removeImage: false })} onPause={(on) => setPause(c, on)} onProxy={() => setProxy({ id: c.key, name: c.name, mode: c.proxy ? c.proxy.mode : 'uazapi', display: c.proxy && c.proxy.display })} onManage={() => setFlow({ kind: 'oficial', step: 'manage', accountId: c.accountId || null })} />
         ))}
       </div>
 
@@ -712,7 +713,7 @@ function KoblyConnections({ empresaId, notify = () => {} }) {
       </Modal>
 
       <Drawer open={!!flow && flow.kind === 'oficial'} onClose={() => { setFlow(null); load(); }} width={720} title="WhatsApp API Oficial" subtitle="WhatsApp Cloud API: número verificado e modelos aprovados.">
-        {flow && flow.kind === 'oficial' && <WhatsappMetaTab empresaId={empresaId} />}
+        {flow && flow.kind === 'oficial' && <WhatsappMetaTab empresaId={empresaId} accountId={flow.accountId || null} startAdding={flow.step === 'form'} />}
       </Drawer>
     </div>
   );

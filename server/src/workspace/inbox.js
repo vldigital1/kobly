@@ -7,6 +7,7 @@
 import { AuthError } from '../auth.js';
 import { isWindowOpen } from '../flows/vars.js';
 import { addressOf } from '../messaging/metaChannels.js';
+import { listConnections, parseConnKey } from './connections.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const MEDIA_TTL_MS = 40 * 3600 * 1000; // link da Uazapi vale 48 h
@@ -32,6 +33,9 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
       case 'list': { // uma linha por lead com a última mensagem (de qualquer lado) e quantas o lead mandou sem resposta
         const q = typeof body.q === 'string' ? body.q.trim().slice(0, 80) : '';
         const filtro = ['aguardando', 'humano', 'fluxo', 'arquivadas'].includes(body.filtro) ? body.filtro : 'todas';
+        // rede (WhatsApp, Instagram, Messenger) e conexão ("uazapi:<id>", "oficial:<id>"...): de onde veio a conversa
+        const rede = ['whatsapp', 'instagram', 'messenger'].includes(body.rede) ? body.rede : '';
+        const conn = parseConnKey(body.conexao);
         const { rows } = await pool.query(`
           with msgs as (
             select lead_id, body, msg_type as tipo, received_at as at, 'lead' as de from public.whatsapp_inbound_messages where organization_id = $1 and lead_id is not null
@@ -49,18 +53,32 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
           )
           select l.id as lead_id, l.nome, l.sobrenome, l.telefone, l.whatsapp_last_inbound_at, l.automation_paused, l.valor_compra, l.avatar_url, l.chat_channel, l.ig_username,
                  u.body as ultima, u.tipo as ultima_tipo, u.at as ultima_em, u.de as ultima_de, coalesce(n.n, 0) as nao_lidas,
+                 coalesce(ci.kind, co.kind) as conn_kind, coalesce(ci.id, co.id)::text as conn_id,
                  (l.chat_archived_at is not null and u.at <= l.chat_archived_at) as arquivada,
                  exists (select 1 from public.flow_executions e where e.lead_id = l.id and e.status in ('running','waiting')) as em_fluxo
             from ult u join public.leads l on l.id = u.lead_id left join unread n on n.lead_id = l.id
-           where ($2 = '' or l.nome ilike '%' || $2 || '%' or l.telefone ilike '%' || $2 || '%' or l.email ilike '%' || $2 || '%' or l.ig_username ilike '%' || $2 || '%')
+            -- conexão da conversa: a da última mensagem que o lead mandou; sem nenhuma, a da última enviada a ele
+            left join lateral (select case when m.account_id is not null then 'oficial' when m.instance_id is not null then 'uazapi' else mc.kind end as kind,
+                     coalesce(m.account_id, m.instance_id, m.meta_channel_id) as id
+                from public.whatsapp_inbound_messages m left join public.meta_channels mc on mc.id = m.meta_channel_id
+               where m.lead_id = l.id order by m.received_at desc limit 1) ci on true
+            left join lateral (select o.channel as kind, coalesce(o.account_id, o.instance_id, o.meta_channel_id) as id
+                from public.whatsapp_outbound_messages o
+               where o.lead_id = l.id and coalesce(o.account_id, o.instance_id, o.meta_channel_id) is not null order by o.created_at desc limit 1) co on true
+           where ($4 = '' or (case when coalesce(ci.kind, co.kind, l.chat_channel) in ('instagram', 'messenger') then coalesce(ci.kind, co.kind, l.chat_channel) else 'whatsapp' end) = $4)
+             and ($5 = '' or (coalesce(ci.kind, co.kind) = $5 and coalesce(ci.id, co.id)::text = $6))
+             and ($2 = '' or l.nome ilike '%' || $2 || '%' or l.telefone ilike '%' || $2 || '%' or l.email ilike '%' || $2 || '%' or l.ig_username ilike '%' || $2 || '%')
              and (case when $3 = 'arquivadas' then l.chat_archived_at is not null and u.at <= l.chat_archived_at
                        else not (l.chat_archived_at is not null and u.at <= l.chat_archived_at) end)
              and ($3 in ('todas', 'arquivadas') or ($3 = 'aguardando' and u.de = 'lead') or ($3 = 'humano' and l.automation_paused)
                or ($3 = 'fluxo' and exists (select 1 from public.flow_executions e where e.lead_id = l.id and e.status in ('running','waiting'))))
-           order by u.at desc limit 300`, [orgId, q, filtro]);
+           order by u.at desc limit 300`, [orgId, q, filtro, rede, conn ? conn.kind : '', conn ? conn.id : '']);
         const arquivadas = (await pool.query(`select count(*)::int as n from public.leads l where l.organization_id = $1 and l.chat_archived_at is not null`, [orgId])).rows[0].n;
-        return { conversations: rows.map((r) => ({ ...r, janela_aberta: isWindowOpen(r.whatsapp_last_inbound_at, now()) })), arquivadas };
+        const conexoes = await listConnections(pool, orgId);
+        return { conversations: rows.map((r) => ({ ...r, janela_aberta: isWindowOpen(r.whatsapp_last_inbound_at, now()) })), arquivadas, conexoes };
       }
+      case 'connections': return { conexoes: await listConnections(pool, orgId) };
+
       case 'messages': {
         const lead = await leadOf(orgId, body.lead_id);
         const { rows } = await pool.query(`
@@ -120,9 +138,9 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
         const livre = whatsapp.freeTextAllowed ? await whatsapp.freeTextAllowed(orgId, to) : false; // WhatsApp por QR Code: sem janela
         if (!livre && !isWindowOpen(lead.whatsapp_last_inbound_at, now())) throw new AuthError(409, 'window_closed', 'A janela de 24 h está fechada: o lead precisa mandar uma mensagem antes (ou use um modelo aprovado num fluxo).');
         const out = await whatsapp.sendTextTo(orgId, { to, text: msg });
-        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, instance_id, meta_channel_id)
-          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8,$9) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
-          [orgId, lead.id, out.to || to, msg, out.id || null, (user && user.id) || null, channelOf(out), out.instanceId || null, out.metaChannelId || null]);
+        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, instance_id, meta_channel_id, account_id)
+          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8,$9,$10) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
+          [orgId, lead.id, out.to || to, msg, out.id || null, (user && user.id) || null, channelOf(out), out.instanceId || null, out.metaChannelId || null, out.accountId || null]);
         if (lead.chat_archived_at) await pool.query(`update public.leads set chat_archived_at = null where id = $1`, [lead.id]);
         return { ok: true, message: r.rows[0] };
       }
@@ -140,10 +158,10 @@ export function createInbox({ pool, whatsapp, flows = null, now = () => new Date
         if (!livre && !isWindowOpen(lead.whatsapp_last_inbound_at, now())) throw new AuthError(409, 'window_closed', 'A janela de 24 h está fechada: o lead precisa mandar uma mensagem antes.');
         const out = await whatsapp.sendMediaTo(orgId, { to, kind, url, caption: caption || undefined, filename: body.filename ? String(body.filename).slice(0, 120) : undefined });
         const label = { image: 'imagem', video: 'vídeo', audio: 'áudio', document: 'arquivo' }[kind];
-        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, msg_type, media_url, instance_id, meta_channel_id)
-          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8,$9,$10,$11) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
+        const r = await pool.query(`insert into public.whatsapp_outbound_messages (organization_id, lead_id, to_phone, source, body, wa_message_id, sent_by, channel, msg_type, media_url, instance_id, meta_channel_id, account_id)
+          values ($1,$2,$3,'humano',$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id::text, 'humano' as de, body, msg_type as tipo, created_at as at, media_url`,
           [orgId, lead.id, out.to || to, caption || (kind === 'document' ? String(body.filename || url.split('/').pop()) : `[${label}]`), out.id || null, (user && user.id) || null,
-            channelOf(out), kind, url, out.instanceId || null, out.metaChannelId || null]);
+            channelOf(out), kind, url, out.instanceId || null, out.metaChannelId || null, out.accountId || null]);
         return { ok: true, message: r.rows[0] };
       }
       case 'tags': { // adicionar/remover etiquetas do lead pelo chat

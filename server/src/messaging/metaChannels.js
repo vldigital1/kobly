@@ -302,7 +302,7 @@ export function createMetaChannels({ pool, secretKey, fetchImpl = globalThis.fet
     if (uname) await pool.query(`update public.leads set nome = '@' || $2::text, ig_username = coalesce(ig_username, $2::text) where id = $1 and (nome is null or nome = '')`, [leadId, uname]);
     await pool.query(`update public.leads set ig_comment_id = $2, ig_comment_at = now() where id = $1`, [leadId, String(v.id)]);
     let r = { started: [], replies: [] };
-    if (onComment) r = (await onComment({ orgId: ch.organization_id, leadId, text: String(v.text || ''), mediaId: v.media && v.media.id ? String(v.media.id) : null, commentId: String(v.id) })
+    if (onComment) r = (await onComment({ orgId: ch.organization_id, leadId, text: String(v.text || ''), mediaId: v.media && v.media.id ? String(v.media.id) : null, commentId: String(v.id), metaChannelId: ch.id })
       .catch((e) => { console.error('[instagram] fluxo do comentário:', e.message); return null; })) || r;
     const replies = (r.replies || []).map((x) => String(x || '').trim()).filter(Boolean);
     let pub = null;
@@ -354,7 +354,7 @@ export function createMetaChannels({ pool, secretKey, fetchImpl = globalThis.fet
         // menção em story não abre conversa no Direct: não conta como "a pessoa escreveu"
         await pool.query(`update public.leads set whatsapp_last_inbound_at = case when $4 then whatsapp_last_inbound_at else $2 end, chat_channel = $3,
           chat_archived_at = case when chat_archived_at is not null and chat_archived_at < $2 then null else chat_archived_at end where id = $1`, [leadId, at, kind, story === 'mention']);
-        if (onInbound) await onInbound({ orgId: ch.organization_id, leadId, text: story === 'mention' ? '' : String(m.text || '') || text, messageId: m.mid, channel: kind, story, storyUrl })
+        if (onInbound) await onInbound({ orgId: ch.organization_id, leadId, text: story === 'mention' ? '' : String(m.text || '') || text, messageId: m.mid, channel: kind, story, storyUrl, metaChannelId: ch.id })
           .catch((e) => console.error('[meta-msg] fluxo:', e.message));
       }
     }

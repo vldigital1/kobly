@@ -7,6 +7,7 @@ import { KoblyEmailEditor } from '@/routes/EmailEditor.jsx';
 import { Badge, Button, Icon, IconButton, Input, Select } from '@/ds';
 import { BLOCKS, MEDIA, PALETTE_GROUPS, TONES, TIPOS_EVENTO, PAYMENT_METHODS, CURRENCY_LABEL, exitsOf, newRef, emptyGraph, toCanvas, fromCanvas, summaryOf, paletteItems, metaOf, edgeTone } from '@/lib/flowGraph.js';
 import { FlowSimulator } from '@/routes/FlowSimulator.jsx';
+import { ChannelLogo } from '@/lib/brandLogos.jsx';
 import { SYSTEM_VARS, AD_VARS, GREETING_VARS, COUNTRIES, REACTION_SUGGESTIONS, EMOJIS, flowVarsOf } from '@/lib/flowVars.js';
 
 // Kobly — Editor visual do fluxo em grafo (motor novo). Blocos ligados por saídas nomeadas:
@@ -23,6 +24,7 @@ const defaultApi = {
   listAgents: () => KoblyApi.workspaceSettings('get').then((r) => r.agents || []),
   uploadMedia: (file) => KoblyApi.uploadFlowMedia(file),
   listIgMedia: (emp) => KoblyApi.metaChannels('ig_media', {}, emp),
+  listConnections: (emp) => KoblyApi.inbox('connections', {}, emp),
   tts: (text) => KoblyApi.voice('tts', { text }),
   listEmails: () => KoblyApi.getFlowOptions().then((r) => r.emails || []),
   listBrands: () => KoblyApi.listBrands(),
@@ -138,6 +140,15 @@ const FLOW_CSS = `
 .kf-chan { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; cursor: pointer; font: 500 12.5px var(--font-sans); color: var(--text-muted); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .1); }
 .kf-chan:hover { color: var(--text-strong); }
 .kf-chan.on { color: var(--text-strong); border-color: #ff7a1a; background: rgba(255,98,1,.12); }
+.kf-conns { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.kf-conn { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; cursor: pointer; text-align: left; font: inherit; color: var(--text-body); background: rgba(var(--fg-rgb), .03); border: 1px solid rgba(var(--fg-rgb), .1); transition: border-color .15s, background .15s; }
+.kf-conn:hover { border-color: rgba(255,122,26,.55); }
+.kf-conn.on { border-color: #ff7a1a; background: rgba(255,98,1,.1); }
+.kf-conn b { display: block; font-size: 13px; color: var(--text-strong); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kf-conn small { display: block; font-size: 11.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kf-conn .tick { position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; border-radius: 6px; display: grid; place-items: center; border: 1px solid rgba(var(--fg-rgb), .2); color: #fff; }
+.kf-conn.on .tick { background: #ff7a1a; border-color: #ff7a1a; }
+.kf-conn .off { color: var(--status-danger-fg); }
 .kf-chan-whatsapp.on svg { color: #25D366; }
 .kf-chan-instagram.on svg { color: #f472b6; }
 .kf-chan-messenger.on svg { color: #60a5fa; }
@@ -734,6 +745,49 @@ function TipRow({ children, icon = 'info', color = '#60a5fa' }) {
     </div>
   );
 }
+// Conexões do Gatilho: em quais números/contas/Páginas o fluxo vale (mensagem, Instagram) ou por qual número ele envia
+// (checkout). Nenhuma marcada = todas. Igual ao ZapData: cada fluxo escolhe a conexão.
+const CONN_LOGO = { uazapi: 'qr', oficial: 'oficial', instagram: 'instagram', messenger: 'messenger' };
+function ConnPicker({ d, set, kinds, title, hint }) {
+  const { listConnections } = React.useContext(LookupsCtx);
+  const [st, setSt] = useState({ loading: true, list: [] });
+  useEffect(() => {
+    let on = true;
+    (listConnections ? listConnections() : Promise.resolve({ conexoes: [] })).then((r) => { if (on) setSt({ loading: false, list: (r && r.conexoes) || [] }); })
+      .catch(() => on && setSt({ loading: false, list: [] }));
+    return () => { on = false; };
+  }, [listConnections]);
+  const list = st.list.filter((c) => kinds.includes(c.kind));
+  const sel = (d.connections || []).filter((k) => list.some((c) => c.key === k));
+  if (st.loading || list.length < 2) return null; // com uma conexão só não há o que escolher
+  const toggle = (k) => { const next = sel.includes(k) ? sel.filter((x) => x !== k) : [...sel, k]; set({ connections: next.length ? next : undefined }); };
+  return (
+    <Section title={title}>
+      <div className="kf-conns">
+        <button type="button" className={`kf-conn${!sel.length ? ' on' : ''}`} onClick={() => set({ connections: undefined })} aria-pressed={!sel.length}>
+          <Icon name="layers" size={22} style={{ color: '#ff7a1a', flex: 'none' }} />
+          <span style={{ minWidth: 0 }}><b>Todas</b><small>{list.length} conexões</small></span>
+          <span className="tick">{!sel.length && <Icon name="check" size={12} />}</span>
+        </button>
+        {list.map((c) => {
+          const on = sel.includes(c.key);
+          return (
+            <button key={c.key} type="button" className={`kf-conn${on ? ' on' : ''}`} onClick={() => toggle(c.key)} aria-pressed={on} title={`${c.nome} · ${c.detalhe}`}>
+              <ChannelLogo kind={CONN_LOGO[c.kind]} size={24} />
+              <span style={{ minWidth: 0, paddingRight: 18 }}><b>{c.nome}</b><small className={c.conectado ? '' : 'off'}>{c.conectado ? c.detalhe : 'desconectado'}</small></span>
+              <span className="tick">{on && <Icon name="check" size={12} />}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>{hint}</div>
+    </Section>
+  );
+}
+const WA_CONN = ['uazapi', 'oficial'];
+const connKindsFor = (d) => (d.source === 'message' ? ({ whatsapp: WA_CONN, instagram: ['instagram'], messenger: ['messenger'] }[d.channel || 'whatsapp'] || [...WA_CONN, 'instagram', 'messenger'])
+  : ['ig_comment', 'ig_story'].includes(d.source) ? ['instagram'] : WA_CONN);
+
 // posts e Reels do Instagram conectado, para escolher em quais o comentário vale
 function IgPostPicker({ value = [], onChange }) {
   const { listIgMedia } = React.useContext(LookupsCtx);
@@ -782,15 +836,19 @@ function TriggerFields({ d, set }) {
         <Chips value={d.events || []} onChange={(events) => set({ events })} options={TIPOS_EVENTO.map((ev) => ({ value: ev, label: ev }))} />
       </Section>
       <Toggle label="Encerrar este fluxo se o lead comprar" hint="Para quem pagou não receber mais mensagens de recuperação." checked={d.stop_on_purchase ?? !(d.events || []).includes('Compra Aprovada')} onChange={(v) => set({ stop_on_purchase: v })} />
+      <ConnPicker d={d} set={set} kinds={connKindsFor(d)} title="Por qual número o fluxo envia"
+        hint="Se marcar mais de um, usa o primeiro conectado. Em Todas, usa o número em que o lead já conversou ou o principal." />
     </>)}
     {src === 'message' && (<>
       <Section title="Por onde chega a mensagem">
         <div className="kf-chanrow">
           {[['whatsapp', 'WhatsApp', 'message-circle'], ['instagram', 'Instagram Direct', 'instagram'], ['messenger', 'Messenger', 'facebook'], ['any', 'Todos', 'layers']].map(([v, l, ic]) => (
-            <button key={v} type="button" className={`kf-chan kf-chan-${v}${(d.channel || 'whatsapp') === v ? ' on' : ''}`} onClick={() => set({ channel: v })}><Icon name={ic} size={15} />{l}</button>
+            <button key={v} type="button" className={`kf-chan kf-chan-${v}${(d.channel || 'whatsapp') === v ? ' on' : ''}`} onClick={() => set({ channel: v, connections: undefined })}><Icon name={ic} size={15} />{l}</button>
           ))}
         </div>
       </Section>
+      <ConnPicker d={d} set={set} kinds={connKindsFor(d)} title="Em quais conexões"
+        hint="O fluxo só começa com mensagens que chegam nas conexões marcadas e responde pela mesma conexão. Em Todas, vale para qualquer uma." />
       <KeywordFields d={d} set={set} />
       <TipRow>Se o lead estiver respondendo outro fluxo (Aguardar resposta), a mensagem vai para esse fluxo e não inicia este. Contato novo vira lead sozinho.</TipRow>
     </>)}
@@ -800,6 +858,8 @@ function TriggerFields({ d, set }) {
           <button key={v} type="button" className={`kf-card2${d.source === v ? ' on' : ''}`} onClick={() => set({ source: v, ...(v === 'ig_story' && !(d.keywords || []).length ? { mode: 'any' } : {}) })}><b>{t}</b><span>{h}</span></button>
         ))}
       </div>
+      <ConnPicker d={d} set={set} kinds={['instagram']} title="Em quais contas do Instagram"
+        hint="O fluxo só vale para as contas marcadas. Em Todas, vale para qualquer Instagram conectado." />
       {d.source === 'ig_comment' && (<>
         <Section title="Em quais posts">
           <div className="kf-cards2">
@@ -1395,6 +1455,7 @@ function Editor({ campaign, onBack, api, notify }) {
   const addTag = (t) => setLookups((l) => ({ ...l, tags: [...(l.tags || []).filter((x) => x.id !== t.id), t].sort((a, b) => String(a.nome).localeCompare(String(b.nome))) }));
   // posts do Instagram conectado (gatilho "Comentário"); uma referência estável para não recarregar a cada tecla
   const listIgMedia = useCallback(() => (api.listIgMedia ? api.listIgMedia(campaign.empresaId) : Promise.resolve({ media: [] })), [api, campaign.empresaId]);
+  const listConnections = useCallback(() => (api.listConnections ? api.listConnections(campaign.empresaId) : Promise.resolve({ conexoes: [] })), [api, campaign.empresaId]);
   const createTag = async (nome) => {
     if (!api.createTag) return { error: 'Criar etiqueta indisponível aqui.' };
     try { const t = await api.createTag(nome, campaign.empresaId); notify('success', `Etiqueta "${t.nome}" criada.`); return t; } catch (e) { return { error: (e && e.message) || 'Não deu para criar a etiqueta.' }; }
@@ -1490,7 +1551,7 @@ function Editor({ campaign, onBack, api, notify }) {
   );
 
   return (
-    <LookupsCtx.Provider value={{ ...lookups, metrics, listIgMedia, uploadMedia: api.uploadMedia, tts: api.tts, openEmail, copyEmail, flowVars, campaignId: campaign.id, createTag, addTag }}>
+    <LookupsCtx.Provider value={{ ...lookups, metrics, listIgMedia, listConnections, uploadMedia: api.uploadMedia, tts: api.tts, openEmail, copyEmail, flowVars, campaignId: campaign.id, createTag, addTag }}>
       <style>{FLOW_CSS}</style>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 520, gap: 10 }}>
         {/* barra superior */}
