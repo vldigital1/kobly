@@ -435,15 +435,14 @@ function MetaConnect({ empresaId, want, notify, onDone, onClose }) {
         <button type="button" className="kc-ig-btn" disabled={busy || st.igEnabled === false} onClick={() => login('ig')}>
           {busy ? <Icon name="loader-circle" size={18} /> : <ChannelLogo kind="instagram" size={22} />}{busy ? 'Esperando o Instagram…' : 'Entrar com Instagram'}
         </button>
-        <button type="button" className="kc-link" onClick={() => setViaFb(true)}>Prefere conectar pela página do Facebook (junto com o Messenger)?</button>
       </>)}
       {st.step === 'start' && viaFb && (<>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ display: 'flex' }}><ChannelLogo kind="instagram" size={46} /><span style={{ marginLeft: -10 }}><ChannelLogo kind="messenger" size={46} /></span></div>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Entre com o Facebook que administra a página da empresa. O Instagram precisa ser <b style={{ color: 'var(--text-strong)' }}>profissional</b> e estar ligado a essa página.</div>
+          <ChannelLogo kind="messenger" size={46} />
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>Entre com o Facebook que administra a página da empresa. As conversas do Messenger dessa página chegam no Chat ao vivo.</div>
         </div>
         <div className="kc-step"><i>1</i><span>Clique em <b>Conectar com Facebook</b> e entre com a sua conta.</span></div>
-        <div className="kc-step"><i>2</i><span>Marque a <b>página</b> e o <b>Instagram</b> da empresa e permita o acesso às mensagens.</span></div>
+        <div className="kc-step"><i>2</i><span>Marque a <b>página</b> da empresa e permita o acesso às mensagens.</span></div>
         <div className="kc-step"><i>3</i><span>De volta aqui, escolha o que conectar. Pronto: as conversas chegam no Chat ao vivo.</span></div>
         {st.enabled === false && <Banner tone="warning" title="Ainda não ativo neste servidor.">O administrador da Kobly precisa colocar as chaves do app do Facebook no servidor.</Banner>}
         <Button variant="primary" iconLeft={busy ? 'loader-circle' : 'facebook'} disabled={busy || st.enabled === false} onClick={() => login('fb')}>{busy ? 'Esperando o Facebook…' : 'Conectar com Facebook'}</Button>

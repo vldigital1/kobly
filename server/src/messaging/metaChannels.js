@@ -14,7 +14,9 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError } from '../auth.js';
 import { encrypt, decrypt } from '../whatsapp/crypto.js';
 
-const SCOPES = 'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,instagram_basic,instagram_manage_messages,instagram_manage_comments,business_management';
+// só permissões de Página (Messenger): o Instagram entra pelo login próprio do Instagram (IG_SCOPES).
+// Pedir permissão sem aprovação da Meta dá "Invalid Scopes" para quem não tem função no app.
+const SCOPES = 'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,business_management';
 export const IG_SCOPES = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments';
 const IG_FIELDS = 'messages,messaging_postbacks,comments';
 const STATE_TTL_MS = 15 * 60_000;
@@ -156,7 +158,10 @@ export function createMetaChannels({ pool, secretKey, fetchImpl = globalThis.fet
     return { token: decrypt(r.token_enc, secretKey), userName: r.user_name };
   }
   async function listPages(token) {
-    const j = await graph(token, '/me/accounts', { fields: 'id,name,access_token,picture{url},instagram_business_account{id,username,profile_picture_url,name}', limit: '100' });
+    // sem a permissão do Instagram na página o campo pode ser recusado: tenta de novo só com os dados da página
+    let j;
+    try { j = await graph(token, '/me/accounts', { fields: 'id,name,access_token,picture{url},instagram_business_account{id,username,profile_picture_url,name}', limit: '100' }); }
+    catch (e) { j = await graph(token, '/me/accounts', { fields: 'id,name,access_token,picture{url}', limit: '100' }); }
     return (j.data || []).map((p) => ({ id: p.id, name: p.name, token: p.access_token, picture: p.picture && p.picture.data && p.picture.data.url,
       instagram: p.instagram_business_account ? { id: p.instagram_business_account.id, username: p.instagram_business_account.username, name: p.instagram_business_account.name, picture: p.instagram_business_account.profile_picture_url } : null }));
   }

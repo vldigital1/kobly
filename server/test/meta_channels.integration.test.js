@@ -61,7 +61,9 @@ test('conectar: login → páginas → Messenger e Instagram ligados, página as
   const s = await mc.handle(ctx(), {}, { action: 'oauth_start' });
   const state = new URL(s.url).searchParams.get('state');
   assert.ok(mc.ownsState(state));
-  assert.match(new URL(s.url).searchParams.get('scope'), /instagram_manage_messages/);
+  // só permissões de Página: as do Instagram ainda não aprovadas dariam "Invalid Scopes" para clientes
+  assert.match(new URL(s.url).searchParams.get('scope'), /pages_messaging/);
+  assert.doesNotMatch(new URL(s.url).searchParams.get('scope'), /instagram_/);
   await assert.rejects(mc.handle(ctx(), {}, { action: 'oauth_pages' }), /expirou/);
   const html = await mc.oauthCallback({ state, code: 'codigo' });
   assert.match(html, /Facebook conectado/);

@@ -1,0 +1,47 @@
+MESSENGER - ANÁLISE DO APP KOBLY (pages_messaging + pages_manage_metadata)
+Textos prontos para copiar e colar (em inglês). Entram no MESMO pedido do Instagram e do WhatsApp.
+
+============================================================
+pages_messaging  (campo "Descreva como seu aplicativo usa esta permissão")
+============================================================
+Kobly is a customer-messaging and sales-recovery platform for online businesses in Brazil and Latin America. A business connects its own Facebook Page to Kobly ("Connect Messenger" > "Connect with Facebook") and we use pages_messaging to receive the messages that customers send to that Page on Messenger, show them in the business's shared inbox ("Live chat"), and let the business's human agents, or the automations (flows) the business built in Kobly, reply to those customers with text, images or quick-reply buttons. We only reply to people who messaged the Page first, inside the 24-hour messaging window; Kobly never contacts people on its own behalf and does not use this permission for cold or promotional broadcasts. We only access the Pages the business selected during login, and the business can disconnect the Page at any time.
+
+How to test: log in at https://app.koblay.io with the test account provided in "Instructions for the reviewer". Go to Integrações (Integrations) > Nova conexão (New connection) > Messenger > "Conectar com Facebook" (Connect with Facebook), choose the Page and allow access. Back in Kobly, select the Page and confirm: it shows "Conectado" (Connected). From another Facebook account that has a role in the app, send a message to that Page on Messenger. The message appears in "Chats ao vivo" (Live chat). Type a reply in Kobly: it arrives in the customer's Messenger conversation.
+
+============================================================
+pages_manage_metadata  (campo "Descreva como seu aplicativo usa esta permissão")
+============================================================
+We use pages_manage_metadata only to subscribe our app to the webhooks of the Page the business selected when connecting Messenger (POST /{page-id}/subscribed_apps with the fields messages, messaging_postbacks and message_echoes). Without this subscription Kobly would not be notified when a customer messages the Page, and the message would never reach the business's inbox. Kobly does not edit the Page's name, photo, settings or any other metadata. The subscription stops when the business clicks "Desconectar" (Disconnect) in Kobly.
+
+How to test: it happens automatically when you connect the Page (same steps as above). After connecting, send a message to the Page on Messenger and it shows up in Kobly's Live chat.
+
+============================================================
+ROTEIRO DO VÍDEO DO MESSENGER (1 a 2 minutos, tela inteira, Facebook em inglês)
+============================================================
+Pode ser um vídeo só para as duas permissões. Use a conta de teste do revisor na Kobly.
+Precisa de: uma Página do Facebook sua e outra conta do Facebook (ou o celular) para mandar a mensagem.
+
+1. Kobly > Integrações > Nova conexão > Messenger > clique em "Conectar com Facebook".
+2. Mostre a janela da Meta: escolha a Página (e a empresa) e a tela com as permissões, depois "Continuar/Permitir".
+3. De volta à Kobly, escolha a Página e mostre "Conectado".
+4. No celular (ou outra conta), abra o Messenger e mande uma mensagem para a Página. Mostre o envio.
+5. No PC, mostre a mensagem aparecendo no Chat ao vivo da Kobly.
+6. Responda pela Kobly. Mostre a resposta chegando no Messenger do celular.
+7. (Opcional) Integrações > Desconectar, mostrando que o negócio pode sair quando quiser.
+
+Dicas: nada de senha na tela; cliente e negócio bem separados (diga "agora o cliente manda a mensagem").
+
+============================================================
+CHAMADAS DE API DE TESTE
+============================================================
+Conectar a Página (chama subscribed_apps) e responder uma mensagem pela Kobly (chama /me/messages) já gera as chamadas.
+A Meta pode levar até 24 horas para contar. Por isso faça o teste do vídeo o quanto antes.
+
+============================================================
+ATENÇÃO (decidir antes de enviar)
+============================================================
+O login do Facebook da Kobly pede também permissões de Instagram pela Página (instagram_basic,
+instagram_manage_messages, instagram_manage_comments) e business_management. Para clientes
+comuns isso pode dar erro de "permissão inválida" no Messenger. Sugestão: no Messenger pedir só
+pages_show_list, pages_messaging, pages_manage_metadata, pages_read_engagement (o Instagram já
+usa o login próprio do Instagram). Ajuste de código pequeno; fazer antes de liberar para clientes.
