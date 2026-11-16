@@ -257,10 +257,6 @@ function PixBox({ inv, mensal }) {
   return (
     <div className="kp-qr">
       <span className="kp-wait"><i />{inv.autoriza ? 'Aguardando pagamento e autorização' : 'Aguardando pagamento'}</span>
-      {inv.autoriza && <div style={{ display: 'flex', gap: 10, textAlign: 'left', padding: '12px 14px', borderRadius: 14, background: 'rgba(52,211,153,.08)', border: '1px solid rgba(52,211,153,.3)', fontSize: 13.5, color: 'var(--text-body)', lineHeight: 1.5 }}>
-        <Icon name="shield-check" size={18} style={{ color: '#34d399', flex: 'none', marginTop: 2 }} />
-        <span><b style={{ color: 'var(--text-strong)' }}>Pix Automático:</b> ao pagar este QR Code, o app do seu banco pede para autorizar o débito automático{mensal ? <> de <b style={{ color: 'var(--text-strong)' }}>{money(mensal)}</b> a cada renovação</> : ' das próximas renovações'}. Confirme as duas coisas e pronto: as próximas cobranças saem sozinhas. Você pode cancelar a autorização quando quiser, no app do banco.</span>
-      </div>}
       {inv.pix_image ? <img src={`data:image/png;base64,${inv.pix_image}`} alt="QR Code do Pix" /> : <div className="kp-empty">QR Code indisponível. Use o código copia e cola.</div>}
       <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--text-strong)' }}>{money(inv.value)}</div>
       <div style={{ fontSize: 13.5, color: 'var(--text-muted)', maxWidth: 360 }}>Abra o app do seu banco, escolha <b>Pix → Ler QR Code</b> ou cole o código abaixo. Esta tela atualiza sozinha quando o pagamento cair.</div>
@@ -344,10 +340,7 @@ function Checkout({ pick, status, onClose, onDone }) {
                 </div>
                 {needDoc && (method === 'PIX' || !stripeCard) && <DocumentoField label="CPF ou CNPJ da sua empresa (para a nota)" value={doc} onChange={setDoc} />}
                 {method === 'PIX'
-                  ? <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(var(--fg-rgb), .03)', border: '1px solid rgba(var(--fg-rgb), .08)', fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}><Icon name="zap" size={18} style={{ color: '#ff9452', flex: 'none', marginTop: 2 }} />
-                    {pixAuto
-                      ? <span><b style={{ color: 'var(--text-strong)' }}>Pix Automático.</b> Você paga o primeiro {CICLOS[pick.cycle].meses === 1 ? 'mês' : 'ciclo'} com um QR Code e, no mesmo passo, autoriza o débito automático no app do seu banco. Depois, cada renovação sai sozinha, sem precisar pagar Pix na mão. Cancele quando quiser no app do banco.</span>
-                      : <span>Geramos o QR Code na hora. O plano libera assim que o Pix cair (normalmente em segundos). A cada renovação chega um Pix novo.</span>}</div>
+                  ? (pixAuto ? null : <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(var(--fg-rgb), .03)', border: '1px solid rgba(var(--fg-rgb), .08)', fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}><Icon name="zap" size={18} style={{ color: '#ff9452', flex: 'none', marginTop: 2 }} /><span>Geramos o QR Code na hora. O plano libera assim que o Pix cair (normalmente em segundos). A cada renovação chega um Pix novo.</span></div>)
                   : stripeCard
                     ? <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(var(--fg-rgb), .03)', border: '1px solid rgba(var(--fg-rgb), .08)', fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}><Icon name="lock" size={18} style={{ color: '#ff9452', flex: 'none', marginTop: 2 }} /><span>No próximo passo você digita o cartão no formulário seguro da Stripe, aqui mesmo. As renovações entram sozinhas no cartão.</span></div>
                     : <CardForm c={card} set={setCard} />}
@@ -435,7 +428,6 @@ function Change({ pick, sub, usage, pay = {}, onClose, onDone }) {
                   <div className="tot"><span style={{ color: 'var(--text-muted)' }}>Total hoje</span><b>{money(pagar)}</b></div>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="calendar" size={14} />Renovação continua em {dia(sub.renova_em)}, já no valor novo de {money(q.upgrade.price)}{CICLOS[sub.cycle].sufixo}.</div>
-                {prov === 'pix_auto' && <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(52,211,153,.07)', border: '1px solid rgba(52,211,153,.28)', fontSize: 13.5, color: 'var(--text-body)', lineHeight: 1.5 }}><Icon name="shield-check" size={18} style={{ color: '#34d399', flex: 'none', marginTop: 2 }} /><span><b style={{ color: 'var(--text-strong)' }}>Um QR Code só:</b> ele paga a diferença de {money(Math.max(0.01, pagar))} agora e autoriza o novo valor de {money(q.upgrade.price)}{CICLOS[sub.cycle].sufixo} no Pix Automático, a partir de {dia(sub.renova_em)}.</span></div>}
                 {prov === 'stripe' && pagar >= 5 && <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13.5, color: 'var(--text-muted)' }}><Icon name="credit-card" size={16} style={{ color: '#ff9452' }} />Cobrado no cartão {sub.card ? `${sub.card.brand || ''} •••• ${sub.card.last4}` : 'salvo'}.</div>}
                 {prov !== 'pix_auto' && prov !== 'stripe' && pagar >= 5 && (<>
                   <div className="kp-pay" style={{ gridTemplateColumns: sub.card ? '1fr 1fr 1fr' : '1fr 1fr' }}>
