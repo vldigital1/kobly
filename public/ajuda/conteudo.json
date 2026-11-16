@@ -1,559 +1,1999 @@
 {
-  "atualizado": "14 de novembro de 2026",
-  "categorias": [
-    { "id": "comece", "nome": "Primeiros passos", "icone": "rocket", "desc": "Crie a conta, conheça o painel e deixe tudo pronto para vender no automático." },
-    { "id": "conexoes", "nome": "Conexões", "icone": "plug", "desc": "WhatsApp (QR Code e API Oficial), Instagram, Messenger e Telegram, passo a passo." },
-    { "id": "fluxos", "nome": "Fluxos e automações", "icone": "git-branch", "desc": "Monte fluxos visuais: gatilhos, blocos, IA, cobrança e publicação." },
-    { "id": "chat", "nome": "Chat ao vivo e leads", "icone": "message-circle", "desc": "Atenda todas as redes num lugar só, com etiquetas, pipeline e equipe." },
-    { "id": "vendas", "nome": "Vendas e checkout", "icone": "shopping-cart", "desc": "Conecte o checkout, recupere carrinho e Pix e acompanhe o faturamento." },
-    { "id": "disparos", "nome": "Disparo em massa", "icone": "send", "desc": "Mande campanhas para muitos contatos com segurança e agendamento." },
-    { "id": "anuncios", "nome": "Anúncios e rastreamento", "icone": "target", "desc": "Meta Ads, Google Ads, Pixel e UTMs ligados às vendas de verdade." },
-    { "id": "ia", "nome": "IA e voz", "icone": "sparkles", "desc": "Agente de IA, chave própria, voz da ElevenLabs e ligações." },
-    { "id": "conta", "nome": "Plano, equipe e conta", "icone": "credit-card", "desc": "Planos, cobrança, afiliados, equipe, segurança e seus dados." },
-    { "id": "problemas", "nome": "Solução de problemas", "icone": "life-buoy", "desc": "O que fazer quando algo não funciona como esperado." },
-    { "id": "dev", "nome": "API e integrações avançadas", "icone": "code", "desc": "API pública, webhooks, MCP e integrações com outros sistemas." }
-  ],
-  "trilhas": [
-    { "id": "comecar", "titulo": "Comece aqui: sua Kobly funcionando hoje", "nivel": "Essencial", "tempo": "~25 min", "desc": "Do cadastro ao primeiro fluxo vendendo sozinho.", "artigos": ["criar-conta", "tour-painel", "conectar-whatsapp-qr", "primeiro-fluxo", "publicar-fluxo", "chat-ao-vivo"] },
-    { "id": "recuperar", "titulo": "Recuperar vendas no automático", "nivel": "Essencial", "tempo": "~30 min", "desc": "Checkout conectado, Pix e carrinho abandonado sendo recuperados no WhatsApp.", "artigos": ["conectar-gateway", "postback", "gatilho-checkout", "bloco-cobranca", "fluxo-recuperacao-pix", "dashboard-vendas"] },
-    { "id": "instagram", "titulo": "Instagram que vende: comentário vira Direct", "nivel": "Crescimento", "tempo": "~20 min", "desc": "Conecte o Instagram e responda comentários, Direct e stories sozinho.", "artigos": ["conectar-instagram", "gatilho-instagram-comentario", "gatilho-instagram-story", "instagram-segue-perfil", "chat-filtros"] },
-    { "id": "oficial", "titulo": "API Oficial do WhatsApp sem bloqueio", "nivel": "Crescimento", "tempo": "~25 min", "desc": "Número verificado, modelos aprovados e vários números na mesma conta.", "artigos": ["conectar-whatsapp-oficial", "modelos-whatsapp", "janela-24h", "varios-numeros", "escolher-conexao-fluxo"] },
-    { "id": "ia", "titulo": "IA que atende e vende por você", "nivel": "Avançado", "tempo": "~30 min", "desc": "Chave de IA, agente que conversa, entende respostas e liga para o lead.", "artigos": ["chave-ia", "bloco-ia-entender", "agente-ia", "voz-elevenlabs", "agente-voz-ligacao"] },
-    { "id": "escala", "titulo": "Escala: anúncios, disparos e equipe", "nivel": "Avançado", "tempo": "~35 min", "desc": "Rastreie de onde vem cada venda, dispare campanhas e organize a equipe.", "artigos": ["conectar-meta-ads", "utm-rastreamento", "pixel-meta", "disparo-massa", "equipe-permissoes", "pipeline"] }
-  ],
-  "artigos": [
+ "academy": false,
+ "atualizado": "2026-11-16",
+ "categorias": [
+  {
+   "id": "comece",
+   "nome": "Primeiros passos",
+   "icone": "rocket",
+   "desc": "Crie a conta, conheça o painel e deixe tudo pronto para vender no automático."
+  },
+  {
+   "id": "conexoes",
+   "nome": "Conexões",
+   "icone": "plug",
+   "desc": "WhatsApp (QR Code e API Oficial), Instagram, Messenger e Telegram, passo a passo."
+  },
+  {
+   "id": "fluxos",
+   "nome": "Fluxos e automações",
+   "icone": "git-branch",
+   "desc": "Monte fluxos visuais: gatilhos, blocos, IA, cobrança e publicação."
+  },
+  {
+   "id": "chat",
+   "nome": "Chat ao vivo e leads",
+   "icone": "message-circle",
+   "desc": "Atenda todas as redes num lugar só, com etiquetas, pipeline e equipe."
+  },
+  {
+   "id": "vendas",
+   "nome": "Vendas e checkout",
+   "icone": "shopping-cart",
+   "desc": "Conecte o checkout, recupere carrinho e Pix e acompanhe o faturamento."
+  },
+  {
+   "id": "disparos",
+   "nome": "Disparo em massa",
+   "icone": "send",
+   "desc": "Mande campanhas para muitos contatos com segurança e agendamento."
+  },
+  {
+   "id": "anuncios",
+   "nome": "Anúncios e rastreamento",
+   "icone": "target",
+   "desc": "Meta Ads, Google Ads, Pixel e UTMs ligados às vendas de verdade."
+  },
+  {
+   "id": "ia",
+   "nome": "IA e voz",
+   "icone": "sparkles",
+   "desc": "Agente de IA, chave própria, voz da ElevenLabs e ligações."
+  },
+  {
+   "id": "conta",
+   "nome": "Plano, equipe e conta",
+   "icone": "credit-card",
+   "desc": "Planos, cobrança, afiliados, equipe, segurança e seus dados."
+  },
+  {
+   "id": "problemas",
+   "nome": "Solução de problemas",
+   "icone": "life-buoy",
+   "desc": "O que fazer quando algo não funciona como esperado."
+  },
+  {
+   "id": "dev",
+   "nome": "API e integrações avançadas",
+   "icone": "code",
+   "desc": "API pública, webhooks, MCP e integrações com outros sistemas."
+  }
+ ],
+ "trilhas": [
+  {
+   "id": "comecar",
+   "titulo": "Comece aqui: sua Kobly funcionando hoje",
+   "nivel": "Essencial",
+   "tempo": "~25 min",
+   "desc": "Do cadastro ao primeiro fluxo vendendo sozinho.",
+   "artigos": [
+    "criar-conta",
+    "tour-painel",
+    "conectar-whatsapp-qr",
+    "primeiro-fluxo",
+    "publicar-fluxo",
+    "chat-ao-vivo"
+   ]
+  },
+  {
+   "id": "recuperar",
+   "titulo": "Recuperar vendas no automático",
+   "nivel": "Essencial",
+   "tempo": "~30 min",
+   "desc": "Checkout conectado, Pix e carrinho abandonado sendo recuperados no WhatsApp.",
+   "artigos": [
+    "conectar-gateway",
+    "postback",
+    "gatilho-checkout",
+    "bloco-cobranca",
+    "fluxo-recuperacao-pix",
+    "dashboard-vendas"
+   ]
+  },
+  {
+   "id": "instagram",
+   "titulo": "Instagram que vende: comentário vira Direct",
+   "nivel": "Crescimento",
+   "tempo": "~20 min",
+   "desc": "Conecte o Instagram e responda comentários, Direct e stories sozinho.",
+   "artigos": [
+    "conectar-instagram",
+    "gatilho-instagram-comentario",
+    "gatilho-instagram-story",
+    "instagram-segue-perfil",
+    "chat-filtros"
+   ]
+  },
+  {
+   "id": "oficial",
+   "titulo": "API Oficial do WhatsApp sem bloqueio",
+   "nivel": "Crescimento",
+   "tempo": "~25 min",
+   "desc": "Número verificado, modelos aprovados e vários números na mesma conta.",
+   "artigos": [
+    "conectar-whatsapp-oficial",
+    "modelos-whatsapp",
+    "janela-24h",
+    "varios-numeros",
+    "escolher-conexao-fluxo"
+   ]
+  },
+  {
+   "id": "ia",
+   "titulo": "IA que atende e vende por você",
+   "nivel": "Avançado",
+   "tempo": "~30 min",
+   "desc": "Chave de IA, agente que conversa, entende respostas e liga para o lead.",
+   "artigos": [
+    "chave-ia",
+    "bloco-ia-entender",
+    "agente-ia",
+    "voz-elevenlabs",
+    "agente-voz-ligacao"
+   ]
+  },
+  {
+   "id": "escala",
+   "titulo": "Escala: anúncios, disparos e equipe",
+   "nivel": "Avançado",
+   "tempo": "~35 min",
+   "desc": "Rastreie de onde vem cada venda, dispare campanhas e organize a equipe.",
+   "artigos": [
+    "conectar-meta-ads",
+    "utm-rastreamento",
+    "pixel-meta",
+    "disparo-massa",
+    "equipe-permissoes",
+    "pipeline"
+   ]
+  }
+ ],
+ "artigos": [
+  {
+   "id": "criar-conta",
+   "cat": "comece",
+   "titulo": "Como criar sua conta na Kobly",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Crie a conta, confirme o e-mail e escolha o plano. Em poucos minutos você já está dentro do painel.",
+   "antes": [
+    "Um e-mail que você usa no dia a dia.",
+    "O nome da sua empresa ou marca."
+   ],
+   "passos": [
     {
-      "id": "criar-conta", "cat": "comece", "titulo": "Como criar sua conta na Kobly", "tempo": "3 min", "video": "",
-      "resumo": "Crie a conta, confirme o e-mail e escolha o plano. Em poucos minutos você já está dentro do painel.",
-      "antes": ["Um e-mail que você usa no dia a dia.", "O nome da sua empresa ou marca."],
-      "passos": [
-        { "t": "Abra a Kobly", "d": "Entre em app.koblay.io e clique em <b>Criar conta</b>, embaixo do botão Entrar.", "img": "login.png" },
-        { "t": "Preencha seus dados", "d": "Digite nome, e-mail e uma senha forte (pelo menos 8 caracteres, com letras e números). Clique em <b>Criar conta</b>." },
-        { "t": "Confirme o e-mail", "d": "Abra a mensagem que a Kobly mandou para o seu e-mail e clique no link de confirmação. Não chegou? Veja a pasta de spam ou promoções." },
-        { "t": "Dê nome à sua empresa", "d": "No primeiro acesso, informe o nome da empresa. Ele aparece no topo do painel e nos e-mails enviados aos seus clientes." },
-        { "t": "Escolha o plano", "d": "Em <b>Planos &amp; cobrança</b>, escolha o plano e quantas conexões (números) você precisa. Dá para mudar depois quando quiser." }
-      ],
-      "dicas": ["Use o mesmo e-mail que você usa no Facebook e no Google: facilita conectar anúncios e Instagram depois."]
+     "t": "Abra a Kobly",
+     "d": "Entre em app.koblay.io e clique em <b>Criar conta</b>, embaixo do botão Entrar.",
+     "img": [
+      "login-criar.webp"
+     ]
     },
     {
-      "id": "tour-painel", "cat": "comece", "titulo": "Conheça o painel da Kobly", "tempo": "4 min", "video": "",
-      "resumo": "Um passeio rápido pelo menu: onde fica cada coisa e para que serve.",
-      "passos": [
-        { "t": "Dashboard", "d": "Resumo da operação: leads que chegaram, mensagens enviadas, respostas, vendas e o que os fluxos recuperaram. Troque o período em 7, 30 ou 90 dias.", "img": "dashboard.png" },
-        { "t": "Vendas", "d": "Todas as vendas que chegaram do checkout, de onde vieram (anúncio, UTM) e quanto cada fluxo recuperou." },
-        { "t": "Chats ao vivo", "d": "Todas as conversas do WhatsApp, Instagram e Messenger num lugar só, separadas por rede e por conexão." },
-        { "t": "Pipeline e Leads", "d": "Seus contatos organizados em etapas (como um funil) e a lista completa com busca, filtros e etiquetas." },
-        { "t": "Fluxos", "d": "Onde você monta as automações: o que a Kobly manda, quando e para quem." },
-        { "t": "Disparo em massa", "d": "Mande uma campanha para uma lista de contatos, agora ou agendada." },
-        { "t": "Integrações", "d": "Conexões (WhatsApp, Instagram, Messenger), checkouts, rastreamento, IA, voz, produtos, e-mail, etiquetas e API." },
-        { "t": "Anúncios", "d": "Resultados do Facebook Ads e do Google Ads ao lado das vendas rastreadas, com liga/pausa e orçamento." },
-        { "t": "Configurações, Planos e Afiliados", "d": "Dados da empresa, equipe, plano e o seu link de afiliado para indicar a Kobly." }
-      ]
+     "t": "Preencha seus dados",
+     "d": "Digite nome, e-mail e uma senha forte (pelo menos 8 caracteres, com letras e números). Clique em <b>Criar conta</b>."
     },
     {
-      "id": "conectar-whatsapp-qr", "cat": "conexoes", "titulo": "Como conectar o WhatsApp pelo QR Code", "tempo": "3 min", "video": "",
-      "resumo": "Conecte qualquer número de WhatsApp ou WhatsApp Business lendo um QR Code, igual ao WhatsApp Web.",
-      "antes": ["O celular com o WhatsApp do número que você quer usar, com internet.", "Um plano com conexão livre (veja em Planos &amp; cobrança)."],
-      "passos": [
-        { "t": "Abra as conexões", "d": "No menu, clique em <b>Integrações</b> e depois em <b>Conexões</b>.", "img": "conexoes.png" },
-        { "t": "Nova conexão", "d": "Clique em <b>Nova conexão</b> e escolha <b>WhatsApp</b>.", "img": "nova-conexao.png" },
-        { "t": "Dê um nome", "d": "Escreva um nome para reconhecer o número (ex.: Vendas, Suporte, Chip 2) e clique em <b>Gerar QR Code</b>." },
-        { "t": "Leia o QR Code no celular", "d": "No celular, abra o WhatsApp, toque em <b>⋮ (Android)</b> ou <b>Configurações (iPhone)</b> &gt; <b>Aparelhos conectados</b> &gt; <b>Conectar um aparelho</b> e aponte a câmera para o QR Code da tela." },
-        { "t": "Pronto", "d": "Em alguns segundos o cartão fica <b>Conectado</b>, com a foto e o número. As conversas novas já aparecem no Chat ao vivo." }
-      ],
-      "dicas": ["O QR Code vale por poucos segundos. Se expirar, clique em gerar de novo.", "Não use o mesmo número em outro sistema de automação ao mesmo tempo.", "Para evitar bloqueio: aqueça números novos, não mande para quem não pediu e respeite quem responde SAIR."]
+     "t": "Confirme o e-mail",
+     "d": "Abra a mensagem que a Kobly mandou para o seu e-mail e clique no link de confirmação. Não chegou? Veja a pasta de spam ou promoções."
     },
     {
-      "id": "conectar-whatsapp-oficial", "cat": "conexoes", "titulo": "Como conectar a API Oficial do WhatsApp com um clique", "tempo": "6 min", "video": "",
-      "resumo": "Conecte um número verificado pela Meta, sem copiar token: é só entrar com o Facebook.",
-      "antes": ["Uma conta do Facebook que administre a empresa (portfólio empresarial).", "Um número que <b>não</b> esteja ativo no app do WhatsApp (ou apague a conta do app antes).", "O celular desse número por perto para receber o código por SMS ou ligação."],
-      "passos": [
-        { "t": "Abra a nova conexão", "d": "Vá em <b>Integrações &gt; Conexões &gt; Nova conexão</b> e escolha <b>WhatsApp API Oficial</b>." },
-        { "t": "Conectar com Facebook", "d": "Clique em <b>Conectar com Facebook</b>. Abre uma janela da Meta: entre e toque em <b>Continuar</b>.", "img": "oficial-conectar.png" },
-        { "t": "Escolha a empresa", "d": "Selecione o portfólio empresarial (a sua BM). Não tem? A própria janela cria um." },
-        { "t": "Conta do WhatsApp Business", "d": "Escolha <b>Criar nova conta</b>, dê o nome que aparece para os clientes e uma categoria." },
-        { "t": "Número e código", "d": "Digite o número, escolha receber o código por <b>SMS</b> ou <b>ligação</b> e digite os 6 dígitos." },
-        { "t": "Revise e conclua", "d": "Confira as permissões e clique em <b>Concluir</b>. Se a Meta pedir forma de pagamento, você pode pular e cadastrar depois no Gerenciador do WhatsApp." },
-        { "t": "Conectado", "d": "A janela fecha e a Kobly mostra o número <b>Conectado</b>, com a qualidade e o limite de envio." }
-      ],
-      "dicas": ["O nome de exibição passa por análise da Meta. Enquanto isso o número já funciona.", "A Meta cobra por conversa iniciada pela empresa (modelos). Responder dentro de 24 h é grátis."]
+     "t": "Dê nome à sua empresa",
+     "d": "No primeiro acesso, informe o nome da empresa. Ele aparece no topo do painel e nos e-mails enviados aos seus clientes."
     },
     {
-      "id": "varios-numeros", "cat": "conexoes", "titulo": "Como usar vários números (chips) na mesma conta", "tempo": "3 min", "video": "",
-      "resumo": "Conecte quantos números quiser, por QR Code ou API Oficial, e escolha qual cada fluxo usa.",
-      "passos": [
-        { "t": "Conecte mais números", "d": "Repita <b>Nova conexão</b> para cada chip. Na API Oficial, abra o número conectado e clique em <b>Conectar outro número</b>." },
-        { "t": "Dê nomes claros", "d": "Renomeie cada conexão (Vendas, Suporte, Loja Centro...). O nome aparece no Chat ao vivo e no editor de fluxos." },
-        { "t": "Escolha a conexão no fluxo", "d": "No bloco <b>Gatilho</b> de cada fluxo, marque em quais conexões ele vale. Veja o artigo <b>Escolher a conexão de um fluxo</b>." },
-        { "t": "Filtre as conversas", "d": "No Chat ao vivo, use as abas de rede e o seletor de conexão para ver só as conversas de um chip." }
-      ],
-      "dicas": ["A conversa sempre continua no mesmo número em que o cliente escreveu, mesmo quando você responde pelo chat.", "Cada conexão conta uma vaga do seu plano."]
-    },
-    {
-      "id": "conectar-instagram", "cat": "conexoes", "titulo": "Como conectar o Instagram", "tempo": "3 min", "video": "",
-      "resumo": "Entre com o Instagram da empresa e receba Direct, comentários e stories na Kobly.",
-      "antes": ["Conta do Instagram <b>profissional</b> (Empresa ou Criador). Em Configurações &gt; Tipo de conta, troque se for pessoal.", "Login e senha do Instagram da empresa."],
-      "passos": [
-        { "t": "Nova conexão", "d": "Em <b>Integrações &gt; Conexões &gt; Nova conexão</b>, escolha <b>Instagram</b>." },
-        { "t": "Entrar com Instagram", "d": "Clique em <b>Entrar com Instagram</b> e entre com o usuário e a senha da conta.", "img": "instagram-entrar.png" },
-        { "t": "Permitir", "d": "Na tela de permissões, toque em <b>Permitir</b>. É ela que deixa a Kobly ler e responder Direct e comentários." },
-        { "t": "Conectado", "d": "O cartão do Instagram aparece com a foto e o @. Mande um Direct de outra conta para testar: ele chega no Chat ao vivo." }
-      ],
-      "dicas": ["Não precisa de Página do Facebook.", "A Kobly renova o acesso sozinha a cada 60 dias.", "No Instagram, a empresa só pode mandar mensagem até 24 h depois que a pessoa escreveu (regra da Meta)."]
-    },
-    {
-      "id": "conectar-messenger", "cat": "conexoes", "titulo": "Como conectar o Messenger (Página do Facebook)", "tempo": "3 min", "video": "",
-      "resumo": "Receba e responda as mensagens da sua Página do Facebook no Chat ao vivo.",
-      "antes": ["Ser administrador da Página do Facebook."],
-      "passos": [
-        { "t": "Nova conexão", "d": "Em <b>Integrações &gt; Conexões &gt; Nova conexão</b>, escolha <b>Messenger</b>." },
-        { "t": "Conectar com Facebook", "d": "Clique em <b>Conectar com Facebook</b>, entre e marque a <b>Página</b> da empresa." },
-        { "t": "Permita o acesso", "d": "Confirme as permissões e volte para a Kobly." },
-        { "t": "Escolha a Página", "d": "Marque a Página na lista e clique em <b>Conectar</b>. As mensagens novas chegam no Chat ao vivo." }
-      ]
-    },
-    {
-      "id": "conectar-telegram", "cat": "conexoes", "titulo": "Como receber alertas da Kobly no Telegram", "tempo": "3 min", "video": "",
-      "resumo": "Receba no Telegram avisos de venda, erro de pagamento e lead pedindo humano.",
-      "passos": [
-        { "t": "Nova conexão", "d": "Em <b>Integrações &gt; Conexões &gt; Nova conexão</b>, escolha <b>Telegram</b>." },
-        { "t": "Siga as instruções", "d": "Abra o bot indicado no Telegram, envie a mensagem com o código mostrado na tela e pronto." },
-        { "t": "Use nos fluxos", "d": "No fluxo, adicione o bloco <b>Alerta (Telegram)</b> onde quiser ser avisado." }
-      ]
-    },
-    {
-      "id": "primeiro-fluxo", "cat": "fluxos", "titulo": "Como criar seu primeiro fluxo", "tempo": "6 min", "video": "",
-      "resumo": "Monte um fluxo de boas-vindas que responde sozinho quem manda mensagem.",
-      "antes": ["Pelo menos uma conexão de WhatsApp, Instagram ou Messenger conectada."],
-      "passos": [
-        { "t": "Novo fluxo", "d": "No menu, clique em <b>Fluxos</b> e em <b>Novo fluxo</b>. Dê um nome (ex.: Boas-vindas).", "img": "fluxos.png" },
-        { "t": "Configure o Gatilho", "d": "Clique no bloco <b>Gatilho</b>. Escolha <b>Mensagem</b>, a rede (WhatsApp) e <b>Qualquer texto</b> ou palavras-chave (ex.: quero, preço).", "img": "gatilho.png" },
-        { "t": "Adicione um Texto", "d": "Arraste o bloco <b>Texto</b> da paleta e escreva: <i>Oi {{primeiro_nome}}! Como posso te ajudar?</i>" },
-        { "t": "Ligue os blocos", "d": "Puxe a bolinha de saída do Gatilho até o bloco Texto. A linha mostra o caminho que o lead faz." },
-        { "t": "Pergunte com botões", "d": "Adicione <b>Botões / lista</b> com as opções (Comprar, Dúvidas, Falar com humano). Cada opção vira uma saída para ligar no próximo passo." },
-        { "t": "Confira", "d": "Clique em <b>Conferir</b> para simular a conversa no visual do WhatsApp, sem mandar nada de verdade." },
-        { "t": "Publique", "d": "Clique em <b>Publicar</b>. A partir daí, quem mandar mensagem entra no fluxo." }
-      ],
-      "dicas": ["Use <b>Salvar</b> (ou Ctrl+S) a qualquer momento: o rascunho fica guardado mesmo com pendências.", "Comece simples e vá melhorando com os números do fluxo (Métricas)."]
-    },
-    {
-      "id": "publicar-fluxo", "cat": "fluxos", "titulo": "Salvar, publicar e voltar uma versão do fluxo", "tempo": "3 min", "video": "",
-      "resumo": "Entenda a diferença entre rascunho e versão publicada e como desfazer uma mudança.",
-      "passos": [
-        { "t": "Salvar", "d": "<b>Salvar</b> guarda o rascunho. Ele não muda o que está rodando para os leads." },
-        { "t": "Publicar", "d": "<b>Publicar</b> confere o fluxo e coloca a nova versão no ar. Os leads novos já seguem a versão nova." },
-        { "t": "Pendências", "d": "Se faltar algo (texto vazio, bloco sem saída), a Kobly mostra o que corrigir antes de publicar." },
-        { "t": "Voltar uma versão", "d": "Em <b>Versões</b>, escolha uma versão anterior e clique em <b>Restaurar</b>." },
-        { "t": "Pausar", "d": "Na lista de Fluxos, use o botão de pausa para parar um fluxo sem apagar." }
-      ]
-    },
-    {
-      "id": "gatilho-checkout", "cat": "fluxos", "titulo": "Gatilho de checkout: fluxo que começa sozinho a cada evento", "tempo": "4 min", "video": "",
-      "resumo": "Dispare um fluxo quando o checkout mandar Pix gerado, carrinho abandonado, compra aprovada e outros eventos.",
-      "antes": ["Um checkout conectado (veja <b>Conectar o checkout</b>)."],
-      "passos": [
-        { "t": "Abra o Gatilho", "d": "No fluxo, clique no bloco <b>Gatilho</b> e escolha <b>Checkout</b>." },
-        { "t": "Escolha os eventos", "d": "Marque os eventos que iniciam o fluxo: Pix Gerado, Boleto Gerado, Abandono de carrinho, Compra Recusada, Compra Aprovada..." },
-        { "t": "Encerrar se comprar", "d": "Deixe ligado <b>Encerrar este fluxo se o lead comprar</b> para quem pagou não receber mais cobrança." },
-        { "t": "Escolha o número", "d": "Com mais de um número conectado, marque <b>Por qual número o fluxo envia</b>." }
-      ]
-    },
-    {
-      "id": "gatilho-instagram-comentario", "cat": "fluxos", "titulo": "Comentário no Instagram vira mensagem no Direct", "tempo": "5 min", "video": "",
-      "resumo": "Quem comentar a palavra certa no seu post recebe uma resposta pública e uma mensagem no Direct, igual ao ManyChat.",
-      "antes": ["Instagram conectado (veja <b>Como conectar o Instagram</b>)."],
-      "passos": [
-        { "t": "Novo fluxo", "d": "Crie um fluxo e, no <b>Gatilho</b>, escolha <b>Instagram &gt; Comentário</b>.", "img": "gatilho-comentario.png" },
-        { "t": "Escolha os posts", "d": "Deixe <b>Qualquer post ou Reels</b> ou marque <b>Posts específicos</b> e toque nos posts." },
-        { "t": "Palavras-chave", "d": "Escolha <b>Palavras específicas</b> e adicione as palavras (ex.: eu quero, quero, link)." },
-        { "t": "Resposta pública", "d": "Escreva uma ou mais respostas para o comentário (ex.: Te mandei no Direct! 💌). Com várias, a Kobly sorteia." },
-        { "t": "Primeira mensagem do Direct", "d": "Ligue o Gatilho a um bloco <b>Botões / lista</b> (ex.: Quer o link? Sim / Não). Ela chega no Direct como resposta ao comentário." },
-        { "t": "Publique e teste", "d": "Publique e comente a palavra no post com outra conta." }
-      ],
-      "dicas": ["O Instagram só deixa a 1ª mensagem até a pessoa responder: por isso use botões ou Aguardar resposta logo depois.", "Cada comentário recebe só uma mensagem privada (regra da Meta)."]
-    },
-    {
-      "id": "gatilho-instagram-story", "cat": "fluxos", "titulo": "Responder quem responde ou marca você no story", "tempo": "3 min", "video": "",
-      "resumo": "Inicie um fluxo quando alguém responder seu story ou marcar a sua conta.",
-      "passos": [
-        { "t": "Gatilho de story", "d": "No Gatilho, escolha <b>Instagram &gt; Story</b>." },
-        { "t": "Quando", "d": "Escolha <b>Responde ou marca</b>, só <b>Responde o story</b> ou só <b>Marca você no story</b>." },
-        { "t": "Palavras (opcional)", "d": "Para respostas, você pode exigir uma palavra-chave." },
-        { "t": "Use o link do story", "d": "O link do story fica na variável <b>{{story_url}}</b>." }
-      ]
-    },
-    {
-      "id": "instagram-segue-perfil", "cat": "fluxos", "titulo": "Só entregar para quem segue o perfil", "tempo": "2 min", "video": "",
-      "resumo": "Use a Condição \"Segue o perfil\" para pedir que a pessoa siga antes de receber o link.",
-      "passos": [
-        { "t": "Adicione uma Condição", "d": "Depois da resposta da pessoa, adicione o bloco <b>Condição</b>." },
-        { "t": "Regra Segue o perfil", "d": "Em <b>+ Regra</b>, escolha <b>Segue o perfil</b> e <b>segue</b>." },
-        { "t": "Os dois caminhos", "d": "Na saída <b>Sim</b>, mande o link. Na <b>Não</b>, peça para seguir e use Aguardar resposta para conferir de novo." }
-      ]
-    },
-    {
-      "id": "escolher-conexao-fluxo", "cat": "fluxos", "titulo": "Escolher a conexão (número) de um fluxo", "tempo": "2 min", "video": "",
-      "resumo": "Com vários números, Instagrams ou Páginas, defina em quais o fluxo vale e por onde ele fala.",
-      "passos": [
-        { "t": "Abra o Gatilho", "d": "No fluxo, clique no bloco <b>Gatilho</b>." },
-        { "t": "Em quais conexões", "d": "Em <b>Em quais conexões</b>, deixe <b>Todas</b> ou marque só os números/contas que esse fluxo atende." },
-        { "t": "Checkout", "d": "Em fluxos de checkout, marque <b>Por qual número o fluxo envia</b>." },
-        { "t": "Publique", "d": "Publique o fluxo. A resposta sai sempre pela mesma conexão em que a conversa começou." }
-      ],
-      "dicas": ["Esta opção só aparece quando a conta tem mais de uma conexão daquele tipo."]
-    },
-    {
-      "id": "blocos-mensagem", "cat": "fluxos", "titulo": "Blocos de mensagem: Texto, Mídia, Botões, Modelo e E-mail", "tempo": "6 min", "video": "",
-      "resumo": "O que cada bloco de mensagem faz e quando usar.",
-      "passos": [
-        { "t": "Texto", "d": "Mensagem com variáveis ({{nome}}, {{produto}}...), emojis, prévia de link, responder ou reagir à última mensagem do lead." },
-        { "t": "Mídia", "d": "Imagem, vídeo, áudio (como gravação de voz) ou arquivo: envie do computador ou cole um link. Imagem pode ser de visualização única." },
-        { "t": "Botões / lista", "d": "Pergunta com opções. Cada opção vira uma saída do bloco. O fluxo espera a resposta." },
-        { "t": "Modelo do WhatsApp", "d": "Mensagem aprovada pela Meta (API Oficial). É a única que pode iniciar conversa com a janela de 24 h fechada." },
-        { "t": "E-mail", "d": "E-mail com a sua marca e link de descadastro. Lead sem e-mail segue o fluxo sem receber." }
-      ]
-    },
-    {
-      "id": "blocos-controle", "cat": "fluxos", "titulo": "Blocos de controle: Esperar, Aguardar resposta, Condição e mais", "tempo": "7 min", "video": "",
-      "resumo": "Controle o tempo e o caminho de cada lead no fluxo.",
-      "passos": [
-        { "t": "Esperar", "d": "Pausa fixa ou aleatória (ex.: 2 a 5 minutos), com \"digitando...\" para parecer natural." },
-        { "t": "Aguardar resposta", "d": "Espera o lead responder e guarda o texto numa variável. Tem saída para quando ele não responde no tempo." },
-        { "t": "Condição", "d": "Divide o caminho por etiqueta, variável, compra, janela de 24 h, dia, horário, país ou se segue o Instagram. Combine regras com E / OU." },
-        { "t": "Teste A/B", "d": "Divide os leads entre caminhos por porcentagem para ver qual mensagem vende mais." },
-        { "t": "Contador", "d": "Marca um ponto do funil para contar quantos leads chegam até ali." },
-        { "t": "Horário comercial", "d": "Espera o próximo horário de atendimento (no fuso da empresa) ou uma data e hora." },
-        { "t": "Conectar fluxo", "d": "O lead sai deste fluxo e começa outro do início." }
-      ]
-    },
-    {
-      "id": "blocos-acoes", "cat": "fluxos", "titulo": "Blocos de ação: Etiquetas, Variável, Webhook, Alerta e Ligação", "tempo": "5 min", "video": "",
-      "resumo": "Organize os leads e converse com outros sistemas durante o fluxo.",
-      "passos": [
-        { "t": "Etiquetas", "d": "Adiciona ou remove etiquetas do lead (ex.: interessado, comprou)." },
-        { "t": "Definir variável", "d": "Grava um texto ou faz uma conta numa variável para usar nas mensagens." },
-        { "t": "Webhook", "d": "Manda os dados do lead para outro sistema (CRM, planilha, Make, Zapier) e guarda a resposta." },
-        { "t": "Alerta (Telegram)", "d": "Avisa a equipe no Telegram: venda feita, erro de pagamento, lead pedindo humano." },
-        { "t": "Ligação", "d": "Liga no WhatsApp do lead: só tocar para chamar atenção, ou um agente de voz que conversa e escolhe a saída." }
-      ]
-    },
-    {
-      "id": "variaveis", "cat": "fluxos", "titulo": "Variáveis: personalize cada mensagem", "tempo": "4 min", "video": "",
-      "resumo": "Use o nome, o produto, o link de pagamento e muito mais dentro das mensagens.",
-      "passos": [
-        { "t": "Inserir uma variável", "d": "No campo de texto, clique em <b>{ }</b> e escolha a variável. Ela aparece entre chaves, como <b>{{primeiro_nome}}</b>." },
-        { "t": "Do lead", "d": "{{nome}}, {{primeiro_nome}}, {{telefone}}, {{email}}, {{produto}}, {{valor}}." },
-        { "t": "Do checkout e da cobrança", "d": "{{cta_link}} (link de pagamento), {{pagamento_codigo}} (Pix copia e cola), {{pagamento_qr}}, {{pagamento_link}}." },
-        { "t": "Saudação por país", "d": "{{saudacao_personalizada}} vira Bom dia, Boa tarde ou Boa noite no horário do lead." },
-        { "t": "Do anúncio", "d": "{{ad_title}}, {{source_id}} e {{ctwa_clid}} quando o lead veio de um anúncio de clique para WhatsApp." },
-        { "t": "Suas variáveis", "d": "O que o lead responde em Aguardar resposta fica na variável que você nomear (ex.: {{resposta1}})." }
-      ]
-    },
-    {
-      "id": "conferir-simulador", "cat": "fluxos", "titulo": "Testar o fluxo antes de publicar (Conferir)", "tempo": "2 min", "video": "",
-      "resumo": "Simule a conversa no visual do WhatsApp sem mandar nada de verdade.",
-      "passos": [
-        { "t": "Abra o simulador", "d": "No editor, clique em <b>Conferir</b>." },
-        { "t": "Converse", "d": "Responda como se fosse o cliente. O bloco atual fica destacado no editor." },
-        { "t": "Escolhas", "d": "IA, pagamento e ligação viram botões de escolha na tela, para você testar cada caminho." }
-      ]
-    },
-    {
-      "id": "bloco-cobranca", "cat": "vendas", "titulo": "Cobrar no chat: bloco Cobrança (Pix e outros)", "tempo": "5 min", "video": "",
-      "resumo": "Gere um Pix (ou SPEI, OXXO, Nequi...) no seu gateway e siga o fluxo quando o cliente pagar.",
-      "antes": ["Um gateway conectado em <b>Integrações &gt; Gateways de pagamento</b>."],
-      "passos": [
-        { "t": "Adicione o bloco", "d": "No fluxo, arraste <b>Cobrança</b> (grupo Dinheiro)." },
-        { "t": "Valor e produto", "d": "Escolha o gateway, o valor (fixo ou de uma variável) e a descrição." },
-        { "t": "Mande o código", "d": "Depois do bloco, use um Texto com <b>{{pagamento_codigo}}</b> (copia e cola) ou <b>{{pagamento_link}}</b>." },
-        { "t": "Pago", "d": "Se o cliente pagar em até 48 h, o fluxo pula sozinho para a saída <b>Pago</b>: entregue o produto e use <b>Registrar venda</b>." }
-      ]
-    },
-    {
-      "id": "conectar-gateway", "cat": "vendas", "titulo": "Conectar o checkout ou gateway de pagamento", "tempo": "5 min", "video": "",
-      "resumo": "Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt, Mercado Pago e outros: cada um com a sua página de conexão.",
-      "passos": [
-        { "t": "Abra os gateways", "d": "Em <b>Integrações &gt; Gateways de pagamento</b>, escolha a sua plataforma." },
-        { "t": "Siga a página dela", "d": "Cada plataforma tem o passo a passo na tela: cole a chave/token ou a URL de postback que a Kobly mostra." },
-        { "t": "Teste", "d": "Faça um evento de teste na plataforma e veja ele chegar na Kobly." }
-      ]
-    },
-    {
-      "id": "postback", "cat": "vendas", "titulo": "Postback (webhook) do checkout", "tempo": "4 min", "video": "",
-      "resumo": "Use a URL de postback para receber eventos de qualquer plataforma.",
-      "passos": [
-        { "t": "Crie um webhook", "d": "Em <b>Integrações &gt; Postback</b>, crie um webhook com um nome (ex.: Produto A)." },
-        { "t": "Copie a URL", "d": "Copie a URL e cole no campo de postback/webhook da sua plataforma." },
-        { "t": "Dispare um teste", "d": "Envie um evento de teste. Ele aparece na <b>sessão de teste ao vivo</b>." },
-        { "t": "Segurança", "d": "Ative o modo estrito para aceitar só eventos assinados pela plataforma." }
-      ]
-    },
-    {
-      "id": "fluxo-recuperacao-pix", "cat": "vendas", "titulo": "Fluxo pronto: recuperar Pix e carrinho abandonado", "tempo": "6 min", "video": "",
-      "resumo": "Um modelo de fluxo que lembra o cliente do Pix e do carrinho e para quando ele paga.",
-      "passos": [
-        { "t": "Gatilho de checkout", "d": "Crie um fluxo com Gatilho <b>Checkout</b> nos eventos Pix Gerado e Abandono de carrinho." },
-        { "t": "1ª mensagem rápida", "d": "Esperar 5 minutos e mandar: <i>Oi {{primeiro_nome}}, seu Pix de {{valor}} está pronto: {{cta_link}}</i>." },
-        { "t": "Lembretes", "d": "Esperar 1 hora e mandar outro lembrete; depois 1 dia com um bônus ou prova social." },
-        { "t": "Encerrar quando comprar", "d": "Deixe ligado <b>Encerrar se o lead comprar</b> no Gatilho." },
-        { "t": "Use modelos se for Oficial", "d": "Na API Oficial, use <b>Modelo do WhatsApp</b> quando a janela de 24 h estiver fechada." }
-      ]
-    },
-    {
-      "id": "dashboard-vendas", "cat": "vendas", "titulo": "Entender o Dashboard e a tela de Vendas", "tempo": "4 min", "video": "",
-      "resumo": "Saiba o que cada número significa e quanto os fluxos estão recuperando.",
-      "passos": [
-        { "t": "Período", "d": "Escolha 7, 30 ou 90 dias no topo." },
-        { "t": "Cartões", "d": "Leads que chegaram, mensagens enviadas, respostas, vendas aprovadas e o valor recuperado pelos fluxos." },
-        { "t": "Vendas", "d": "Na tela Vendas, veja cada venda com a origem (UTM, anúncio) e o fluxo que recuperou." }
-      ]
-    },
-    {
-      "id": "produtos", "cat": "vendas", "titulo": "Cadastrar produtos", "tempo": "3 min", "video": "",
-      "resumo": "Cadastre os produtos para juntar nomes diferentes do checkout e usar nos fluxos.",
-      "passos": [
-        { "t": "Abra Produtos", "d": "Em <b>Integrações &gt; Produtos</b>, clique em novo produto." },
-        { "t": "Nomes e IDs", "d": "Adicione outros nomes ou IDs com que o checkout manda este produto (ex.: o ID da Hotmart)." },
-        { "t": "Use nos fluxos", "d": "Filtre fluxos e relatórios pelo produto." }
-      ]
-    },
-    {
-      "id": "chat-ao-vivo", "cat": "chat", "titulo": "Usar o Chat ao vivo", "tempo": "5 min", "video": "",
-      "resumo": "Responda WhatsApp, Instagram e Messenger num lugar só, assuma conversas e organize com etiquetas.",
-      "passos": [
-        { "t": "Abra o Chat", "d": "No menu, clique em <b>Chats ao vivo</b>. A lista mostra a última mensagem de cada contato.", "img": "chat.png" },
-        { "t": "Responda", "d": "Clique na conversa, escreva e envie. Dá para mandar imagem, áudio, arquivo e respostas rápidas (digite /)." },
-        { "t": "Assumir a conversa", "d": "Clique na <b>mão</b> para assumir: a automação pausa para esse contato até você devolver." },
-        { "t": "Iniciar um fluxo", "d": "Clique no <b>play</b> para colocar o contato num fluxo." },
-        { "t": "Detalhes do contato", "d": "Etiquetas, notas, histórico de compra e automação ficam no painel da direita." },
-        { "t": "Arquivar e limpar", "d": "Arquivar tira da lista até ele mandar mensagem de novo. Limpar esconde as mensagens antigas só na Kobly." }
-      ],
-      "dicas": ["Na API Oficial, só dá para responder livremente até 24 h depois da última mensagem do cliente."]
-    },
-    {
-      "id": "chat-filtros", "cat": "chat", "titulo": "Separar o Chat por rede e por conexão", "tempo": "2 min", "video": "",
-      "resumo": "Veja só o WhatsApp, só o Instagram, só o Messenger ou só um chip específico.",
-      "passos": [
-        { "t": "Abas de rede", "d": "No topo da lista, toque em <b>Todas</b>, <b>WhatsApp</b>, <b>Instagram</b> ou <b>Messenger</b>." },
-        { "t": "Escolha a conexão", "d": "Com mais de uma conexão, use o seletor <b>Todas as conexões</b> para ver só um número, conta ou Página." },
-        { "t": "Etiqueta da conexão", "d": "Cada conversa mostra embaixo do nome por qual conexão ela chegou." },
-        { "t": "Filtros de atendimento", "d": "Combine com Não respondidas, Em fluxo, Com humano e Arquivadas." }
-      ]
-    },
-    {
-      "id": "pipeline", "cat": "chat", "titulo": "Pipeline e Leads", "tempo": "4 min", "video": "",
-      "resumo": "Acompanhe cada contato no funil e encontre qualquer lead em segundos.",
-      "passos": [
-        { "t": "Pipeline", "d": "Os leads ficam em colunas por etapa (novo, respondeu, em fluxo, comprou). Clique num lead para ver o histórico." },
-        { "t": "Leads", "d": "Lista completa com busca por nome, telefone e e-mail, filtros por etiqueta, conexão e período." },
-        { "t": "Exportar", "d": "Clique em <b>Planilha</b> para baixar a lista filtrada (CSV)." }
-      ]
-    },
-    {
-      "id": "etiquetas", "cat": "chat", "titulo": "Etiquetas (tags)", "tempo": "2 min", "video": "",
-      "resumo": "Marque os leads para filtrar, segmentar disparos e decidir caminhos nos fluxos.",
-      "passos": [
-        { "t": "Crie", "d": "Em <b>Integrações &gt; Tags</b> ou direto no chat ou no bloco do fluxo." },
-        { "t": "Aplique", "d": "No chat (painel do contato) ou com o bloco <b>Etiquetas</b> no fluxo." },
-        { "t": "Use", "d": "Filtre Leads e Disparos pela etiqueta e use na <b>Condição</b>." }
-      ]
-    },
-    {
-      "id": "respostas-rapidas", "cat": "chat", "titulo": "Respostas rápidas", "tempo": "2 min", "video": "",
-      "resumo": "Salve as respostas que você mais usa e mande com dois toques.",
-      "passos": [
-        { "t": "Cadastre", "d": "Em <b>Configurações</b>, adicione as respostas rápidas com um atalho." },
-        { "t": "Use no chat", "d": "Na caixa de mensagem, digite <b>/</b> e escolha a resposta." }
-      ]
-    },
-    {
-      "id": "disparo-massa", "cat": "disparos", "titulo": "Como fazer um disparo em massa", "tempo": "6 min", "video": "",
-      "resumo": "Mande uma campanha para uma lista de contatos agora, numa data ou todo dia.",
-      "antes": ["WhatsApp conectado.", "Contatos que aceitaram receber suas mensagens."],
-      "passos": [
-        { "t": "Novo disparo", "d": "No menu, clique em <b>Disparo em massa</b> e em <b>Novo disparo</b>." },
-        { "t": "Público", "d": "Escolha os contatos por filtro (etiqueta, produto, período) ou envie uma lista." },
-        { "t": "Mensagem ou fluxo", "d": "Escreva a mensagem ou escolha um fluxo para cada contato." },
-        { "t": "Quando", "d": "Agora, uma vez (dia e hora) ou todo dia num período, no fuso de São Paulo." },
-        { "t": "Acompanhe", "d": "Veja enviados, falhas e respostas em <b>Disparos</b>. Dá para pausar, retomar e cancelar." }
-      ],
-      "dicas": ["Na API Oficial, disparos precisam de modelo aprovado.", "No QR Code, mande aos poucos e com intervalo para evitar bloqueio."]
-    },
-    {
-      "id": "modelos-whatsapp", "cat": "conexoes", "titulo": "Criar modelos de mensagem (API Oficial)", "tempo": "4 min", "video": "",
-      "resumo": "Crie os modelos que a Meta aprova para iniciar conversas e fazer disparos.",
-      "passos": [
-        { "t": "Abra o número", "d": "Em <b>Integrações &gt; Conexões</b>, clique em <b>Gerenciar</b> no número da API Oficial." },
-        { "t": "Novo modelo", "d": "Clique em <b>Novo modelo</b>: nome (minúsculas e _), categoria, texto com {{1}}, {{2}} e exemplos." },
-        { "t": "Categoria certa", "d": "<b>Utilidade</b> para avisos de pedido (aprova mais rápido). <b>Marketing</b> para promoções e recuperação." },
-        { "t": "Envie e sincronize", "d": "Clique em <b>Enviar para análise</b>. Depois, <b>Sincronizar com a Meta</b> atualiza o status (Em análise, Aprovado, Recusado)." },
-        { "t": "Teste", "d": "Com o modelo aprovado, use <b>Enviar teste</b> para o seu número." }
-      ]
-    },
-    {
-      "id": "janela-24h", "cat": "conexoes", "titulo": "O que é a janela de 24 horas", "tempo": "2 min", "video": "",
-      "resumo": "A regra da Meta que decide quando dá para mandar mensagem livre no WhatsApp Oficial, Instagram e Messenger.",
-      "passos": [
-        { "t": "A regra", "d": "Depois que o cliente manda uma mensagem, você tem 24 horas para responder com mensagens livres." },
-        { "t": "Janela fechada", "d": "Passou das 24 h? No WhatsApp Oficial, só com <b>Modelo do WhatsApp</b> aprovado. No Instagram e Messenger, espere a pessoa escrever de novo." },
-        { "t": "QR Code", "d": "O WhatsApp por QR Code não tem essa regra, mas mande com moderação." }
-      ]
-    },
-    {
-      "id": "conectar-meta-ads", "cat": "anuncios", "titulo": "Conectar o Facebook Ads (Meta Ads)", "tempo": "4 min", "video": "",
-      "resumo": "Veja gasto, cliques e resultados ao lado das vendas e ligue, pause ou mude o orçamento pela Kobly.",
-      "passos": [
-        { "t": "Abra Anúncios", "d": "No menu, clique em <b>Anúncios</b> e na aba <b>Facebook Ads</b>." },
-        { "t": "Conectar", "d": "Clique em <b>Conectar com Facebook</b>, entre e permita o acesso." },
-        { "t": "Escolha as contas", "d": "Marque as contas de anúncios que a Kobly vai acompanhar." },
-        { "t": "Acompanhe", "d": "Veja Contas, Campanhas, Conjuntos e Anúncios. Use o botão para pausar/ativar e o lápis para o orçamento." }
-      ]
-    },
-    {
-      "id": "conectar-google-ads", "cat": "anuncios", "titulo": "Conectar o Google Ads", "tempo": "4 min", "video": "",
-      "resumo": "Relatórios do Google Ads com as vendas rastreadas.",
-      "passos": [
-        { "t": "Abra Anúncios", "d": "Em <b>Anúncios</b>, aba <b>Google Ads</b>, clique em conectar." },
-        { "t": "Entre com o Google", "d": "Use a conta que acessa o Google Ads e permita o acesso." },
-        { "t": "Escolha as contas", "d": "Marque as contas (inclusive dentro de uma conta de administrador/MCC)." },
-        { "t": "Modelo de acompanhamento", "d": "Cole no Google Ads o modelo de URL que a Kobly mostra, para cada venda saber de qual campanha veio." }
-      ]
-    },
-    {
-      "id": "utm-rastreamento", "cat": "anuncios", "titulo": "Rastrear de onde vem cada venda (UTM)", "tempo": "4 min", "video": "",
-      "resumo": "Saiba qual campanha, conjunto e anúncio trouxe cada venda.",
-      "passos": [
-        { "t": "Trackeamento", "d": "Em <b>Integrações &gt; Trackeamento</b>, copie os parâmetros de URL." },
-        { "t": "No anúncio", "d": "No Meta Ads, cole em <b>Parâmetros de URL</b> do anúncio." },
-        { "t": "Veja nas vendas", "d": "Na tela Vendas, cada venda mostra a campanha, o conjunto e o anúncio de origem." }
-      ]
-    },
-    {
-      "id": "pixel-meta", "cat": "anuncios", "titulo": "Pixel da Meta e API de Conversões", "tempo": "4 min", "video": "",
-      "resumo": "Mande Lead e Purchase para a Meta direto do fluxo, para os anúncios otimizarem melhor.",
-      "passos": [
-        { "t": "Cadastre o Pixel", "d": "Em <b>Integrações &gt; Trackeamento</b>, adicione o Pixel (Meta, TikTok ou Google) com o ID e o token da API de Conversões." },
-        { "t": "Teste", "d": "Use <b>Enviar evento de teste</b> e veja no Gerenciador de Eventos da Meta." },
-        { "t": "No fluxo", "d": "Adicione o bloco <b>Pixel da Meta</b> e escolha o evento (Lead ou Purchase)." }
-      ]
-    },
-    {
-      "id": "chave-ia", "cat": "ia", "titulo": "Cadastrar sua chave de IA", "tempo": "3 min", "video": "",
-      "resumo": "Use a sua conta da OpenAI, Claude (Anthropic), Google Gemini, DeepSeek ou OpenRouter nos blocos de IA.",
-      "passos": [
-        { "t": "Abra IA (sua chave)", "d": "Em <b>Integrações &gt; IA (sua chave)</b>, escolha o provedor." },
-        { "t": "Cole a chave", "d": "Crie a chave no site do provedor e cole aqui. Ela fica guardada criptografada." },
-        { "t": "Teste", "d": "Clique em testar. O custo da IA é cobrado pelo provedor na sua conta." }
-      ]
-    },
-    {
-      "id": "bloco-ia-entender", "cat": "ia", "titulo": "IA: entender resposta e extrair dados", "tempo": "4 min", "video": "",
-      "resumo": "Deixe a IA entender o que o cliente quis dizer e tirar informações da resposta.",
-      "passos": [
-        { "t": "Entender resposta", "d": "Depois de um Aguardar resposta, use <b>IA: entender resposta</b> e escreva as opções (ex.: quer comprar, tem dúvida, não quer). Cada opção vira uma saída." },
-        { "t": "Extrair dados", "d": "Use <b>IA: extrair dados</b> para tirar cidade, plano, e-mail... e salvar em variáveis." }
-      ]
-    },
-    {
-      "id": "agente-ia", "cat": "ia", "titulo": "Agente de IA que conversa e vende", "tempo": "6 min", "video": "",
-      "resumo": "Um agente que conversa em vários turnos até concluir o objetivo, pedir um humano ou o lead sumir.",
-      "passos": [
-        { "t": "Crie o agente", "d": "Em <b>Configurações &gt; Agentes de IA</b>, descreva quem ele é, o que vende, o tom e as regras." },
-        { "t": "Adicione no fluxo", "d": "Arraste o bloco <b>Agente de IA</b> e escolha o agente." },
-        { "t": "Saídas", "d": "Ligue as saídas: objetivo concluído, pediu humano, sem resposta." },
-        { "t": "Teste", "d": "Use o <b>Conferir</b> e converse com ele antes de publicar." }
-      ],
-      "dicas": ["Dê exemplos de perguntas e respostas: o agente fica muito mais preciso."]
-    },
-    {
-      "id": "voz-elevenlabs", "cat": "ia", "titulo": "Áudios com voz realista (ElevenLabs)", "tempo": "3 min", "video": "",
-      "resumo": "Mande áudios gerados com a sua voz ou uma voz realista.",
-      "passos": [
-        { "t": "Conecte", "d": "Em <b>Integrações &gt; Voz (ElevenLabs)</b>, cole a sua chave." },
-        { "t": "Escolha a voz", "d": "Escolha uma voz da sua conta ElevenLabs." },
-        { "t": "Use no fluxo", "d": "No bloco de mídia (áudio), escreva o texto e gere o áudio." }
-      ]
-    },
-    {
-      "id": "agente-voz-ligacao", "cat": "ia", "titulo": "Agente de voz e bloco Ligação", "tempo": "6 min", "video": "",
-      "resumo": "Um agente de voz liga para o lead, conversa e decide o próximo passo do fluxo.",
-      "passos": [
-        { "t": "Crie o agente", "d": "Em <b>Integrações &gt; Agentes de voz</b>, escolha ElevenLabs ou OpenAI, a voz, as instruções e a primeira frase." },
-        { "t": "Bloco Ligação", "d": "No fluxo, adicione <b>Ligação</b>: só tocar, ou o agente de voz." },
-        { "t": "Saídas", "d": "O fluxo segue pela saída que o agente escolher ou por Atendeu / Não atendeu / Recusou." },
-        { "t": "Resultado", "d": "Resumo, duração e transcrição ficam nas variáveis ligacao_resumo, ligacao_duracao e ligacao_transcricao." }
-      ]
-    },
-    {
-      "id": "planos-cobranca", "cat": "conta", "titulo": "Planos, conexões e cobrança", "tempo": "3 min", "video": "",
-      "resumo": "Como funciona o plano, quantas conexões você tem e como pagar.",
-      "passos": [
-        { "t": "Ver o plano", "d": "Em <b>Planos &amp; cobrança</b>, veja o plano atual, as conexões e a próxima cobrança." },
-        { "t": "Mudar", "d": "Escolha outro plano ou mais conexões. Aumentos valem na hora; reduções, na próxima renovação." },
-        { "t": "Pagamento", "d": "Pix ou cartão. A assinatura renova sozinha até você cancelar." }
-      ]
-    },
-    {
-      "id": "afiliados", "cat": "conta", "titulo": "Programa de afiliados", "tempo": "2 min", "video": "",
-      "resumo": "Indique a Kobly e ganhe comissão.",
-      "passos": [
-        { "t": "Seu link", "d": "Em <b>Afiliados</b>, copie o seu link de indicação." },
-        { "t": "Acompanhe", "d": "Veja indicados, assinaturas ativas e comissões." }
-      ]
-    },
-    {
-      "id": "equipe-permissoes", "cat": "conta", "titulo": "Equipe e permissões", "tempo": "3 min", "video": "",
-      "resumo": "Convide sua equipe e defina o que cada pessoa pode ver e fazer.",
-      "passos": [
-        { "t": "Convide", "d": "Em <b>Configurações</b>, no cartão <b>Equipe</b>, convide pelo e-mail." },
-        { "t": "Papel", "d": "Escolha o papel: dono, administrador ou atendente (atendente vê só Chat, Leads e Pipeline)." },
-        { "t": "Remova", "d": "Remova o acesso de quem saiu da equipe quando quiser." }
-      ]
-    },
-    {
-      "id": "seguranca-dados", "cat": "conta", "titulo": "Segurança, privacidade e exclusão de dados", "tempo": "2 min", "video": "",
-      "resumo": "Como a Kobly protege seus dados e como apagar tudo.",
-      "passos": [
-        { "t": "Proteção", "d": "Tokens e chaves ficam criptografados; cada empresa só vê os próprios dados." },
-        { "t": "Desconectar", "d": "Desconecte qualquer integração em Conexões ou Anúncios: o token é apagado na hora." },
-        { "t": "Apagar a conta", "d": "Veja a página <a href=\"/exclusao-de-dados\">Exclusão de dados</a>." }
-      ]
-    },
-    {
-      "id": "api-publica", "cat": "dev", "titulo": "API pública: disparar fluxos de outro sistema", "tempo": "4 min", "video": "",
-      "resumo": "Coloque um contato num fluxo a partir do seu CRM, checkout ou sistema.",
-      "passos": [
-        { "t": "Crie a chave", "d": "Em <b>Integrações &gt; API pública</b>, crie uma chave e guarde (ela aparece só uma vez)." },
-        { "t": "Liste os fluxos", "d": "Chame <b>GET /flows</b> para pegar o id do fluxo." },
-        { "t": "Dispare", "d": "Chame <b>POST /flows/{id}/trigger</b> com o telefone e as variáveis. Veja a <a href=\"/developers\">documentação completa</a>." }
-      ]
-    },
-    {
-      "id": "mcp", "cat": "dev", "titulo": "Acesso de IA (MCP): monte fluxos conversando com a IA", "tempo": "3 min", "video": "",
-      "resumo": "Conecte o Claude ou outra IA à sua Kobly para criar e editar fluxos por conversa.",
-      "passos": [
-        { "t": "Ative", "d": "Em <b>Integrações &gt; Acesso de IA</b>, gere o acesso." },
-        { "t": "Conecte a IA", "d": "Siga a instrução da tela para adicionar a Kobly como conector na sua IA." },
-        { "t": "Peça", "d": "Peça à IA, por exemplo: monte um fluxo de recuperação de Pix com 3 lembretes." }
-      ]
+     "t": "Escolha o plano",
+     "d": "Em <b>Planos &amp; cobrança</b>, escolha o plano e quantas conexões (números) você precisa. Dá para mudar depois quando quiser.",
+     "img": [
+      "planos.webp"
+     ]
     }
-  ],
-  "faq": [
-    { "cat": "problemas", "q": "A mensagem do cliente não aparece no Chat ao vivo. E agora?", "a": "Confira em Integrações > Conexões se a conexão está Conectada. No QR Code, abra o WhatsApp do celular: se ele ficou desconectado, leia o QR de novo. Na API Oficial, mande uma mensagem de outro número e aguarde até 15 segundos. Se ainda assim não aparecer, abra um chamado com o número e o horário." },
-    { "cat": "problemas", "q": "Meu WhatsApp do QR Code desconecta sozinho.", "a": "O celular precisa ficar com internet e o WhatsApp não pode ser desconectado em Aparelhos conectados. Evite usar o mesmo número em outro sistema. Se desconectou, leia o QR Code de novo: as conversas continuam." },
-    { "cat": "problemas", "q": "O fluxo não começou quando o cliente mandou mensagem.", "a": "Confira se o fluxo está publicado e ativo, se a palavra-chave bate com o que o cliente escreveu, se o Gatilho está na rede e na conexão certas, e se o cliente não estava em outro fluxo esperando resposta (aí a mensagem vai para aquele fluxo)." },
-    { "cat": "problemas", "q": "Apareceu \"janela de 24 h fechada\".", "a": "Na API Oficial, Instagram e Messenger, só dá para mandar mensagem livre até 24 h depois da última mensagem do cliente. Use um Modelo do WhatsApp aprovado ou espere o cliente escrever." },
-    { "cat": "problemas", "q": "Meu modelo de mensagem foi recusado pela Meta.", "a": "Veja o motivo na lista de modelos. Os mais comuns: variável no começo ou no fim do texto, texto promocional na categoria Utilidade e exemplos faltando. Ajuste e envie um modelo novo." },
-    { "cat": "problemas", "q": "O Instagram não respondeu o comentário.", "a": "Confira se o fluxo de Comentário está publicado, se o post está entre os escolhidos e se a palavra-chave bate. Cada comentário recebe só uma resposta privada, e a Meta não entrega comentários da própria conta da empresa." },
-    { "cat": "problemas", "q": "O evento do checkout não chegou na Kobly.", "a": "Confira a URL de postback colada na plataforma, se o produto e o evento estão marcados lá, e use a sessão de teste ao vivo em Integrações > Postback para ver o evento chegando." },
-    { "cat": "problemas", "q": "A cobrança Pix não confirmou o pagamento.", "a": "Confira se o gateway está conectado e se o webhook dele aponta para a Kobly. A confirmação pode levar alguns minutos dependendo do gateway." },
-    { "cat": "conexoes", "q": "Posso usar o mesmo número no celular e na Kobly?", "a": "No QR Code, sim: a Kobly entra como um aparelho conectado e você continua usando o celular. Na API Oficial, não: o número sai do app do WhatsApp e passa a funcionar só pela Kobly." },
-    { "cat": "conexoes", "q": "Qual a diferença entre QR Code e API Oficial?", "a": "QR Code: conecta qualquer número na hora, sem custo da Meta, mas com risco de bloqueio se usado de forma abusiva. API Oficial: número verificado pela Meta, modelos aprovados, sem risco de bloqueio por automação, com custo por conversa iniciada pela empresa." },
-    { "cat": "conexoes", "q": "Quantos números posso conectar?", "a": "Quantos o seu plano permitir. Cada conexão (número, Instagram ou Página) usa uma vaga. Veja e aumente em Planos & cobrança." },
-    { "cat": "fluxos", "q": "Um contato pode estar em dois fluxos ao mesmo tempo?", "a": "Pode estar em fluxos diferentes, mas não duas vezes no mesmo fluxo. Quando ele responde, a resposta vai para o fluxo que estava esperando resposta." },
-    { "cat": "fluxos", "q": "Como parar a automação para um cliente específico?", "a": "No Chat ao vivo, clique na mão (assumir conversa). A automação pausa só para ele até você devolver." },
-    { "cat": "fluxos", "q": "O cliente respondeu SAIR. O que acontece?", "a": "A Kobly marca o contato como descadastrado e não manda mais WhatsApp para ele pelos fluxos e disparos." },
-    { "cat": "conta", "q": "Posso cancelar quando quiser?", "a": "Sim. O acesso continua até o fim do período já pago." },
-    { "cat": "conta", "q": "Meus dados ficam seguros?", "a": "Sim. Tokens e chaves ficam criptografados e cada empresa só acessa os próprios dados. Veja a Política de Privacidade." }
-  ]
+   ],
+   "dicas": [
+    "Use o mesmo e-mail que você usa no Facebook e no Google: facilita conectar anúncios e Instagram depois."
+   ]
+  },
+  {
+   "id": "tour-painel",
+   "cat": "comece",
+   "titulo": "Conheça o painel da Kobly",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Um passeio rápido pelo menu: onde fica cada coisa e para que serve.",
+   "passos": [
+    {
+     "t": "Dashboard",
+     "d": "Resumo da operação: leads que chegaram, mensagens enviadas, respostas, vendas e o que os fluxos recuperaram. Troque o período em 7, 30 ou 90 dias.",
+     "img": [
+      "tour-periodo.webp"
+     ]
+    },
+    {
+     "t": "Vendas",
+     "d": "Todas as vendas que chegaram do checkout, de onde vieram (anúncio, UTM) e quanto cada fluxo recuperou.",
+     "img": [
+      "vendas.webp"
+     ]
+    },
+    {
+     "t": "Chats ao vivo",
+     "d": "Todas as conversas do WhatsApp, Instagram e Messenger num lugar só, separadas por rede e por conexão.",
+     "img": [
+      "chat-conversa.webp"
+     ]
+    },
+    {
+     "t": "Pipeline e Leads",
+     "d": "Seus contatos organizados em etapas (como um funil) e a lista completa com busca, filtros e etiquetas.",
+     "img": [
+      "pipeline.webp",
+      "leads-etapas.webp"
+     ]
+    },
+    {
+     "t": "Fluxos",
+     "d": "Onde você monta as automações: o que a Kobly manda, quando e para quem.",
+     "img": [
+      "fluxos-novo.webp"
+     ]
+    },
+    {
+     "t": "Disparo em massa",
+     "d": "Mande uma campanha para uma lista de contatos, agora ou agendada.",
+     "img": [
+      "disparo-menu.webp"
+     ]
+    },
+    {
+     "t": "Integrações",
+     "d": "Conexões (WhatsApp, Instagram, Messenger), checkouts, rastreamento, IA, voz, produtos, e-mail, etiquetas e API.",
+     "img": [
+      "conexoes-menu.webp"
+     ]
+    },
+    {
+     "t": "Anúncios",
+     "d": "Resultados do Facebook Ads e do Google Ads ao lado das vendas rastreadas, com liga/pausa e orçamento.",
+     "img": [
+      "anuncios-meta.webp"
+     ]
+    },
+    {
+     "t": "Configurações, Planos e Afiliados",
+     "d": "Dados da empresa, equipe, plano e o seu link de afiliado para indicar a Kobly.",
+     "img": [
+      "config-equipe.webp",
+      "tour-tema.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "conectar-whatsapp-qr",
+   "cat": "conexoes",
+   "titulo": "Como conectar o WhatsApp pelo QR Code",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Conecte qualquer número de WhatsApp ou WhatsApp Business lendo um QR Code, igual ao WhatsApp Web.",
+   "antes": [
+    "O celular com o WhatsApp do número que você quer usar, com internet.",
+    "Um plano com conexão livre (veja em Planos &amp; cobrança)."
+   ],
+   "passos": [
+    {
+     "t": "Abra as conexões",
+     "d": "No menu, clique em <b>Integrações</b> e depois em <b>Conexões</b>.",
+     "img": [
+      "conexoes-menu.webp"
+     ]
+    },
+    {
+     "t": "Nova conexão",
+     "d": "Clique em <b>Nova conexão</b> e escolha <b>WhatsApp</b>.",
+     "img": [
+      "conexoes-nova.webp",
+      "nova-qr.webp"
+     ]
+    },
+    {
+     "t": "Dê um nome",
+     "d": "Escreva um nome para reconhecer o número (ex.: Vendas, Suporte, Chip 2) e clique em <b>Gerar QR Code</b>.",
+     "img": [
+      "qr-conectar.webp"
+     ]
+    },
+    {
+     "t": "Leia o QR Code no celular",
+     "d": "No celular, abra o WhatsApp, toque em <b>⋮ (Android)</b> ou <b>Configurações (iPhone)</b> &gt; <b>Aparelhos conectados</b> &gt; <b>Conectar um aparelho</b> e aponte a câmera para o QR Code da tela."
+    },
+    {
+     "t": "Pronto",
+     "d": "Em alguns segundos o cartão fica <b>Conectado</b>, com a foto e o número. As conversas novas já aparecem no Chat ao vivo.",
+     "img": [
+      "conexoes-filtros.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "O QR Code vale por poucos segundos. Se expirar, clique em gerar de novo.",
+    "Não use o mesmo número em outro sistema de automação ao mesmo tempo.",
+    "Para evitar bloqueio: aqueça números novos, não mande para quem não pediu e respeite quem responde SAIR."
+   ]
+  },
+  {
+   "id": "conectar-whatsapp-oficial",
+   "cat": "conexoes",
+   "titulo": "Como conectar a API Oficial do WhatsApp com um clique",
+   "tempo": "6 min",
+   "video": "",
+   "resumo": "Conecte um número verificado pela Meta, sem copiar token: é só entrar com o Facebook.",
+   "antes": [
+    "Uma conta do Facebook que administre a empresa (portfólio empresarial).",
+    "Um número que <b>não</b> esteja ativo no app do WhatsApp (ou apague a conta do app antes).",
+    "O celular desse número por perto para receber o código por SMS ou ligação."
+   ],
+   "passos": [
+    {
+     "t": "Abra a nova conexão",
+     "d": "Vá em <b>Integrações &gt; Conexões &gt; Nova conexão</b> e escolha <b>WhatsApp API Oficial</b>.",
+     "img": [
+      "conexoes-nova.webp",
+      "nova-oficial.webp"
+     ]
+    },
+    {
+     "t": "Conectar com Facebook",
+     "d": "Clique em <b>Conectar com Facebook</b>. Abre uma janela da Meta: entre e toque em <b>Continuar</b>.",
+     "img": [
+      "oficial-conectar.webp"
+     ]
+    },
+    {
+     "t": "Escolha a empresa",
+     "d": "Selecione o portfólio empresarial (a sua BM). Não tem? A própria janela cria um."
+    },
+    {
+     "t": "Conta do WhatsApp Business",
+     "d": "Escolha <b>Criar nova conta</b>, dê o nome que aparece para os clientes e uma categoria."
+    },
+    {
+     "t": "Número e código",
+     "d": "Digite o número, escolha receber o código por <b>SMS</b> ou <b>ligação</b> e digite os 6 dígitos."
+    },
+    {
+     "t": "Revise e conclua",
+     "d": "Confira as permissões e clique em <b>Concluir</b>. Se a Meta pedir forma de pagamento, você pode pular e cadastrar depois no Gerenciador do WhatsApp."
+    },
+    {
+     "t": "Conectado",
+     "d": "A janela fecha e a Kobly mostra o número <b>Conectado</b>, com a qualidade e o limite de envio.",
+     "img": [
+      "oficial-gerenciar.webp",
+      "oficial-painel.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "O nome de exibição passa por análise da Meta. Enquanto isso o número já funciona.",
+    "A Meta cobra por conversa iniciada pela empresa (modelos). Responder dentro de 24 h é grátis."
+   ]
+  },
+  {
+   "id": "varios-numeros",
+   "cat": "conexoes",
+   "titulo": "Como usar vários números (chips) na mesma conta",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Conecte quantos números quiser, por QR Code ou API Oficial, e escolha qual cada fluxo usa.",
+   "passos": [
+    {
+     "t": "Conecte mais números",
+     "d": "Repita <b>Nova conexão</b> para cada chip. Na API Oficial, abra o número conectado e clique em <b>Conectar outro número</b>.",
+     "img": [
+      "conexoes-nova.webp"
+     ]
+    },
+    {
+     "t": "Dê nomes claros",
+     "d": "Renomeie cada conexão (Vendas, Suporte, Loja Centro...). O nome aparece no Chat ao vivo e no editor de fluxos.",
+     "img": [
+      "qr-conectar.webp"
+     ]
+    },
+    {
+     "t": "Escolha a conexão no fluxo",
+     "d": "No bloco <b>Gatilho</b> de cada fluxo, marque em quais conexões ele vale. Veja o artigo <b>Escolher a conexão de um fluxo</b>.",
+     "img": [
+      "gatilho-conexao.webp"
+     ]
+    },
+    {
+     "t": "Filtre as conversas",
+     "d": "No Chat ao vivo, use as abas de rede e o seletor de conexão para ver só as conversas de um chip.",
+     "img": [
+      "chat-conexao.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "A conversa sempre continua no mesmo número em que o cliente escreveu, mesmo quando você responde pelo chat.",
+    "Cada conexão conta uma vaga do seu plano."
+   ]
+  },
+  {
+   "id": "conectar-instagram",
+   "cat": "conexoes",
+   "titulo": "Como conectar o Instagram",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Entre com o Instagram da empresa e receba Direct, comentários e stories na Kobly.",
+   "antes": [
+    "Conta do Instagram <b>profissional</b> (Empresa ou Criador). Em Configurações &gt; Tipo de conta, troque se for pessoal.",
+    "Login e senha do Instagram da empresa."
+   ],
+   "passos": [
+    {
+     "t": "Nova conexão",
+     "d": "Em <b>Integrações &gt; Conexões &gt; Nova conexão</b>, escolha <b>Instagram</b>.",
+     "img": [
+      "conexoes-nova.webp",
+      "nova-instagram.webp"
+     ]
+    },
+    {
+     "t": "Entrar com Instagram",
+     "d": "Clique em <b>Entrar com Instagram</b> e entre com o usuário e a senha da conta.",
+     "img": [
+      "instagram-conectar.webp"
+     ]
+    },
+    {
+     "t": "Permitir",
+     "d": "Na tela de permissões, toque em <b>Permitir</b>. É ela que deixa a Kobly ler e responder Direct e comentários."
+    },
+    {
+     "t": "Conectado",
+     "d": "O cartão do Instagram aparece com a foto e o @. Mande um Direct de outra conta para testar: ele chega no Chat ao vivo.",
+     "img": [
+      "chat-redes.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "Não precisa de Página do Facebook.",
+    "A Kobly renova o acesso sozinha a cada 60 dias.",
+    "No Instagram, a empresa só pode mandar mensagem até 24 h depois que a pessoa escreveu (regra da Meta)."
+   ]
+  },
+  {
+   "id": "conectar-messenger",
+   "cat": "conexoes",
+   "titulo": "Como conectar o Messenger (Página do Facebook)",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Receba e responda as mensagens da sua Página do Facebook no Chat ao vivo.",
+   "antes": [
+    "Ser administrador da Página do Facebook."
+   ],
+   "passos": [
+    {
+     "t": "Nova conexão",
+     "d": "Em <b>Integrações &gt; Conexões &gt; Nova conexão</b>, escolha <b>Messenger</b>.",
+     "img": [
+      "conexoes-nova.webp",
+      "nova-messenger.webp"
+     ]
+    },
+    {
+     "t": "Conectar com Facebook",
+     "d": "Clique em <b>Conectar com Facebook</b>, entre e marque a <b>Página</b> da empresa.",
+     "img": [
+      "messenger-conectar.webp"
+     ]
+    },
+    {
+     "t": "Permita o acesso",
+     "d": "Confirme as permissões e volte para a Kobly."
+    },
+    {
+     "t": "Escolha a Página",
+     "d": "Marque a Página na lista e clique em <b>Conectar</b>. As mensagens novas chegam no Chat ao vivo.",
+     "img": [
+      "chat-redes.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "conectar-telegram",
+   "cat": "conexoes",
+   "titulo": "Como receber alertas da Kobly no Telegram",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Receba no Telegram avisos de venda, erro de pagamento e lead pedindo humano.",
+   "passos": [
+    {
+     "t": "Nova conexão",
+     "d": "Em <b>Integrações &gt; Conexões &gt; Nova conexão</b>, escolha <b>Telegram</b>.",
+     "img": [
+      "nova-telegram.webp"
+     ]
+    },
+    {
+     "t": "Siga as instruções",
+     "d": "Abra o bot indicado no Telegram, envie a mensagem com o código mostrado na tela e pronto.",
+     "img": [
+      "telegram-conectar.webp"
+     ]
+    },
+    {
+     "t": "Use nos fluxos",
+     "d": "No fluxo, adicione o bloco <b>Alerta (Telegram)</b> onde quiser ser avisado.",
+     "img": [
+      "bloco-alerta.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "primeiro-fluxo",
+   "cat": "fluxos",
+   "titulo": "Como criar seu primeiro fluxo",
+   "tempo": "6 min",
+   "video": "",
+   "resumo": "Monte um fluxo de boas-vindas que responde sozinho quem manda mensagem.",
+   "antes": [
+    "Pelo menos uma conexão de WhatsApp, Instagram ou Messenger conectada."
+   ],
+   "passos": [
+    {
+     "t": "Novo fluxo",
+     "d": "No menu, clique em <b>Fluxos</b> e em <b>Novo fluxo</b>. Dê um nome (ex.: Boas-vindas).",
+     "img": [
+      "fluxos-novo.webp"
+     ]
+    },
+    {
+     "t": "Configure o Gatilho",
+     "d": "Clique no bloco <b>Gatilho</b>. Escolha <b>Mensagem</b>, a rede (WhatsApp) e <b>Qualquer texto</b> ou palavras-chave (ex.: quero, preço).",
+     "img": [
+      "editor-gatilho.webp",
+      "gatilho-abas.webp"
+     ]
+    },
+    {
+     "t": "Adicione um Texto",
+     "d": "Arraste o bloco <b>Texto</b> da paleta e escreva: <i>Oi {{primeiro_nome}}! Como posso te ajudar?</i>",
+     "img": [
+      "editor-blocos.webp",
+      "bloco-texto.webp"
+     ]
+    },
+    {
+     "t": "Ligue os blocos",
+     "d": "Puxe a bolinha de saída do Gatilho até o bloco Texto. A linha mostra o caminho que o lead faz.",
+     "img": [
+      "editor-ligar.webp"
+     ]
+    },
+    {
+     "t": "Pergunte com botões",
+     "d": "Adicione <b>Botões / lista</b> com as opções (Comprar, Dúvidas, Falar com humano). Cada opção vira uma saída para ligar no próximo passo.",
+     "img": [
+      "bloco-botoes.webp"
+     ]
+    },
+    {
+     "t": "Confira",
+     "d": "Clique em <b>Conferir</b> para simular a conversa no visual do WhatsApp, sem mandar nada de verdade.",
+     "img": [
+      "editor-conferir.webp"
+     ]
+    },
+    {
+     "t": "Publique",
+     "d": "Clique em <b>Publicar</b>. A partir daí, quem mandar mensagem entra no fluxo.",
+     "img": [
+      "editor-publicar.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "Use <b>Salvar</b> (ou Ctrl+S) a qualquer momento: o rascunho fica guardado mesmo com pendências.",
+    "Comece simples e vá melhorando com os números do fluxo (Métricas)."
+   ]
+  },
+  {
+   "id": "publicar-fluxo",
+   "cat": "fluxos",
+   "titulo": "Salvar, publicar e voltar uma versão do fluxo",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Entenda a diferença entre rascunho e versão publicada e como desfazer uma mudança.",
+   "passos": [
+    {
+     "t": "Salvar",
+     "d": "<b>Salvar</b> guarda o rascunho. Ele não muda o que está rodando para os leads.",
+     "img": [
+      "editor-salvar.webp"
+     ]
+    },
+    {
+     "t": "Publicar",
+     "d": "<b>Publicar</b> confere o fluxo e coloca a nova versão no ar. Os leads novos já seguem a versão nova.",
+     "img": [
+      "editor-publicar.webp"
+     ]
+    },
+    {
+     "t": "Pendências",
+     "d": "Se faltar algo (texto vazio, bloco sem saída), a Kobly mostra o que corrigir antes de publicar."
+    },
+    {
+     "t": "Voltar uma versão",
+     "d": "Em <b>Versões</b>, escolha uma versão anterior e clique em <b>Restaurar</b>.",
+     "img": [
+      "fluxos-editar.webp"
+     ]
+    },
+    {
+     "t": "Pausar",
+     "d": "Na lista de Fluxos, use o botão de pausa para parar um fluxo sem apagar.",
+     "img": [
+      "fluxos-ativar.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "gatilho-checkout",
+   "cat": "fluxos",
+   "titulo": "Gatilho de checkout: fluxo que começa sozinho a cada evento",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Dispare um fluxo quando o checkout mandar Pix gerado, carrinho abandonado, compra aprovada e outros eventos.",
+   "antes": [
+    "Um checkout conectado (veja <b>Conectar o checkout</b>)."
+   ],
+   "passos": [
+    {
+     "t": "Abra o Gatilho",
+     "d": "No fluxo, clique no bloco <b>Gatilho</b> e escolha <b>Checkout</b>.",
+     "img": [
+      "editor-gatilho.webp"
+     ]
+    },
+    {
+     "t": "Escolha os eventos",
+     "d": "Marque os eventos que iniciam o fluxo: Pix Gerado, Boleto Gerado, Abandono de carrinho, Compra Recusada, Compra Aprovada...",
+     "img": [
+      "gatilho-checkout.webp"
+     ]
+    },
+    {
+     "t": "Encerrar se comprar",
+     "d": "Deixe ligado <b>Encerrar este fluxo se o lead comprar</b> para quem pagou não receber mais cobrança."
+    },
+    {
+     "t": "Escolha o número",
+     "d": "Com mais de um número conectado, marque <b>Por qual número o fluxo envia</b>.",
+     "img": [
+      "gatilho-conexao.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "gatilho-instagram-comentario",
+   "cat": "fluxos",
+   "titulo": "Comentário no Instagram vira mensagem no Direct",
+   "tempo": "5 min",
+   "video": "",
+   "resumo": "Quem comentar a palavra certa no seu post recebe uma resposta pública e uma mensagem no Direct, igual ao ManyChat.",
+   "antes": [
+    "Instagram conectado (veja <b>Como conectar o Instagram</b>)."
+   ],
+   "passos": [
+    {
+     "t": "Novo fluxo",
+     "d": "Crie um fluxo e, no <b>Gatilho</b>, escolha <b>Instagram &gt; Comentário</b>.",
+     "img": [
+      "gatilho-comentario.webp"
+     ]
+    },
+    {
+     "t": "Escolha os posts",
+     "d": "Deixe <b>Qualquer post ou Reels</b> ou marque <b>Posts específicos</b> e toque nos posts.",
+     "img": [
+      "gatilho-posts.webp"
+     ]
+    },
+    {
+     "t": "Palavras-chave",
+     "d": "Escolha <b>Palavras específicas</b> e adicione as palavras (ex.: eu quero, quero, link)."
+    },
+    {
+     "t": "Resposta pública",
+     "d": "Escreva uma ou mais respostas para o comentário (ex.: Te mandei no Direct! 💌). Com várias, a Kobly sorteia."
+    },
+    {
+     "t": "Primeira mensagem do Direct",
+     "d": "Ligue o Gatilho a um bloco <b>Botões / lista</b> (ex.: Quer o link? Sim / Não). Ela chega no Direct como resposta ao comentário."
+    },
+    {
+     "t": "Publique e teste",
+     "d": "Publique e comente a palavra no post com outra conta.",
+     "img": [
+      "editor-publicar.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "O Instagram só deixa a 1ª mensagem até a pessoa responder: por isso use botões ou Aguardar resposta logo depois.",
+    "Cada comentário recebe só uma mensagem privada (regra da Meta)."
+   ]
+  },
+  {
+   "id": "gatilho-instagram-story",
+   "cat": "fluxos",
+   "titulo": "Responder quem responde ou marca você no story",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Inicie um fluxo quando alguém responder seu story ou marcar a sua conta.",
+   "passos": [
+    {
+     "t": "Gatilho de story",
+     "d": "No Gatilho, escolha <b>Instagram &gt; Story</b>.",
+     "img": [
+      "gatilho-story.webp"
+     ]
+    },
+    {
+     "t": "Quando",
+     "d": "Escolha <b>Responde ou marca</b>, só <b>Responde o story</b> ou só <b>Marca você no story</b>."
+    },
+    {
+     "t": "Palavras (opcional)",
+     "d": "Para respostas, você pode exigir uma palavra-chave."
+    },
+    {
+     "t": "Use o link do story",
+     "d": "O link do story fica na variável <b>{{story_url}}</b>."
+    }
+   ]
+  },
+  {
+   "id": "instagram-segue-perfil",
+   "cat": "fluxos",
+   "titulo": "Só entregar para quem segue o perfil",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Use a Condição \"Segue o perfil\" para pedir que a pessoa siga antes de receber o link.",
+   "passos": [
+    {
+     "t": "Adicione uma Condição",
+     "d": "Depois da resposta da pessoa, adicione o bloco <b>Condição</b>.",
+     "img": [
+      "bloco-condicao.webp"
+     ]
+    },
+    {
+     "t": "Regra Segue o perfil",
+     "d": "Em <b>+ Regra</b>, escolha <b>Segue o perfil</b> e <b>segue</b>."
+    },
+    {
+     "t": "Os dois caminhos",
+     "d": "Na saída <b>Sim</b>, mande o link. Na <b>Não</b>, peça para seguir e use Aguardar resposta para conferir de novo."
+    }
+   ]
+  },
+  {
+   "id": "escolher-conexao-fluxo",
+   "cat": "fluxos",
+   "titulo": "Escolher a conexão (número) de um fluxo",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Com vários números, Instagrams ou Páginas, defina em quais o fluxo vale e por onde ele fala.",
+   "passos": [
+    {
+     "t": "Abra o Gatilho",
+     "d": "No fluxo, clique no bloco <b>Gatilho</b>.",
+     "img": [
+      "editor-gatilho.webp"
+     ]
+    },
+    {
+     "t": "Em quais conexões",
+     "d": "Em <b>Em quais conexões</b>, deixe <b>Todas</b> ou marque só os números/contas que esse fluxo atende.",
+     "img": [
+      "gatilho-canal.webp"
+     ]
+    },
+    {
+     "t": "Checkout",
+     "d": "Em fluxos de checkout, marque <b>Por qual número o fluxo envia</b>.",
+     "img": [
+      "gatilho-conexao.webp"
+     ]
+    },
+    {
+     "t": "Publique",
+     "d": "Publique o fluxo. A resposta sai sempre pela mesma conexão em que a conversa começou.",
+     "img": [
+      "editor-publicar.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "Esta opção só aparece quando a conta tem mais de uma conexão daquele tipo."
+   ]
+  },
+  {
+   "id": "blocos-mensagem",
+   "cat": "fluxos",
+   "titulo": "Blocos de mensagem: Texto, Mídia, Botões, Modelo e E-mail",
+   "tempo": "6 min",
+   "video": "",
+   "resumo": "O que cada bloco de mensagem faz e quando usar.",
+   "passos": [
+    {
+     "t": "Texto",
+     "d": "Mensagem com variáveis ({{nome}}, {{produto}}...), emojis, prévia de link, responder ou reagir à última mensagem do lead.",
+     "img": [
+      "editor-blocos.webp",
+      "bloco-texto.webp"
+     ]
+    },
+    {
+     "t": "Mídia",
+     "d": "Imagem, vídeo, áudio (como gravação de voz) ou arquivo: envie do computador ou cole um link. Imagem pode ser de visualização única.",
+     "img": [
+      "bloco-imagem.webp",
+      "bloco-audio.webp"
+     ]
+    },
+    {
+     "t": "Botões / lista",
+     "d": "Pergunta com opções. Cada opção vira uma saída do bloco. O fluxo espera a resposta.",
+     "img": [
+      "bloco-botoes.webp"
+     ]
+    },
+    {
+     "t": "Modelo do WhatsApp",
+     "d": "Mensagem aprovada pela Meta (API Oficial). É a única que pode iniciar conversa com a janela de 24 h fechada.",
+     "img": [
+      "bloco-modelo.webp"
+     ]
+    },
+    {
+     "t": "E-mail",
+     "d": "E-mail com a sua marca e link de descadastro. Lead sem e-mail segue o fluxo sem receber.",
+     "img": [
+      "bloco-email.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "blocos-controle",
+   "cat": "fluxos",
+   "titulo": "Blocos de controle: Esperar, Aguardar resposta, Condição e mais",
+   "tempo": "7 min",
+   "video": "",
+   "resumo": "Controle o tempo e o caminho de cada lead no fluxo.",
+   "passos": [
+    {
+     "t": "Esperar",
+     "d": "Pausa fixa ou aleatória (ex.: 2 a 5 minutos), com \"digitando...\" para parecer natural.",
+     "img": [
+      "bloco-esperar.webp"
+     ]
+    },
+    {
+     "t": "Aguardar resposta",
+     "d": "Espera o lead responder e guarda o texto numa variável. Tem saída para quando ele não responde no tempo.",
+     "img": [
+      "bloco-aguardar.webp"
+     ]
+    },
+    {
+     "t": "Condição",
+     "d": "Divide o caminho por etiqueta, variável, compra, janela de 24 h, dia, horário, país ou se segue o Instagram. Combine regras com E / OU.",
+     "img": [
+      "bloco-condicao.webp"
+     ]
+    },
+    {
+     "t": "Teste A/B",
+     "d": "Divide os leads entre caminhos por porcentagem para ver qual mensagem vende mais.",
+     "img": [
+      "bloco-ab.webp"
+     ]
+    },
+    {
+     "t": "Contador",
+     "d": "Marca um ponto do funil para contar quantos leads chegam até ali."
+    },
+    {
+     "t": "Horário comercial",
+     "d": "Espera o próximo horário de atendimento (no fuso da empresa) ou uma data e hora.",
+     "img": [
+      "bloco-horario.webp"
+     ]
+    },
+    {
+     "t": "Conectar fluxo",
+     "d": "O lead sai deste fluxo e começa outro do início.",
+     "img": [
+      "bloco-conectar-fluxo.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "blocos-acoes",
+   "cat": "fluxos",
+   "titulo": "Blocos de ação: Etiquetas, Variável, Webhook, Alerta e Ligação",
+   "tempo": "5 min",
+   "video": "",
+   "resumo": "Organize os leads e converse com outros sistemas durante o fluxo.",
+   "passos": [
+    {
+     "t": "Etiquetas",
+     "d": "Adiciona ou remove etiquetas do lead (ex.: interessado, comprou).",
+     "img": [
+      "bloco-etiquetas.webp"
+     ]
+    },
+    {
+     "t": "Definir variável",
+     "d": "Grava um texto ou faz uma conta numa variável para usar nas mensagens.",
+     "img": [
+      "bloco-variavel.webp"
+     ]
+    },
+    {
+     "t": "Webhook",
+     "d": "Manda os dados do lead para outro sistema (CRM, planilha, Make, Zapier) e guarda a resposta.",
+     "img": [
+      "bloco-webhook.webp"
+     ]
+    },
+    {
+     "t": "Alerta (Telegram)",
+     "d": "Avisa a equipe no Telegram: venda feita, erro de pagamento, lead pedindo humano.",
+     "img": [
+      "bloco-alerta.webp"
+     ]
+    },
+    {
+     "t": "Ligação",
+     "d": "Liga no WhatsApp do lead: só tocar para chamar atenção, ou um agente de voz que conversa e escolhe a saída.",
+     "img": [
+      "bloco-ligacao.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "variaveis",
+   "cat": "fluxos",
+   "titulo": "Variáveis: personalize cada mensagem",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Use o nome, o produto, o link de pagamento e muito mais dentro das mensagens.",
+   "passos": [
+    {
+     "t": "Inserir uma variável",
+     "d": "No campo de texto, clique em <b>{ }</b> e escolha a variável. Ela aparece entre chaves, como <b>{{primeiro_nome}}</b>.",
+     "img": [
+      "bloco-texto.webp"
+     ]
+    },
+    {
+     "t": "Do lead",
+     "d": "{{nome}}, {{primeiro_nome}}, {{telefone}}, {{email}}, {{produto}}, {{valor}}."
+    },
+    {
+     "t": "Do checkout e da cobrança",
+     "d": "{{cta_link}} (link de pagamento), {{pagamento_codigo}} (Pix copia e cola), {{pagamento_qr}}, {{pagamento_link}}."
+    },
+    {
+     "t": "Saudação por país",
+     "d": "{{saudacao_personalizada}} vira Bom dia, Boa tarde ou Boa noite no horário do lead."
+    },
+    {
+     "t": "Do anúncio",
+     "d": "{{ad_title}}, {{source_id}} e {{ctwa_clid}} quando o lead veio de um anúncio de clique para WhatsApp."
+    },
+    {
+     "t": "Suas variáveis",
+     "d": "O que o lead responde em Aguardar resposta fica na variável que você nomear (ex.: {{resposta1}}).",
+     "img": [
+      "bloco-variavel.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "conferir-simulador",
+   "cat": "fluxos",
+   "titulo": "Testar o fluxo antes de publicar (Conferir)",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Simule a conversa no visual do WhatsApp sem mandar nada de verdade.",
+   "passos": [
+    {
+     "t": "Abra o simulador",
+     "d": "No editor, clique em <b>Conferir</b>.",
+     "img": [
+      "editor-conferir.webp"
+     ]
+    },
+    {
+     "t": "Converse",
+     "d": "Responda como se fosse o cliente. O bloco atual fica destacado no editor.",
+     "img": [
+      "conferir-painel.webp"
+     ]
+    },
+    {
+     "t": "Escolhas",
+     "d": "IA, pagamento e ligação viram botões de escolha na tela, para você testar cada caminho."
+    }
+   ]
+  },
+  {
+   "id": "bloco-cobranca",
+   "cat": "vendas",
+   "titulo": "Cobrar no chat: bloco Cobrança (Pix e outros)",
+   "tempo": "5 min",
+   "video": "",
+   "resumo": "Gere um Pix (ou SPEI, OXXO, Nequi...) no seu gateway e siga o fluxo quando o cliente pagar.",
+   "antes": [
+    "Um gateway conectado em <b>Integrações &gt; Gateways de pagamento</b>."
+   ],
+   "passos": [
+    {
+     "t": "Adicione o bloco",
+     "d": "No fluxo, arraste <b>Cobrança</b> (grupo Dinheiro).",
+     "img": [
+      "bloco-cobranca.webp"
+     ]
+    },
+    {
+     "t": "Valor e produto",
+     "d": "Escolha o gateway, o valor (fixo ou de uma variável) e a descrição."
+    },
+    {
+     "t": "Mande o código",
+     "d": "Depois do bloco, use um Texto com <b>{{pagamento_codigo}}</b> (copia e cola) ou <b>{{pagamento_link}}</b>."
+    },
+    {
+     "t": "Pago",
+     "d": "Se o cliente pagar em até 48 h, o fluxo pula sozinho para a saída <b>Pago</b>: entregue o produto e use <b>Registrar venda</b>.",
+     "img": [
+      "bloco-venda.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "conectar-gateway",
+   "cat": "vendas",
+   "titulo": "Conectar o checkout ou gateway de pagamento",
+   "tempo": "5 min",
+   "video": "",
+   "resumo": "Hotmart, Kiwify, Cakto, Kirvano, PerfectPay, Payt, Mercado Pago e outros: cada um com a sua página de conexão.",
+   "passos": [
+    {
+     "t": "Abra os gateways",
+     "d": "Em <b>Integrações &gt; Gateways de pagamento</b>, escolha a sua plataforma.",
+     "img": [
+      "int-gateways.webp"
+     ]
+    },
+    {
+     "t": "Siga a página dela",
+     "d": "Cada plataforma tem o passo a passo na tela: cole a chave/token ou a URL de postback que a Kobly mostra."
+    },
+    {
+     "t": "Teste",
+     "d": "Faça um evento de teste na plataforma e veja ele chegar na Kobly."
+    }
+   ]
+  },
+  {
+   "id": "postback",
+   "cat": "vendas",
+   "titulo": "Postback (webhook) do checkout",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Use a URL de postback para receber eventos de qualquer plataforma.",
+   "passos": [
+    {
+     "t": "Crie um webhook",
+     "d": "Em <b>Integrações &gt; Postback</b>, crie um webhook com um nome (ex.: Produto A).",
+     "img": [
+      "int-postback.webp"
+     ]
+    },
+    {
+     "t": "Copie a URL",
+     "d": "Copie a URL e cole no campo de postback/webhook da sua plataforma."
+    },
+    {
+     "t": "Dispare um teste",
+     "d": "Envie um evento de teste. Ele aparece na <b>sessão de teste ao vivo</b>."
+    },
+    {
+     "t": "Segurança",
+     "d": "Ative o modo estrito para aceitar só eventos assinados pela plataforma."
+    }
+   ]
+  },
+  {
+   "id": "fluxo-recuperacao-pix",
+   "cat": "vendas",
+   "titulo": "Fluxo pronto: recuperar Pix e carrinho abandonado",
+   "tempo": "6 min",
+   "video": "",
+   "resumo": "Um modelo de fluxo que lembra o cliente do Pix e do carrinho e para quando ele paga.",
+   "passos": [
+    {
+     "t": "Gatilho de checkout",
+     "d": "Crie um fluxo com Gatilho <b>Checkout</b> nos eventos Pix Gerado e Abandono de carrinho.",
+     "img": [
+      "gatilho-checkout.webp"
+     ]
+    },
+    {
+     "t": "1ª mensagem rápida",
+     "d": "Esperar 5 minutos e mandar: <i>Oi {{primeiro_nome}}, seu Pix de {{valor}} está pronto: {{cta_link}}</i>.",
+     "img": [
+      "editor-exemplo.webp"
+     ]
+    },
+    {
+     "t": "Lembretes",
+     "d": "Esperar 1 hora e mandar outro lembrete; depois 1 dia com um bônus ou prova social.",
+     "img": [
+      "bloco-esperar.webp"
+     ]
+    },
+    {
+     "t": "Encerrar quando comprar",
+     "d": "Deixe ligado <b>Encerrar se o lead comprar</b> no Gatilho."
+    },
+    {
+     "t": "Use modelos se for Oficial",
+     "d": "Na API Oficial, use <b>Modelo do WhatsApp</b> quando a janela de 24 h estiver fechada.",
+     "img": [
+      "bloco-modelo.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "dashboard-vendas",
+   "cat": "vendas",
+   "titulo": "Entender o Dashboard e a tela de Vendas",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Saiba o que cada número significa e quanto os fluxos estão recuperando.",
+   "passos": [
+    {
+     "t": "Período",
+     "d": "Escolha 7, 30 ou 90 dias no topo.",
+     "img": [
+      "tour-periodo.webp"
+     ]
+    },
+    {
+     "t": "Cartões",
+     "d": "Leads que chegaram, mensagens enviadas, respostas, vendas aprovadas e o valor recuperado pelos fluxos."
+    },
+    {
+     "t": "Vendas",
+     "d": "Na tela Vendas, veja cada venda com a origem (UTM, anúncio) e o fluxo que recuperou.",
+     "img": [
+      "vendas.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "produtos",
+   "cat": "vendas",
+   "titulo": "Cadastrar produtos",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Cadastre os produtos para juntar nomes diferentes do checkout e usar nos fluxos.",
+   "passos": [
+    {
+     "t": "Abra Produtos",
+     "d": "Em <b>Integrações &gt; Produtos</b>, clique em novo produto.",
+     "img": [
+      "int-produtos.webp"
+     ]
+    },
+    {
+     "t": "Nomes e IDs",
+     "d": "Adicione outros nomes ou IDs com que o checkout manda este produto (ex.: o ID da Hotmart)."
+    },
+    {
+     "t": "Use nos fluxos",
+     "d": "Filtre fluxos e relatórios pelo produto."
+    }
+   ]
+  },
+  {
+   "id": "chat-ao-vivo",
+   "cat": "chat",
+   "titulo": "Usar o Chat ao vivo",
+   "tempo": "5 min",
+   "video": "",
+   "resumo": "Responda WhatsApp, Instagram e Messenger num lugar só, assuma conversas e organize com etiquetas.",
+   "passos": [
+    {
+     "t": "Abra o Chat",
+     "d": "No menu, clique em <b>Chats ao vivo</b>. A lista mostra a última mensagem de cada contato.",
+     "img": [
+      "chat-conversa.webp"
+     ]
+    },
+    {
+     "t": "Responda",
+     "d": "Clique na conversa, escreva e envie. Dá para mandar imagem, áudio, arquivo e respostas rápidas (digite /).",
+     "img": [
+      "chat-responder.webp"
+     ]
+    },
+    {
+     "t": "Assumir a conversa",
+     "d": "Clique na <b>mão</b> para assumir: a automação pausa para esse contato até você devolver.",
+     "img": [
+      "chat-acoes.webp"
+     ]
+    },
+    {
+     "t": "Iniciar um fluxo",
+     "d": "Clique no <b>play</b> para colocar o contato num fluxo."
+    },
+    {
+     "t": "Detalhes do contato",
+     "d": "Etiquetas, notas, histórico de compra e automação ficam no painel da direita."
+    },
+    {
+     "t": "Arquivar e limpar",
+     "d": "Arquivar tira da lista até ele mandar mensagem de novo. Limpar esconde as mensagens antigas só na Kobly."
+    }
+   ],
+   "dicas": [
+    "Na API Oficial, só dá para responder livremente até 24 h depois da última mensagem do cliente."
+   ]
+  },
+  {
+   "id": "chat-filtros",
+   "cat": "chat",
+   "titulo": "Separar o Chat por rede e por conexão",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Veja só o WhatsApp, só o Instagram, só o Messenger ou só um chip específico.",
+   "passos": [
+    {
+     "t": "Abas de rede",
+     "d": "No topo da lista, toque em <b>Todas</b>, <b>WhatsApp</b>, <b>Instagram</b> ou <b>Messenger</b>.",
+     "img": [
+      "chat-redes.webp"
+     ]
+    },
+    {
+     "t": "Escolha a conexão",
+     "d": "Com mais de uma conexão, use o seletor <b>Todas as conexões</b> para ver só um número, conta ou Página.",
+     "img": [
+      "chat-conexao.webp"
+     ]
+    },
+    {
+     "t": "Etiqueta da conexão",
+     "d": "Cada conversa mostra embaixo do nome por qual conexão ela chegou."
+    },
+    {
+     "t": "Filtros de atendimento",
+     "d": "Combine com Não respondidas, Em fluxo, Com humano e Arquivadas.",
+     "img": [
+      "chat-status.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "pipeline",
+   "cat": "chat",
+   "titulo": "Pipeline e Leads",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Acompanhe cada contato no funil e encontre qualquer lead em segundos.",
+   "passos": [
+    {
+     "t": "Pipeline",
+     "d": "Os leads ficam em colunas por etapa (novo, respondeu, em fluxo, comprou). Clique num lead para ver o histórico.",
+     "img": [
+      "pipeline.webp"
+     ]
+    },
+    {
+     "t": "Leads",
+     "d": "Lista completa com busca por nome, telefone e e-mail, filtros por etiqueta, conexão e período.",
+     "img": [
+      "leads-etapas.webp"
+     ]
+    },
+    {
+     "t": "Exportar",
+     "d": "Clique em <b>Planilha</b> para baixar a lista filtrada (CSV).",
+     "img": [
+      "leads-planilha.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "etiquetas",
+   "cat": "chat",
+   "titulo": "Etiquetas (tags)",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Marque os leads para filtrar, segmentar disparos e decidir caminhos nos fluxos.",
+   "passos": [
+    {
+     "t": "Crie",
+     "d": "Em <b>Integrações &gt; Tags</b> ou direto no chat ou no bloco do fluxo.",
+     "img": [
+      "int-tags.webp"
+     ]
+    },
+    {
+     "t": "Aplique",
+     "d": "No chat (painel do contato) ou com o bloco <b>Etiquetas</b> no fluxo.",
+     "img": [
+      "bloco-etiquetas.webp"
+     ]
+    },
+    {
+     "t": "Use",
+     "d": "Filtre Leads e Disparos pela etiqueta e use na <b>Condição</b>.",
+     "img": [
+      "chat-acoes.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "respostas-rapidas",
+   "cat": "chat",
+   "titulo": "Respostas rápidas",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Salve as respostas que você mais usa e mande com dois toques.",
+   "passos": [
+    {
+     "t": "Cadastre",
+     "d": "Em <b>Configurações</b>, adicione as respostas rápidas com um atalho.",
+     "img": [
+      "config-respostas.webp"
+     ]
+    },
+    {
+     "t": "Use no chat",
+     "d": "Na caixa de mensagem, digite <b>/</b> e escolha a resposta.",
+     "img": [
+      "chat-responder.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "disparo-massa",
+   "cat": "disparos",
+   "titulo": "Como fazer um disparo em massa",
+   "tempo": "6 min",
+   "video": "",
+   "resumo": "Mande uma campanha para uma lista de contatos agora, numa data ou todo dia.",
+   "antes": [
+    "WhatsApp conectado.",
+    "Contatos que aceitaram receber suas mensagens."
+   ],
+   "passos": [
+    {
+     "t": "Novo disparo",
+     "d": "No menu, clique em <b>Disparo em massa</b> e em <b>Novo disparo</b>.",
+     "img": [
+      "disparo-menu.webp"
+     ]
+    },
+    {
+     "t": "Público",
+     "d": "Escolha os contatos por filtro (etiqueta, produto, período) ou envie uma lista.",
+     "img": [
+      "disparo-publico.webp"
+     ]
+    },
+    {
+     "t": "Mensagem ou fluxo",
+     "d": "Escreva a mensagem ou escolha um fluxo para cada contato.",
+     "img": [
+      "disparo-tipo.webp"
+     ]
+    },
+    {
+     "t": "Quando",
+     "d": "Agora, uma vez (dia e hora) ou todo dia num período, no fuso de São Paulo.",
+     "img": [
+      "disparo-ritmo.webp"
+     ]
+    },
+    {
+     "t": "Acompanhe",
+     "d": "Veja enviados, falhas e respostas em <b>Disparos</b>. Dá para pausar, retomar e cancelar.",
+     "img": [
+      "disparo-enviar.webp"
+     ]
+    }
+   ],
+   "dicas": [
+    "Na API Oficial, disparos precisam de modelo aprovado.",
+    "No QR Code, mande aos poucos e com intervalo para evitar bloqueio."
+   ]
+  },
+  {
+   "id": "modelos-whatsapp",
+   "cat": "conexoes",
+   "titulo": "Criar modelos de mensagem (API Oficial)",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Crie os modelos que a Meta aprova para iniciar conversas e fazer disparos.",
+   "passos": [
+    {
+     "t": "Abra o número",
+     "d": "Em <b>Integrações &gt; Conexões</b>, clique em <b>Gerenciar</b> no número da API Oficial.",
+     "img": [
+      "oficial-gerenciar.webp"
+     ]
+    },
+    {
+     "t": "Novo modelo",
+     "d": "Clique em <b>Novo modelo</b>: nome (minúsculas e _), categoria, texto com {{1}}, {{2}} e exemplos.",
+     "img": [
+      "oficial-painel.webp"
+     ]
+    },
+    {
+     "t": "Categoria certa",
+     "d": "<b>Utilidade</b> para avisos de pedido (aprova mais rápido). <b>Marketing</b> para promoções e recuperação."
+    },
+    {
+     "t": "Envie e sincronize",
+     "d": "Clique em <b>Enviar para análise</b>. Depois, <b>Sincronizar com a Meta</b> atualiza o status (Em análise, Aprovado, Recusado)."
+    },
+    {
+     "t": "Teste",
+     "d": "Com o modelo aprovado, use <b>Enviar teste</b> para o seu número."
+    }
+   ]
+  },
+  {
+   "id": "janela-24h",
+   "cat": "conexoes",
+   "titulo": "O que é a janela de 24 horas",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "A regra da Meta que decide quando dá para mandar mensagem livre no WhatsApp Oficial, Instagram e Messenger.",
+   "passos": [
+    {
+     "t": "A regra",
+     "d": "Depois que o cliente manda uma mensagem, você tem 24 horas para responder com mensagens livres."
+    },
+    {
+     "t": "Janela fechada",
+     "d": "Passou das 24 h? No WhatsApp Oficial, só com <b>Modelo do WhatsApp</b> aprovado. No Instagram e Messenger, espere a pessoa escrever de novo."
+    },
+    {
+     "t": "QR Code",
+     "d": "O WhatsApp por QR Code não tem essa regra, mas mande com moderação."
+    }
+   ]
+  },
+  {
+   "id": "conectar-meta-ads",
+   "cat": "anuncios",
+   "titulo": "Conectar o Facebook Ads (Meta Ads)",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Veja gasto, cliques e resultados ao lado das vendas e ligue, pause ou mude o orçamento pela Kobly.",
+   "passos": [
+    {
+     "t": "Abra Anúncios",
+     "d": "No menu, clique em <b>Anúncios</b> e na aba <b>Facebook Ads</b>."
+    },
+    {
+     "t": "Conectar",
+     "d": "Clique em <b>Conectar com Facebook</b>, entre e permita o acesso.",
+     "img": [
+      "anuncios-meta.webp"
+     ]
+    },
+    {
+     "t": "Escolha as contas",
+     "d": "Marque as contas de anúncios que a Kobly vai acompanhar."
+    },
+    {
+     "t": "Acompanhe",
+     "d": "Veja Contas, Campanhas, Conjuntos e Anúncios. Use o botão para pausar/ativar e o lápis para o orçamento."
+    }
+   ]
+  },
+  {
+   "id": "conectar-google-ads",
+   "cat": "anuncios",
+   "titulo": "Conectar o Google Ads",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Relatórios do Google Ads com as vendas rastreadas.",
+   "passos": [
+    {
+     "t": "Abra Anúncios",
+     "d": "Em <b>Anúncios</b>, aba <b>Google Ads</b>, clique em conectar."
+    },
+    {
+     "t": "Entre com o Google",
+     "d": "Use a conta que acessa o Google Ads e permita o acesso.",
+     "img": [
+      "anuncios-google.webp"
+     ]
+    },
+    {
+     "t": "Escolha as contas",
+     "d": "Marque as contas (inclusive dentro de uma conta de administrador/MCC)."
+    },
+    {
+     "t": "Modelo de acompanhamento",
+     "d": "Cole no Google Ads o modelo de URL que a Kobly mostra, para cada venda saber de qual campanha veio."
+    }
+   ]
+  },
+  {
+   "id": "utm-rastreamento",
+   "cat": "anuncios",
+   "titulo": "Rastrear de onde vem cada venda (UTM)",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Saiba qual campanha, conjunto e anúncio trouxe cada venda.",
+   "passos": [
+    {
+     "t": "Trackeamento",
+     "d": "Em <b>Integrações &gt; Trackeamento</b>, copie os parâmetros de URL.",
+     "img": [
+      "int-trackeamento.webp"
+     ]
+    },
+    {
+     "t": "No anúncio",
+     "d": "No Meta Ads, cole em <b>Parâmetros de URL</b> do anúncio."
+    },
+    {
+     "t": "Veja nas vendas",
+     "d": "Na tela Vendas, cada venda mostra a campanha, o conjunto e o anúncio de origem."
+    }
+   ]
+  },
+  {
+   "id": "pixel-meta",
+   "cat": "anuncios",
+   "titulo": "Pixel da Meta e API de Conversões",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Mande Lead e Purchase para a Meta direto do fluxo, para os anúncios otimizarem melhor.",
+   "passos": [
+    {
+     "t": "Cadastre o Pixel",
+     "d": "Em <b>Integrações &gt; Trackeamento</b>, adicione o Pixel (Meta, TikTok ou Google) com o ID e o token da API de Conversões.",
+     "img": [
+      "int-trackeamento.webp"
+     ]
+    },
+    {
+     "t": "Teste",
+     "d": "Use <b>Enviar evento de teste</b> e veja no Gerenciador de Eventos da Meta."
+    },
+    {
+     "t": "No fluxo",
+     "d": "Adicione o bloco <b>Pixel da Meta</b> e escolha o evento (Lead ou Purchase).",
+     "img": [
+      "bloco-pixel.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chave-ia",
+   "cat": "ia",
+   "titulo": "Cadastrar sua chave de IA",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Use a sua conta da OpenAI, Claude (Anthropic), Google Gemini, DeepSeek ou OpenRouter nos blocos de IA.",
+   "passos": [
+    {
+     "t": "Abra IA (sua chave)",
+     "d": "Em <b>Integrações &gt; IA (sua chave)</b>, escolha o provedor.",
+     "img": [
+      "int-ia-chave.webp"
+     ]
+    },
+    {
+     "t": "Cole a chave",
+     "d": "Crie a chave no site do provedor e cole aqui. Ela fica guardada criptografada."
+    },
+    {
+     "t": "Teste",
+     "d": "Clique em testar. O custo da IA é cobrado pelo provedor na sua conta."
+    }
+   ]
+  },
+  {
+   "id": "bloco-ia-entender",
+   "cat": "ia",
+   "titulo": "IA: entender resposta e extrair dados",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Deixe a IA entender o que o cliente quis dizer e tirar informações da resposta.",
+   "passos": [
+    {
+     "t": "Entender resposta",
+     "d": "Depois de um Aguardar resposta, use <b>IA: entender resposta</b> e escreva as opções (ex.: quer comprar, tem dúvida, não quer). Cada opção vira uma saída.",
+     "img": [
+      "bloco-ia-entender.webp"
+     ]
+    },
+    {
+     "t": "Extrair dados",
+     "d": "Use <b>IA: extrair dados</b> para tirar cidade, plano, e-mail... e salvar em variáveis.",
+     "img": [
+      "bloco-ia-extrair.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agente-ia",
+   "cat": "ia",
+   "titulo": "Agente de IA que conversa e vende",
+   "tempo": "6 min",
+   "video": "",
+   "resumo": "Um agente que conversa em vários turnos até concluir o objetivo, pedir um humano ou o lead sumir.",
+   "passos": [
+    {
+     "t": "Crie o agente",
+     "d": "Em <b>Configurações &gt; Agentes de IA</b>, descreva quem ele é, o que vende, o tom e as regras.",
+     "img": [
+      "config-agentes.webp"
+     ]
+    },
+    {
+     "t": "Adicione no fluxo",
+     "d": "Arraste o bloco <b>Agente de IA</b> e escolha o agente.",
+     "img": [
+      "bloco-agente-ia.webp"
+     ]
+    },
+    {
+     "t": "Saídas",
+     "d": "Ligue as saídas: objetivo concluído, pediu humano, sem resposta."
+    },
+    {
+     "t": "Teste",
+     "d": "Use o <b>Conferir</b> e converse com ele antes de publicar."
+    }
+   ],
+   "dicas": [
+    "Dê exemplos de perguntas e respostas: o agente fica muito mais preciso."
+   ]
+  },
+  {
+   "id": "voz-elevenlabs",
+   "cat": "ia",
+   "titulo": "Áudios com voz realista (ElevenLabs)",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Mande áudios gerados com a sua voz ou uma voz realista.",
+   "passos": [
+    {
+     "t": "Conecte",
+     "d": "Em <b>Integrações &gt; Voz (ElevenLabs)</b>, cole a sua chave.",
+     "img": [
+      "int-voz.webp"
+     ]
+    },
+    {
+     "t": "Escolha a voz",
+     "d": "Escolha uma voz da sua conta ElevenLabs."
+    },
+    {
+     "t": "Use no fluxo",
+     "d": "No bloco de mídia (áudio), escreva o texto e gere o áudio.",
+     "img": [
+      "bloco-audio.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agente-voz-ligacao",
+   "cat": "ia",
+   "titulo": "Agente de voz e bloco Ligação",
+   "tempo": "6 min",
+   "video": "",
+   "resumo": "Um agente de voz liga para o lead, conversa e decide o próximo passo do fluxo.",
+   "passos": [
+    {
+     "t": "Crie o agente",
+     "d": "Em <b>Integrações &gt; Agentes de voz</b>, escolha ElevenLabs ou OpenAI, a voz, as instruções e a primeira frase.",
+     "img": [
+      "int-agentes-voz.webp"
+     ]
+    },
+    {
+     "t": "Bloco Ligação",
+     "d": "No fluxo, adicione <b>Ligação</b>: só tocar, ou o agente de voz.",
+     "img": [
+      "bloco-ligacao.webp"
+     ]
+    },
+    {
+     "t": "Saídas",
+     "d": "O fluxo segue pela saída que o agente escolher ou por Atendeu / Não atendeu / Recusou."
+    },
+    {
+     "t": "Resultado",
+     "d": "Resumo, duração e transcrição ficam nas variáveis ligacao_resumo, ligacao_duracao e ligacao_transcricao."
+    }
+   ]
+  },
+  {
+   "id": "planos-cobranca",
+   "cat": "conta",
+   "titulo": "Planos, conexões e cobrança",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Como funciona o plano, quantas conexões você tem e como pagar.",
+   "passos": [
+    {
+     "t": "Ver o plano",
+     "d": "Em <b>Planos &amp; cobrança</b>, veja o plano atual, as conexões e a próxima cobrança.",
+     "img": [
+      "planos.webp"
+     ]
+    },
+    {
+     "t": "Mudar",
+     "d": "Escolha outro plano ou mais conexões. Aumentos valem na hora; reduções, na próxima renovação."
+    },
+    {
+     "t": "Pagamento",
+     "d": "Pix ou cartão. A assinatura renova sozinha até você cancelar."
+    }
+   ]
+  },
+  {
+   "id": "afiliados",
+   "cat": "conta",
+   "titulo": "Programa de afiliados",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Indique a Kobly e ganhe comissão.",
+   "passos": [
+    {
+     "t": "Seu link",
+     "d": "Em <b>Afiliados</b>, copie o seu link de indicação.",
+     "img": [
+      "afiliados.webp"
+     ]
+    },
+    {
+     "t": "Acompanhe",
+     "d": "Veja indicados, assinaturas ativas e comissões."
+    }
+   ]
+  },
+  {
+   "id": "equipe-permissoes",
+   "cat": "conta",
+   "titulo": "Equipe e permissões",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Convide sua equipe e defina o que cada pessoa pode ver e fazer.",
+   "passos": [
+    {
+     "t": "Convide",
+     "d": "Em <b>Configurações</b>, no cartão <b>Equipe</b>, convide pelo e-mail.",
+     "img": [
+      "config-equipe.webp"
+     ]
+    },
+    {
+     "t": "Papel",
+     "d": "Escolha o papel: dono, administrador ou atendente (atendente vê só Chat, Leads e Pipeline)."
+    },
+    {
+     "t": "Remova",
+     "d": "Remova o acesso de quem saiu da equipe quando quiser."
+    }
+   ]
+  },
+  {
+   "id": "seguranca-dados",
+   "cat": "conta",
+   "titulo": "Segurança, privacidade e exclusão de dados",
+   "tempo": "2 min",
+   "video": "",
+   "resumo": "Como a Kobly protege seus dados e como apagar tudo.",
+   "passos": [
+    {
+     "t": "Proteção",
+     "d": "Tokens e chaves ficam criptografados; cada empresa só vê os próprios dados."
+    },
+    {
+     "t": "Desconectar",
+     "d": "Desconecte qualquer integração em Conexões ou Anúncios: o token é apagado na hora."
+    },
+    {
+     "t": "Apagar a conta",
+     "d": "Veja a página <a href=\"/exclusao-de-dados\">Exclusão de dados</a>."
+    }
+   ]
+  },
+  {
+   "id": "api-publica",
+   "cat": "dev",
+   "titulo": "API pública: disparar fluxos de outro sistema",
+   "tempo": "4 min",
+   "video": "",
+   "resumo": "Coloque um contato num fluxo a partir do seu CRM, checkout ou sistema.",
+   "passos": [
+    {
+     "t": "Crie a chave",
+     "d": "Em <b>Integrações &gt; API pública</b>, crie uma chave e guarde (ela aparece só uma vez).",
+     "img": [
+      "int-api-publica.webp"
+     ]
+    },
+    {
+     "t": "Liste os fluxos",
+     "d": "Chame <b>GET /flows</b> para pegar o id do fluxo."
+    },
+    {
+     "t": "Dispare",
+     "d": "Chame <b>POST /flows/{id}/trigger</b> com o telefone e as variáveis. Veja a <a href=\"/developers\">documentação completa</a>."
+    }
+   ]
+  },
+  {
+   "id": "mcp",
+   "cat": "dev",
+   "titulo": "Acesso de IA (MCP): monte fluxos conversando com a IA",
+   "tempo": "3 min",
+   "video": "",
+   "resumo": "Conecte o Claude ou outra IA à sua Kobly para criar e editar fluxos por conversa.",
+   "passos": [
+    {
+     "t": "Ative",
+     "d": "Em <b>Integrações &gt; Acesso de IA</b>, gere o acesso.",
+     "img": [
+      "int-acesso-ia.webp"
+     ]
+    },
+    {
+     "t": "Conecte a IA",
+     "d": "Siga a instrução da tela para adicionar a Kobly como conector na sua IA."
+    },
+    {
+     "t": "Peça",
+     "d": "Peça à IA, por exemplo: monte um fluxo de recuperação de Pix com 3 lembretes."
+    }
+   ]
+  }
+ ],
+ "faq": [
+  {
+   "cat": "problemas",
+   "q": "A mensagem do cliente não aparece no Chat ao vivo. E agora?",
+   "a": "Confira em Integrações > Conexões se a conexão está Conectada. No QR Code, abra o WhatsApp do celular: se ele ficou desconectado, leia o QR de novo. Na API Oficial, mande uma mensagem de outro número e aguarde até 15 segundos. Se ainda assim não aparecer, abra um chamado com o número e o horário."
+  },
+  {
+   "cat": "problemas",
+   "q": "Meu WhatsApp do QR Code desconecta sozinho.",
+   "a": "O celular precisa ficar com internet e o WhatsApp não pode ser desconectado em Aparelhos conectados. Evite usar o mesmo número em outro sistema. Se desconectou, leia o QR Code de novo: as conversas continuam."
+  },
+  {
+   "cat": "problemas",
+   "q": "O fluxo não começou quando o cliente mandou mensagem.",
+   "a": "Confira se o fluxo está publicado e ativo, se a palavra-chave bate com o que o cliente escreveu, se o Gatilho está na rede e na conexão certas, e se o cliente não estava em outro fluxo esperando resposta (aí a mensagem vai para aquele fluxo)."
+  },
+  {
+   "cat": "problemas",
+   "q": "Apareceu \"janela de 24 h fechada\".",
+   "a": "Na API Oficial, Instagram e Messenger, só dá para mandar mensagem livre até 24 h depois da última mensagem do cliente. Use um Modelo do WhatsApp aprovado ou espere o cliente escrever."
+  },
+  {
+   "cat": "problemas",
+   "q": "Meu modelo de mensagem foi recusado pela Meta.",
+   "a": "Veja o motivo na lista de modelos. Os mais comuns: variável no começo ou no fim do texto, texto promocional na categoria Utilidade e exemplos faltando. Ajuste e envie um modelo novo."
+  },
+  {
+   "cat": "problemas",
+   "q": "O Instagram não respondeu o comentário.",
+   "a": "Confira se o fluxo de Comentário está publicado, se o post está entre os escolhidos e se a palavra-chave bate. Cada comentário recebe só uma resposta privada, e a Meta não entrega comentários da própria conta da empresa."
+  },
+  {
+   "cat": "problemas",
+   "q": "O evento do checkout não chegou na Kobly.",
+   "a": "Confira a URL de postback colada na plataforma, se o produto e o evento estão marcados lá, e use a sessão de teste ao vivo em Integrações > Postback para ver o evento chegando."
+  },
+  {
+   "cat": "problemas",
+   "q": "A cobrança Pix não confirmou o pagamento.",
+   "a": "Confira se o gateway está conectado e se o webhook dele aponta para a Kobly. A confirmação pode levar alguns minutos dependendo do gateway."
+  },
+  {
+   "cat": "conexoes",
+   "q": "Posso usar o mesmo número no celular e na Kobly?",
+   "a": "No QR Code, sim: a Kobly entra como um aparelho conectado e você continua usando o celular. Na API Oficial, não: o número sai do app do WhatsApp e passa a funcionar só pela Kobly."
+  },
+  {
+   "cat": "conexoes",
+   "q": "Qual a diferença entre QR Code e API Oficial?",
+   "a": "QR Code: conecta qualquer número na hora, sem custo da Meta, mas com risco de bloqueio se usado de forma abusiva. API Oficial: número verificado pela Meta, modelos aprovados, sem risco de bloqueio por automação, com custo por conversa iniciada pela empresa."
+  },
+  {
+   "cat": "conexoes",
+   "q": "Quantos números posso conectar?",
+   "a": "Quantos o seu plano permitir. Cada conexão (número, Instagram ou Página) usa uma vaga. Veja e aumente em Planos & cobrança."
+  },
+  {
+   "cat": "fluxos",
+   "q": "Um contato pode estar em dois fluxos ao mesmo tempo?",
+   "a": "Pode estar em fluxos diferentes, mas não duas vezes no mesmo fluxo. Quando ele responde, a resposta vai para o fluxo que estava esperando resposta."
+  },
+  {
+   "cat": "fluxos",
+   "q": "Como parar a automação para um cliente específico?",
+   "a": "No Chat ao vivo, clique na mão (assumir conversa). A automação pausa só para ele até você devolver."
+  },
+  {
+   "cat": "fluxos",
+   "q": "O cliente respondeu SAIR. O que acontece?",
+   "a": "A Kobly marca o contato como descadastrado e não manda mais WhatsApp para ele pelos fluxos e disparos."
+  },
+  {
+   "cat": "conta",
+   "q": "Posso cancelar quando quiser?",
+   "a": "Sim. O acesso continua até o fim do período já pago."
+  },
+  {
+   "cat": "conta",
+   "q": "Meus dados ficam seguros?",
+   "a": "Sim. Tokens e chaves ficam criptografados e cada empresa só acessa os próprios dados. Veja a Política de Privacidade."
+  }
+ ]
 }

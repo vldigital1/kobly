@@ -54,6 +54,7 @@ export async function mountHelp(root, opts = {}) {
   const cats = Object.fromEntries(data.categorias.map((c) => [c.id, c]));
   const arts = Object.fromEntries(data.artigos.map((a) => [a.id, a]));
   const base = opts.base || '/ajuda/';
+  const ACAD = data.academy === true; // Academy (trilhas) fica guardada até os vídeos existirem: ligar em conteudo.json
   let route = { view: 'home', tab: 'artigos' };
   let q = '';
 
@@ -67,8 +68,8 @@ export async function mountHelp(root, opts = {}) {
     const [kind, id] = h.split('/');
     if (kind === 'artigo' && arts[id]) return { view: 'art', id };
     if (kind === 'categoria' && cats[id]) return { view: 'cat', id };
-    if (kind === 'trilha' && data.trilhas.some((t) => t.id === id)) return { view: 'trail', id };
-    if (kind === 'academy') return { view: 'home', tab: 'academy' };
+    if (ACAD && kind === 'trilha' && data.trilhas.some((t) => t.id === id)) return { view: 'trail', id };
+    if (ACAD && kind === 'academy') return { view: 'home', tab: 'academy' };
     return { view: 'home', tab: 'artigos' };
   };
   const toHash = (r) => (r.view === 'art' ? `#/artigo/${r.id}` : r.view === 'cat' ? `#/categoria/${r.id}` : r.view === 'trail' ? `#/trilha/${r.id}` : r.tab === 'academy' ? '#/academy' : '#/');
@@ -97,10 +98,10 @@ export async function mountHelp(root, opts = {}) {
       <h1>${sub || 'Como podemos <b>ajudar</b>?'}</h1>
       <p>Passo a passo de cada tela, conexões, fluxos e respostas para as dúvidas mais comuns.</p>
       <label class="search">${icon('search')}<input id="kbh-q" type="search" placeholder="Busque: conectar WhatsApp, Pix, Instagram, janela de 24 h…" value="${esc(q)}" autocomplete="off"></label>
-      <div class="tabs" role="tablist">
+      ${ACAD ? `<div class="tabs" role="tablist">
         <button type="button" data-tab="artigos" class="${route.tab !== 'academy' ? 'on' : ''}">${icon('book')}Artigos</button>
         <button type="button" data-tab="academy" class="${route.tab === 'academy' ? 'on' : ''}">${icon('play')}Academy</button>
-      </div>
+      </div>` : ''}
     </section>`;
   }
   function trailCards(list) {
@@ -138,8 +139,8 @@ export async function mountHelp(root, opts = {}) {
     return header()
       + `<div class="sec"><div><h2>Comece por um tema</h2><p>Tudo o que dá para fazer na Kobly, explicado passo a passo.</p></div></div>`
       + `<div class="grid">${data.categorias.map((c) => `<button type="button" class="card" data-cat="${c.id}"><span class="badge">${icon(c.icone)}</span><h3>${esc(c.nome)}</h3><p>${esc(c.desc)}</p><div class="n">${porCat(c.id).length + data.faq.filter((f) => f.cat === c.id).length} conteúdos</div></button>`).join('')}</div>`
-      + `<div class="sec"><div><h2>Trilhas guiadas</h2><p>Siga na ordem e deixe tudo funcionando.</p></div><button type="button" class="link" data-tab="academy">Ver Academy</button></div>`
-      + trailCards(data.trilhas.slice(0, 3))
+      + (ACAD ? `<div class="sec"><div><h2>Trilhas guiadas</h2><p>Siga na ordem e deixe tudo funcionando.</p></div><button type="button" class="link" data-tab="academy">Ver Academy</button></div>`
+      + trailCards(data.trilhas.slice(0, 3)) : '')
       + `<div class="sec"><div><h2>Perguntas frequentes</h2><p>As dúvidas que mais chegam no suporte.</p></div></div>` + faqHtml(data.faq.slice(0, 10));
   }
   function viewCat() {
@@ -157,7 +158,7 @@ export async function mountHelp(root, opts = {}) {
   }
   function viewArt() {
     const a = arts[route.id]; const c = cats[a.cat]; const l = lidos();
-    const trail = data.trilhas.find((t) => t.artigos.includes(a.id) && (route.trail ? t.id === route.trail : true));
+    const trail = ACAD && data.trilhas.find((t) => t.artigos.includes(a.id) && (route.trail ? t.id === route.trail : true));
     const seq = trail ? trail.artigos : porCat(a.cat).map((x) => x.id);
     const i = seq.indexOf(a.id); const prev = arts[seq[i - 1]]; const next = arts[seq[i + 1]];
     const rel = porCat(a.cat).filter((x) => x.id !== a.id).slice(0, 6);
@@ -168,9 +169,9 @@ export async function mountHelp(root, opts = {}) {
       ${videoHtml(a.video)}
       ${a.antes && a.antes.length ? `<div class="box"><h3>${icon('info')} Antes de começar</h3><ul>${a.antes.map((x) => `<li>${x}</li>`).join('')}</ul></div>` : ''}
       <h2 class="steps-h">Passo a passo</h2>
-      ${a.passos.map((p, k) => `<section class="step"><span class="k">${k + 1}</span><h3>${esc(p.t)}</h3><p>${p.d}</p>${shot(p.img, p.t)}</section>`).join('')}
+      ${a.passos.map((p, k) => `<section class="step"><span class="k">${k + 1}</span><h3>${esc(p.t)}</h3><p>${p.d}</p>${[].concat(p.img || []).map((im) => shot(im, p.t)).join('')}</section>`).join('')}
       ${a.dicas && a.dicas.length ? `<div class="box tip"><h3>${icon('bulb')} Dicas</h3><ul>${a.dicas.map((x) => `<li>${x}</li>`).join('')}</ul></div>` : ''}
-      <button type="button" class="done${l.includes(a.id) ? ' on' : ''}" data-done="${a.id}">${icon('check')} ${l.includes(a.id) ? 'Concluído' : 'Marcar como concluído'}</button>
+      ${ACAD ? `<button type="button" class="done${l.includes(a.id) ? ' on' : ''}" data-done="${a.id}">${icon('check')} ${l.includes(a.id) ? 'Concluído' : 'Marcar como concluído'}</button>` : ''}
       <div class="navx">${prev ? `<button type="button" data-art="${prev.id}"><small>Anterior</small><b>${esc(prev.titulo)}</b></button>` : '<span></span>'}${next ? `<button type="button" data-art="${next.id}" style="text-align:right"><small>Próximo</small><b>${esc(next.titulo)}</b></button>` : ''}</div>
     </article>
     <aside class="side">
