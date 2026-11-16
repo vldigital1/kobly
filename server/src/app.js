@@ -179,7 +179,8 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     publicBaseUrl: config.publicBaseUrl || '', siteUrl: config.siteUrl });
   const voice = createVoice({ pool, secretKey: secretKeyBuf, aiKeys, storage, publicBaseUrl: config.publicBaseUrl || '', fetchImpl, base: config.elevenlabsBase });
   const affiliates = createAffiliates({ pool, secretKey: secretKeyBuf, flows, siteUrl: config.siteUrl });
-  const billing = createBilling({ pool, secretKey: secretKeyBuf, fetchImpl, apiKey: config.asaasApiKey, env: config.asaasEnv, webhookToken: config.asaasWebhookToken });
+  const billing = createBilling({ pool, secretKey: secretKeyBuf, fetchImpl, apiKey: config.asaasApiKey, env: config.asaasEnv, webhookToken: config.asaasWebhookToken,
+    pixAuto: config.asaasPixAuto, stripeKey: config.stripeSecretKey, stripePk: config.stripePublishableKey, stripeWebhookSecret: config.stripeWebhookSecret });
   billing.enforce = !!config.billingEnforce;
   const functions = createFunctions({ pool, config, auth, affiliates, billing, mailer, whatsapp, invites, flowAdmin, payments, pixel, notifier, mcpTokens: { handle: mcp.handleTokens }, publicApiKeys: { handle: publicApi.handleKeys }, workspaceSettings, inbox, team, tracking, products, aiKeys, metaAds, googleAds, voice, voiceAgents, metaChannels, platforms, uazapi, bulk, dashboard: createDashboard({ pool }), pipeline: createPipeline({ pool }) });
   // Por IP (escritórios compartilham IP, então o teto é alto); o freio por conta fica em auth.js.
@@ -296,6 +297,11 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
         const r = await billing.receiveWebhook(await readBody(req, 512 * 1024), req.headers['asaas-access-token']);
         return send(res, r.status, { ok: r.status === 200 });
       }
+      // Stripe (cartão): aviso assinado com STRIPE_WEBHOOK_SECRET
+      if (path === '/webhooks/stripe' && req.method === 'POST') {
+        const r = await billing.receiveStripe(await readBody(req, 512 * 1024), req.headers['stripe-signature']);
+        return send(res, r.status, { ok: r.status === 200 });
+      }
       if (path === '/webhooks/meta-messaging') {
         if (req.method === 'GET') { const v = metaChannels.verify(Object.fromEntries(url.searchParams)); res.statusCode = v.status; res.setHeader('Content-Type', 'text/plain'); return res.end(v.body); }
         if (req.method === 'POST') { const r = await metaChannels.receiveWebhook(await readBody(req, 1024 * 1024), req.headers['x-hub-signature-256']); return send(res, r.status, { ok: r.status === 200 }); }
@@ -388,5 +394,5 @@ export function createApp({ pool, config, mailer: mailerIn = null, fetchImpl = g
     }
   });
   const engine = createEngine({ pool, whatsapp });
-  return { server, auth, engine, flows, bulk, voiceAgents };
+  return { server, auth, engine, flows, bulk, voiceAgents, billing };
 }

@@ -12,7 +12,7 @@ try {
   console.error('[kobly-api] o usuário do banco não pode assumir kobly_authenticated:', e.message);
   process.exit(1);
 }
-const { server, engine, flows, bulk, voiceAgents } = createApp({ pool, config });
+const { server, engine, flows, bulk, voiceAgents, billing } = createApp({ pool, config });
 server.listen(config.port, config.host, () => console.log(`[kobly-api] ouvindo em ${config.host}:${config.port}`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => server.close(() => pool.end().then(() => process.exit(0))));
 
@@ -35,6 +35,17 @@ if (process.env.ENGINE_ENABLED !== 'false') {
     try { const b = await bulk.tick(); if (b.sent) console.log('[disparo]', JSON.stringify(b)); }
     catch (e) { console.error('[disparo] tick falhou:', e.message); }
   }, flowEvery).unref();
+
+  // Pix Automático: cria a cobrança de quem renova nos próximos dias (o banco debita no vencimento). A cada 30 min.
+  let billing_running = false;
+  const billingTick = async () => {
+    if (billing_running || !billing) return; billing_running = true;
+    try { const b = await billing.tick(); if (b.created) console.log('[cobrança]', JSON.stringify(b)); }
+    catch (e) { console.error('[cobrança] tick falhou:', e.message); }
+    finally { billing_running = false; }
+  };
+  setTimeout(billingTick, 60000).unref();
+  setInterval(billingTick, 30 * 60000).unref();
 
   // Ligações com agente de voz (ElevenLabs): consulta o resultado das ligações em andamento.
   let polling = false;

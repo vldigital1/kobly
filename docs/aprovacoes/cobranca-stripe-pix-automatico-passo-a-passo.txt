@@ -1,0 +1,86 @@
+KOBLY — COBRANÇA: PIX AUTOMÁTICO (ASAAS) + CARTÃO (STRIPE)
+Passo a passo para ligar. Faça o push do código ANTES de colocar as variáveis.
+
+Como funciona depois de ligado
+- Pix: o cliente lê um QR Code que paga o 1º mês e, no mesmo passo, autoriza o débito automático no app do banco
+  (Pix Automático). Depois a Kobly cria cada cobrança uns 8 dias antes da renovação e o banco debita sozinho.
+  Reduzir plano: a próxima cobrança já sai menor, sem autorizar de novo.
+  Upgrade: um QR Code só paga a diferença e autoriza o valor novo.
+  Se o cliente cancelar a autorização no banco, a renovação seguinte vira um QR que paga e autoriza de novo.
+- Cartão: o cliente digita o cartão no formulário seguro da Stripe, dentro da Kobly. A Stripe cobra a cada ciclo.
+  Upgrade cobra só a diferença no cartão salvo. Redução vale na renovação.
+- Enquanto alguma parte não estiver ligada, a Kobly usa o jeito antigo do Asaas (Pix comum / cartão do Asaas).
+
+
+============================================================
+PARTE 1 — ASAAS (PIX AUTOMÁTICO)
+============================================================
+
+1) Confirmar se a sua conta pode usar o Pix Automático
+   O Asaas só libera para conta de empresa (CNPJ) aprovada, sem pendências, com CNPJ ativo há pelo menos
+   6 meses e sem restrição no Pix. Pergunte no chat do Asaas: "Minha conta está elegível ao Pix Automático
+   pela API (Jornada 3)?". Só siga para o passo 4 (ASAAS_PIX_AUTOMATICO) depois da resposta "sim".
+
+2) Chave de API
+   Asaas → Integrações → Chaves de API → Gerar chave (produção).
+   Marque as permissões de cobranças, clientes, assinaturas e PIX AUTOMÁTICO (leitura e escrita).
+   Guarde a chave: ela aparece uma vez só.
+
+3) Webhook (aviso de pagamento)
+   Asaas → Integrações → Webhooks → Adicionar:
+   - URL: https://api.koblay.io/webhooks/asaas
+   - Token de autenticação: invente uma senha longa (ex.: 40 letras e números) e guarde
+   - Versão da API: v3
+   - Eventos: todos de COBRANÇAS (PAYMENT_...) e todos de PIX AUTOMÁTICO
+     (PIX_AUTOMATIC_RECURRING_AUTHORIZATION_... e PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_...)
+   - Fila de envio: ativa
+
+4) Railway → serviço da API (api.koblay.io) → Variables:
+   ASAAS_API_KEY          = a chave do passo 2
+   ASAAS_ENV              = production
+   ASAAS_WEBHOOK_TOKEN    = o token do passo 3 (igual, letra por letra)
+   ASAAS_PIX_AUTOMATICO   = 1        (só quando o Asaas confirmar o passo 1)
+   Depois: Deploy.
+
+
+============================================================
+PARTE 2 — STRIPE (CARTÃO)
+============================================================
+
+1) Conta
+   Crie em https://dashboard.stripe.com/register com o CNPJ da empresa. Termine o cadastro
+   (dados da empresa e conta bancária para receber). Moeda: BRL.
+
+2) Chaves
+   Stripe → Desenvolvedores → Chaves de API:
+   - Chave publicável (começa com pk_live_)
+   - Chave secreta     (começa com sk_live_)  → clique em "Revelar"
+
+3) Webhook
+   Stripe → Desenvolvedores → Webhooks → Adicionar endpoint:
+   - URL: https://api.koblay.io/webhooks/stripe
+   - Eventos: invoice.paid, invoice.payment_failed, payment_intent.succeeded, customer.subscription.deleted
+   Depois de criar, copie o "Segredo de assinatura" (começa com whsec_).
+
+4) Novas tentativas e recibos (recomendado)
+   Stripe → Configurações → Faturamento → Assinaturas e e-mails:
+   - "Novas tentativas inteligentes" ligado (tenta de novo o cartão recusado)
+   - E-mail de recibo e de cartão recusado para o cliente: ligado
+
+5) Railway → serviço da API → Variables:
+   STRIPE_SECRET_KEY       = sk_live_...
+   STRIPE_PUBLISHABLE_KEY  = pk_live_...
+   STRIPE_WEBHOOK_SECRET   = whsec_...
+   Depois: Deploy.
+
+
+============================================================
+TESTAR ANTES DE LIBERAR PARA CLIENTES (recomendado)
+============================================================
+- Stripe: use primeiro as chaves de TESTE (pk_test_ / sk_test_ e o whsec do webhook de teste) e pague com o
+  cartão 4242 4242 4242 4242, validade qualquer data futura, CVC 123. Para testar o pedido de confirmação do
+  banco (3D Secure), use 4000 0027 6000 3184. Depois troque para as chaves live.
+- Asaas: o sandbox (ASAAS_ENV=sandbox, chave do sandbox) simula o Pix Automático. Assine o plano mais barato
+  com Pix, pague o QR no simulador e confira em Planos & cobrança: "Débito automático autorizado".
+- Em produção, faça uma assinatura real sua (plano mais barato) com Pix e outra com cartão, e depois cancele
+  pelo painel do Administrador.

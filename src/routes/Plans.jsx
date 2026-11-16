@@ -4,6 +4,7 @@ import { Banner, Button, Icon, Input, Select } from '@/ds';
 import { askConfirm } from '@/lib/confirm.jsx';
 import { isDocumentoBr } from '@/lib/documento.js';
 import { Modal, DocumentoField } from '@/lib/ui.jsx';
+import { StripeForm, confirmNextAction } from '@/lib/stripeForm.jsx';
 import { useKobly } from '@/store/store.jsx';
 
 // Kobly — Planos & cobrança. Cliente: meu plano (conexões em uso, renovação, forma de pagamento), escolher plano
@@ -250,12 +251,16 @@ function CardForm({ c, set }) {
 }
 
 // ---- Pix: QR Code esperando o pagamento -----------------------------------------------------------
-function PixBox({ inv }) {
+function PixBox({ inv, mensal }) {
   const [copied, setCopied] = useState(false);
   const copy = () => { try { navigator.clipboard.writeText(inv.pix_payload); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ok */ } };
   return (
     <div className="kp-qr">
-      <span className="kp-wait"><i />Aguardando pagamento</span>
+      <span className="kp-wait"><i />{inv.autoriza ? 'Aguardando pagamento e autorização' : 'Aguardando pagamento'}</span>
+      {inv.autoriza && <div style={{ display: 'flex', gap: 10, textAlign: 'left', padding: '12px 14px', borderRadius: 14, background: 'rgba(52,211,153,.08)', border: '1px solid rgba(52,211,153,.3)', fontSize: 13.5, color: 'var(--text-body)', lineHeight: 1.5 }}>
+        <Icon name="shield-check" size={18} style={{ color: '#34d399', flex: 'none', marginTop: 2 }} />
+        <span><b style={{ color: 'var(--text-strong)' }}>Pix Automático:</b> ao pagar este QR Code, o app do seu banco pede para autorizar o débito automático{mensal ? <> de <b style={{ color: 'var(--text-strong)' }}>{money(mensal)}</b> a cada renovação</> : ' das próximas renovações'}. Confirme as duas coisas e pronto: as próximas cobranças saem sozinhas. Você pode cancelar a autorização quando quiser, no app do banco.</span>
+      </div>}
       {inv.pix_image ? <img src={`data:image/png;base64,${inv.pix_image}`} alt="QR Code do Pix" /> : <div className="kp-empty">QR Code indisponível. Use o código copia e cola.</div>}
       <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--text-strong)' }}>{money(inv.value)}</div>
       <div style={{ fontSize: 13.5, color: 'var(--text-muted)', maxWidth: 360 }}>Abra o app do seu banco, escolha <b>Pix → Ler QR Code</b> ou cole o código abaixo. Esta tela atualiza sozinha quando o pagamento cair.</div>
@@ -283,7 +288,12 @@ function PaidBox({ title, text }) {
 // ---- assinar --------------------------------------------------------------------------------------
 function Checkout({ pick, status, onClose, onDone }) {
   const store = useKobly();
-  const [method, setMethod] = useState('PIX');
+  const formas = status.pagamento || {};
+  const stripeCard = formas.cartao === 'stripe';
+  const pixAuto = formas.pix === 'pix_auto';
+  const [method, setMethod] = useState(formas.pix || !formas.cartao ? 'PIX' : 'CREDIT_CARD');
+  const [stripeCs, setStripeCs] = useState(null); // formulário da Stripe aberto para pagar a 1ª fatura
+  const [confirming, setConfirming] = useState(false);
   const [doc, setDoc] = useState('');
   const [card, setCard] = useState(CARD0);
   const [busy, setBusy] = useState(false);
@@ -292,25 +302,31 @@ function Checkout({ pick, status, onClose, onDone }) {
   usePolling(inv, (r) => { setInv(r.invoice); if (r.invoice.status === 'paga') { setPaid(true); onDone(); } });
   const needDoc = !status.documento;
   const total = priceOf(pick.plan, pick.connections, pick.cycle);
-  const can = (!needDoc || isDocumentoBr(doc)) && (method === 'PIX' || cardOk(card));
+  const can = (!needDoc || isDocumentoBr(doc) || (method === 'CREDIT_CARD' && stripeCard)) && (method === 'PIX' || stripeCard || cardOk(card));
   async function pay() {
     setBusy(true);
-    const r = await KoblyApi.billing('subscribe', { plan: pick.plan, connections: pick.connections, cycle: pick.cycle, method, documento: needDoc ? doc : undefined, ...(method === 'CREDIT_CARD' ? cardBody(card) : {}) }, billingOrg());
+    const r = await KoblyApi.billing('subscribe', { plan: pick.plan, connections: pick.connections, cycle: pick.cycle, method, documento: needDoc && isDocumentoBr(doc) ? doc : undefined, ...(method === 'CREDIT_CARD' && !stripeCard ? cardBody(card) : {}) }, billingOrg());
     setBusy(false);
     if (r.error) { store.notify('danger', r.error); return; }
     onDone();
+    if (r.stripe && r.stripe.client_secret) { setStripeCs(r.stripe); setInv(r.invoice); return; }
     if (r.invoice && r.invoice.status === 'paga') { setPaid(true); return; }
     if (r.invoice && r.invoice.status === 'falhou') { store.notify('danger', 'O cartão foi recusado. Confira os dados ou use outro cartão.'); return; }
     setInv(r.invoice);
   }
   const done = paid || (inv && inv.status === 'paga');
+  const cardStage = !done && stripeCs;
   return (
-    <Modal open onClose={onClose} title={done ? 'Pagamento confirmado' : inv ? 'Pague com Pix' : `Assinar ${pick.nome}`} width={inv || done ? 480 : 820}
+    <Modal open onClose={onClose} title={done ? 'Pagamento confirmado' : cardStage ? `Pagar ${money(total)} no cartão` : inv ? (inv.autoriza ? 'Pague e autorize o Pix Automático' : 'Pague com Pix') : `Assinar ${pick.nome}`} width={inv || done ? 500 : 820}
       footer={done ? <Button variant="primary" onClick={onClose}>Começar a usar</Button>
-        : inv ? <Button variant="ghost" onClick={onClose}>Pagar depois</Button>
-          : <><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant="primary" iconLeft={method === 'PIX' ? 'qr-code' : 'lock'} loading={busy} disabled={!can || busy} onClick={pay}>{method === 'PIX' ? 'Gerar Pix' : `Pagar ${money(total)}`}</Button></>}>
-      {done ? <PaidBox title={`Plano ${pick.nome} ativo!`} text={method === 'CREDIT_CARD' ? 'As próximas cobranças entram sozinhas no seu cartão. Você recebe o recibo por e-mail.' : 'Pronto! Antes de cada renovação você recebe um novo Pix por e-mail e aqui no painel.'} />
-        : inv ? (inv.status === 'pendente' ? <PixBox inv={inv} /> : <Banner tone="warning">Essa cobrança está {INV_ST[inv.status] ? INV_ST[inv.status][0].toLowerCase() : inv.status}. Feche e tente de novo.</Banner>)
+        : cardStage ? null
+          : inv ? <Button variant="ghost" onClick={onClose}>Pagar depois</Button>
+            : <><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant="primary" iconLeft={method === 'PIX' ? 'qr-code' : 'lock'} loading={busy} disabled={!can || busy} onClick={pay}>{method === 'PIX' ? (pixAuto ? 'Gerar QR Code' : 'Gerar Pix') : stripeCard ? 'Continuar para o cartão' : `Pagar ${money(total)}`}</Button></>}>
+      {done ? <PaidBox title={`Plano ${pick.nome} ativo!`} text={method === 'CREDIT_CARD' ? 'As próximas cobranças entram sozinhas no seu cartão. Você recebe o recibo por e-mail.' : pixAuto ? 'Pronto! O débito automático do Pix está autorizado: as próximas renovações saem sozinhas da sua conta.' : 'Pronto! Antes de cada renovação você recebe um novo Pix por e-mail e aqui no painel.'} />
+        : cardStage ? (confirming
+          ? <div className="kp-qr"><span className="kp-wait"><i />Confirmando o pagamento…</span><div style={{ fontSize: 13.5, color: 'var(--text-muted)' }}>Só um instante. Esta tela atualiza sozinha.</div></div>
+          : <StripeForm publishableKey={stripeCs.publishable_key || formas.stripe_pk} clientSecret={stripeCs.client_secret} submitLabel={`Pagar ${money(total)}`} onCancel={onClose} onSuccess={() => setConfirming(true)} />)
+        : inv ? (inv.status === 'pendente' ? <PixBox inv={inv} mensal={inv.autoriza ? total : null} /> : <Banner tone="warning">Essa cobrança está {INV_ST[inv.status] ? INV_ST[inv.status][0].toLowerCase() : inv.status}. Feche e tente de novo.</Banner>)
           : (
             <div className="kp-ck">
               <div className="kp-sum">
@@ -323,13 +339,18 @@ function Checkout({ pick, status, onClose, onDone }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="kp-pay">
-                  <button type="button" className={method === 'PIX' ? 'on' : ''} onClick={() => setMethod('PIX')}><Icon name="qr-code" size={17} />Pix</button>
-                  <button type="button" className={method === 'CREDIT_CARD' ? 'on' : ''} onClick={() => setMethod('CREDIT_CARD')}><Icon name="credit-card" size={17} />Cartão de crédito</button>
+                  {formas.pix !== null && <button type="button" className={method === 'PIX' ? 'on' : ''} onClick={() => setMethod('PIX')}><Icon name="qr-code" size={17} />{pixAuto ? 'Pix Automático' : 'Pix'}</button>}
+                  {formas.cartao !== null && <button type="button" className={method === 'CREDIT_CARD' ? 'on' : ''} onClick={() => setMethod('CREDIT_CARD')}><Icon name="credit-card" size={17} />Cartão de crédito</button>}
                 </div>
-                {needDoc && <DocumentoField label="CPF ou CNPJ da sua empresa (para a nota)" value={doc} onChange={setDoc} />}
+                {needDoc && (method === 'PIX' || !stripeCard) && <DocumentoField label="CPF ou CNPJ da sua empresa (para a nota)" value={doc} onChange={setDoc} />}
                 {method === 'PIX'
-                  ? <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(var(--fg-rgb), .03)', border: '1px solid rgba(var(--fg-rgb), .08)', fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}><Icon name="zap" size={18} style={{ color: '#ff9452', flex: 'none', marginTop: 2 }} /><span>Geramos o QR Code na hora. O plano libera assim que o Pix cair (normalmente em segundos). A cada renovação chega um Pix novo.</span></div>
-                  : <CardForm c={card} set={setCard} />}
+                  ? <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(var(--fg-rgb), .03)', border: '1px solid rgba(var(--fg-rgb), .08)', fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}><Icon name="zap" size={18} style={{ color: '#ff9452', flex: 'none', marginTop: 2 }} />
+                    {pixAuto
+                      ? <span><b style={{ color: 'var(--text-strong)' }}>Pix Automático.</b> Você paga o primeiro {CICLOS[pick.cycle].meses === 1 ? 'mês' : 'ciclo'} com um QR Code e, no mesmo passo, autoriza o débito automático no app do seu banco. Depois, cada renovação sai sozinha, sem precisar pagar Pix na mão. Cancele quando quiser no app do banco.</span>
+                      : <span>Geramos o QR Code na hora. O plano libera assim que o Pix cair (normalmente em segundos). A cada renovação chega um Pix novo.</span>}</div>
+                  : stripeCard
+                    ? <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(var(--fg-rgb), .03)', border: '1px solid rgba(var(--fg-rgb), .08)', fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}><Icon name="lock" size={18} style={{ color: '#ff9452', flex: 'none', marginTop: 2 }} /><span>No próximo passo você digita o cartão no formulário seguro da Stripe, aqui mesmo. As renovações entram sozinhas no cartão.</span></div>
+                    : <CardForm c={card} set={setCard} />}
               </div>
             </div>
           )}
@@ -346,8 +367,9 @@ async function apagarConexao(c) {
   return KoblyApi.metaChannels('remove', { id: c.id }, billingOrg());
 }
 
-function Change({ pick, sub, usage, onClose, onDone }) {
+function Change({ pick, sub, usage, pay = {}, onClose, onDone }) {
   const store = useKobly();
+  const prov = sub.provider;
   const [conns, setConns] = useState(null); // conexões que contam, quando o plano novo comporta menos
   const [apagar, setApagar] = useState([]);
   const permitidas = /^agencia/.test(pick.plan) ? Infinity : Number(pick.connections) || 1;
@@ -369,7 +391,13 @@ function Change({ pick, sub, usage, onClose, onDone }) {
   async function go() {
     setBusy(true);
     let r;
-    if (up) r = await KoblyApi.billing('upgrade', { plan: pick.plan, connections: pick.connections, method: method === 'PIX' ? 'PIX' : 'CREDIT_CARD', ...(method === 'CARD_NEW' ? cardBody(card) : {}) }, billingOrg());
+    if (up && (prov === 'stripe' || prov === 'pix_auto')) {
+      r = await KoblyApi.billing('upgrade', { plan: pick.plan, connections: pick.connections }, billingOrg());
+      if (!r.error && r.stripe && r.stripe.client_secret) { // o banco pediu confirmação (3D Secure)
+        try { await confirmNextAction(r.stripe.publishable_key || pay.stripe_pk, r.stripe.client_secret); }
+        catch (e) { setBusy(false); store.notify('danger', e.message); onDone(); return; }
+      }
+    } else if (up) r = await KoblyApi.billing('upgrade', { plan: pick.plan, connections: pick.connections, method: method === 'PIX' ? 'PIX' : 'CREDIT_CARD', ...(method === 'CARD_NEW' ? cardBody(card) : {}) }, billingOrg());
     else {
       if (apagar.length) {
         const nomes = (conns || []).filter((c) => apagar.includes(c.key)).map((c) => c.nome).join(', ');
@@ -386,17 +414,17 @@ function Change({ pick, sub, usage, onClose, onDone }) {
     onDone();
     if (!up) { store.notify('success', `Pronto. A partir de ${dia(sub.renova_em)} você fica no ${pick.nome}${sub.billing_type === 'PIX' ? `, e o próximo Pix já vem com ${money(r.subscription && r.subscription.pending_change ? r.subscription.pending_change.price : q.price)}` : ''}.`); onClose(); return; }
     if (r.invoice.status === 'paga') { setDone(true); return; }
-    if (r.invoice.status === 'falhou') { store.notify('danger', 'O cartão foi recusado. Tente outro cartão ou Pix.'); return; }
+    if (r.invoice.status === 'falhou') { store.notify('danger', prov === 'stripe' ? 'O cartão foi recusado. Troque o cartão e tente de novo.' : 'O cartão foi recusado. Tente outro cartão ou Pix.'); return; }
     setInv(r.invoice);
   }
   const pagar = q && q.upgrade ? q.upgrade.pagar : 0;
   return (
-    <Modal open onClose={onClose} title={done ? 'Upgrade feito!' : inv ? 'Pague a diferença com Pix' : up ? `Fazer upgrade para ${pick.nome}` : pick.cycle !== sub.cycle ? `Mudar para o ${CICLOS[pick.cycle].nome}` : `Reduzir para ${pick.nome}`} width={540}
+    <Modal open onClose={onClose} title={done ? 'Upgrade feito!' : inv ? (inv.autoriza ? 'Pague a diferença e autorize o novo valor' : inv.billing_type === 'CREDIT_CARD' ? 'Confirmando o pagamento' : 'Pague a diferença com Pix') : up ? `Fazer upgrade para ${pick.nome}` : pick.cycle !== sub.cycle ? `Mudar para o ${CICLOS[pick.cycle].nome}` : `Reduzir para ${pick.nome}`} width={540}
       footer={done ? <Button variant="primary" onClick={onClose}>Fechar</Button>
         : inv ? <Button variant="ghost" onClick={onClose}>Pagar depois</Button>
-          : <><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant={!up && apagar.length ? 'danger' : 'primary'} iconLeft={up ? 'arrow-up-circle' : apagar.length ? 'trash-2' : 'calendar'} loading={busy} disabled={!q || busy || (up && method === 'CARD_NEW' && !cardOk(card)) || faltaEscolher > 0 || (!up && sobra > 0 && !conns)} onClick={go}>{!up ? (apagar.length ? `Apagar ${apagar.length} e reduzir` : 'Confirmar') : pagar < 5 ? 'Mudar agora' : method === 'PIX' ? 'Gerar Pix' : `Pagar ${money(pagar)}`}</Button></>}>
+          : <><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant={!up && apagar.length ? 'danger' : 'primary'} iconLeft={up ? 'arrow-up-circle' : apagar.length ? 'trash-2' : 'calendar'} loading={busy} disabled={!q || busy || (up && prov !== 'stripe' && prov !== 'pix_auto' && method === 'CARD_NEW' && !cardOk(card)) || faltaEscolher > 0 || (!up && sobra > 0 && !conns)} onClick={go}>{!up ? (apagar.length ? `Apagar ${apagar.length} e reduzir` : 'Confirmar') : prov === 'pix_auto' ? 'Gerar QR Code' : pagar < 5 ? 'Mudar agora' : prov === 'stripe' ? `Pagar ${money(pagar)} no cartão` : method === 'PIX' ? 'Gerar Pix' : `Pagar ${money(pagar)}`}</Button></>}>
       {done ? <PaidBox title={`Agora você está no ${pick.nome}`} text="As novas conexões e recursos já estão liberados. A data de renovação continua a mesma." />
-        : inv ? <PixBox inv={inv} />
+        : inv ? (inv.billing_type === 'CREDIT_CARD' ? <div className="kp-qr"><span className="kp-wait"><i />Confirmando o pagamento…</span></div> : <PixBox inv={inv} mensal={inv.autoriza && q && q.upgrade ? q.upgrade.price : null} />)
           : !q ? <div className="kp-empty">Calculando…</div>
             : up ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -407,7 +435,9 @@ function Change({ pick, sub, usage, onClose, onDone }) {
                   <div className="tot"><span style={{ color: 'var(--text-muted)' }}>Total hoje</span><b>{money(pagar)}</b></div>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="calendar" size={14} />Renovação continua em {dia(sub.renova_em)}, já no valor novo de {money(q.upgrade.price)}{CICLOS[sub.cycle].sufixo}.</div>
-                {pagar >= 5 && (<>
+                {prov === 'pix_auto' && <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 14, background: 'rgba(52,211,153,.07)', border: '1px solid rgba(52,211,153,.28)', fontSize: 13.5, color: 'var(--text-body)', lineHeight: 1.5 }}><Icon name="shield-check" size={18} style={{ color: '#34d399', flex: 'none', marginTop: 2 }} /><span><b style={{ color: 'var(--text-strong)' }}>Um QR Code só:</b> ele paga a diferença de {money(Math.max(0.01, pagar))} agora e autoriza o novo valor de {money(q.upgrade.price)}{CICLOS[sub.cycle].sufixo} no Pix Automático, a partir de {dia(sub.renova_em)}.</span></div>}
+                {prov === 'stripe' && pagar >= 5 && <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13.5, color: 'var(--text-muted)' }}><Icon name="credit-card" size={16} style={{ color: '#ff9452' }} />Cobrado no cartão {sub.card ? `${sub.card.brand || ''} •••• ${sub.card.last4}` : 'salvo'}.</div>}
+                {prov !== 'pix_auto' && prov !== 'stripe' && pagar >= 5 && (<>
                   <div className="kp-pay" style={{ gridTemplateColumns: sub.card ? '1fr 1fr 1fr' : '1fr 1fr' }}>
                     {sub.card && <button type="button" className={method === 'CARD_SAVED' ? 'on' : ''} onClick={() => setMethod('CARD_SAVED')}><Icon name="credit-card" size={16} />•••• {sub.card.last4}</button>}
                     <button type="button" className={method === 'CARD_NEW' ? 'on' : ''} onClick={() => setMethod('CARD_NEW')}><Icon name="plus" size={16} />{sub.card ? 'Outro cartão' : 'Cartão'}</button>
@@ -415,7 +445,7 @@ function Change({ pick, sub, usage, onClose, onDone }) {
                   </div>
                   {method === 'CARD_NEW' && <CardForm c={card} set={setCard} />}
                 </>)}
-                {pagar < 5 && <Banner tone="success">A diferença é pequena ({money(pagar)}): fazemos a troca agora sem cobrar.</Banner>}
+                {pagar < 5 && prov !== 'pix_auto' && <Banner tone="success">A diferença é pequena ({money(pagar)}): fazemos a troca agora sem cobrar.</Banner>}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -425,7 +455,8 @@ function Change({ pick, sub, usage, onClose, onDone }) {
                   <div className="tot"><span style={{ color: 'var(--text-muted)' }}>Próxima cobrança</span><b>{money(q.price)}</b></div>
                 </div>
                 <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>Você continua com os recursos do plano atual até o fim do período já pago e não perde nada do que pagou. Se mudar de ideia, dá para desfazer antes da renovação.</div>
-                {sub.billing_type === 'PIX' && <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5, display: 'flex', gap: 8 }}><Icon name="qr-code" size={16} style={{ flex: 'none', marginTop: 2, color: '#ff9452' }} /><span>Você paga por <b style={{ color: 'var(--text-strong)' }}>Pix</b>: a próxima cobrança, em {dia(sub.renova_em)}, já vem no valor novo de <b style={{ color: 'var(--text-strong)' }}>{money(q.price)}</b>. Nada é cobrado agora.</span></div>}
+                {sub.billing_type === 'PIX' && <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5, display: 'flex', gap: 8 }}><Icon name="qr-code" size={16} style={{ flex: 'none', marginTop: 2, color: '#ff9452' }} /><span>Você paga por <b style={{ color: 'var(--text-strong)' }}>{prov === 'pix_auto' ? 'Pix Automático' : 'Pix'}</b>: a próxima cobrança, em {dia(sub.renova_em)}, já vem no valor novo de <b style={{ color: 'var(--text-strong)' }}>{money(q.price)}</b>{prov === 'pix_auto' ? ', debitada sozinha (não precisa autorizar de novo)' : ''}. Nada é cobrado agora.</span></div>}
+                {prov === 'stripe' && <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5, display: 'flex', gap: 8 }}><Icon name="credit-card" size={16} style={{ flex: 'none', marginTop: 2, color: '#ff9452' }} /><span>A próxima cobrança no cartão, em {dia(sub.renova_em)}, já vem no valor novo de <b style={{ color: 'var(--text-strong)' }}>{money(q.price)}</b>. Nada é cobrado agora.</span></div>}
                 {sobra > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <Banner tone="warning" title="Escolha as conexões para apagar">O {pick.nome}{/^agencia/.test(pick.plan) ? '' : ` com ${permitidas} conexão(ões)`} comporta {permitidas} e você usa {usage.total}. Marque {sobra} para apagar.</Banner>
@@ -454,7 +485,35 @@ function Change({ pick, sub, usage, onClose, onDone }) {
   );
 }
 
-function ChangeCard({ onClose, onDone }) {
+function ChangeCard({ onClose, onDone, sub, pay = {} }) {
+  if (pay.cartao === 'stripe') return <StripeCard onClose={onClose} onDone={onDone} sub={sub} pay={pay} />;
+  return <AsaasCard onClose={onClose} onDone={onDone} />;
+}
+function StripeCard({ onClose, onDone, sub, pay }) {
+  const store = useKobly();
+  const [cs, setCs] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const sair = sub && sub.provider !== 'stripe'; // estava no Pix: passa a pagar no cartão
+  useEffect(() => {
+    KoblyApi.billing('card_setup', {}, billingOrg()).then((r) => (r && r.stripe ? setCs(r.stripe) : (store.notify('danger', (r && r.error) || 'Não deu para abrir o cartão.'), onClose())));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  async function saved(si) {
+    setSaving(true);
+    const r = await KoblyApi.billing('card_saved', { setup_intent: si.id }, billingOrg());
+    setSaving(false);
+    if (r.error) { store.notify('danger', r.error); return; }
+    store.notify('success', sair ? `Pronto. A partir de ${dia(sub.renova_em)} a cobrança vai para este cartão.` : 'Cartão atualizado. As próximas cobranças vão nele.');
+    onDone(); onClose();
+  }
+  return (
+    <Modal open onClose={onClose} title={sair ? 'Pagar com cartão' : 'Trocar cartão'} width={520}>
+      {sair && <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 14 }}>Nada é cobrado agora. A partir da renovação em <b style={{ color: 'var(--text-strong)' }}>{dia(sub.renova_em)}</b> a cobrança passa para este cartão e o {sub.provider === 'pix_auto' ? 'Pix Automático é cancelado' : 'Pix deixa de ser usado'}.</div>}
+      {!cs || saving ? <div className="kp-empty">{saving ? 'Salvando o cartão…' : 'Abrindo o formulário seguro do cartão…'}</div>
+        : <StripeForm publishableKey={cs.publishable_key || pay.stripe_pk} clientSecret={cs.client_secret} mode="setup" submitLabel="Salvar cartão" onCancel={onClose} onSuccess={saved} />}
+    </Modal>
+  );
+}
+function AsaasCard({ onClose, onDone }) {
   const store = useKobly();
   const [card, setCard] = useState(CARD0);
   const [busy, setBusy] = useState(false);
@@ -512,7 +571,10 @@ function ClientBilling() {
     if (r.error) store.notify('danger', r.error); else { store.notify('success', 'Redução desfeita.'); load(); }
   }
   async function usePix() {
-    if (!(await askConfirm('As próximas cobranças chegam como Pix (por e-mail e aqui no painel). O cartão salvo deixa de ser usado.', { title: 'Pagar as próximas com Pix?', confirmLabel: 'Usar Pix', danger: false }))) return;
+    const txt = (st.pagamento || {}).pix === 'pix_auto'
+      ? `Na renovação (${dia(sub.renova_em)}) você recebe um QR Code: ao pagar, autoriza o Pix Automático e as cobranças seguintes saem sozinhas da sua conta. O cartão deixa de ser cobrado.`
+      : 'As próximas cobranças chegam como Pix (por e-mail e aqui no painel). O cartão salvo deixa de ser usado.';
+    if (!(await askConfirm(txt, { title: 'Pagar as próximas com Pix?', confirmLabel: 'Usar Pix', danger: false }))) return;
     const r = await KoblyApi.billing('use_pix', {}, billingOrg());
     if (r.error) store.notify('danger', r.error); else { store.notify('success', 'Próximas cobranças por Pix.'); load(); }
   }
@@ -524,6 +586,8 @@ function ClientBilling() {
       {!st.enabled && !current && <Banner tone="warning" title="Pagamento online ainda não ativado">A Kobly está terminando de ligar o pagamento automático. Enquanto isso, fale com o suporte para assinar.</Banner>}
       {sub && sub.status === 'inadimplente' && pend && <Banner tone="danger" title="Pagamento atrasado">Sua fatura de {money(pend.value)} venceu em {dia(pend.due_date)}. Pague para não perder o acesso. <button type="button" className="kp-link" onClick={() => setPayInv(pend)}>Pagar agora</button></Banner>}
       {sub && sub.status === 'pendente' && pend && pend.pix_payload && <Banner tone="warning" title="Falta pagar para liberar seu plano">O Pix de {money(pend.value)} do {sub.nome} está esperando. <button type="button" className="kp-link" onClick={() => setPayInv(pend)}>Ver QR Code</button></Banner>}
+      {current && sub.pix_auto && ['REFUSED', 'CANCELLED', 'EXPIRED'].includes(sub.pix_auto.status) && !(pend && pend.autoriza) && <Banner tone="warning" title="O débito automático do Pix está desligado">Na renovação ({dia(sub.renova_em)}) você recebe um QR Code para pagar e autorizar de novo. Se preferir, passe a pagar no cartão.</Banner>}
+      {current && sub.pix_auto && pend && pend.autoriza && pend.status === 'pendente' && pend.kind === 'assinatura' && <Banner tone="info" title="Pague a renovação e autorize o débito automático">O QR Code de {money(pend.value)} paga a renovação e liga o Pix Automático para os próximos meses. <button type="button" className="kp-link" onClick={() => setPayInv(pend)}>Ver QR Code</button></Banner>}
 
       {(current || ent.plan) ? (
         <div className="kp-me">
@@ -558,7 +622,8 @@ function ClientBilling() {
               <div className="kp-fact" style={{ gridColumn: '1 / -1' }}><span>Contas de clientes</span><b>Até {ent.accounts}</b></div>
             )}
             <div className="kp-fact"><span>{sub && sub.status === 'cortesia' ? 'Válido até' : 'Renova em'}</span><b>{sub ? (sub.renova_em ? dia(sub.renova_em) : 'Sem prazo') : '—'}</b></div>
-            <div className="kp-fact"><span>Pagamento</span><b>{sub && sub.status !== 'cortesia' ? (sub.billing_type === 'CREDIT_CARD' ? (sub.card ? `${sub.card.brand || 'Cartão'} •••• ${sub.card.last4}` : 'Cartão') : 'Pix') : '—'}</b>
+            <div className="kp-fact"><span>Pagamento</span><b>{sub && sub.status !== 'cortesia' ? (sub.billing_type === 'CREDIT_CARD' ? (sub.card ? `${sub.card.brand || 'Cartão'} •••• ${sub.card.last4}` : 'Cartão') : sub.pix_auto ? 'Pix Automático' : 'Pix') : '—'}</b>
+              {sub && sub.pix_auto && <div style={{ fontSize: 12, marginTop: 3, color: sub.pix_auto.status === 'ACTIVE' ? '#34d399' : 'var(--pastel-amber)' }}>{sub.pix_auto.status === 'ACTIVE' ? 'Débito automático autorizado' : sub.pix_auto.status === 'CREATED' ? 'Aguardando autorização' : 'Autorize na próxima renovação'}</div>}
               {current && <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}><button type="button" className="kp-link" onClick={() => setCardModal(true)}>{sub.billing_type === 'CREDIT_CARD' ? 'Trocar cartão' : 'Usar cartão'}</button>{sub.billing_type === 'CREDIT_CARD' && <button type="button" className="kp-link" onClick={usePix}>Usar Pix</button>}</div>}
             </div>
           </div>
@@ -603,11 +668,11 @@ function ClientBilling() {
       </div>}
 
       {pick && !pick.change && <Checkout pick={pick} status={st} onClose={() => setPick(null)} onDone={load} />}
-      {pick && pick.change && <Change pick={pick} sub={sub} usage={usage} onClose={() => setPick(null)} onDone={load} />}
-      {cardModal && <ChangeCard onClose={() => setCardModal(false)} onDone={load} />}
+      {pick && pick.change && <Change pick={pick} sub={sub} usage={usage} pay={st.pagamento || {}} onClose={() => setPick(null)} onDone={load} />}
+      {cardModal && <ChangeCard sub={sub} pay={st.pagamento || {}} onClose={() => setCardModal(false)} onDone={load} />}
       {payInv && (
         <Modal open onClose={() => setPayInv(null)} title={payInv.status === 'paga' ? 'Pagamento confirmado' : 'Pague com Pix'} width={480} footer={<Button variant="ghost" onClick={() => setPayInv(null)}>Fechar</Button>}>
-          {payInv.status === 'paga' ? <PaidBox title="Recebemos seu pagamento" text="Tudo certo com o seu plano." /> : <PixBox inv={payInv} />}
+          {payInv.status === 'paga' ? <PaidBox title="Recebemos seu pagamento" text={payInv.autoriza ? 'Pagamento recebido e débito automático autorizado.' : 'Tudo certo com o seu plano.'} /> : <PixBox inv={payInv} mensal={payInv.autoriza && sub ? (sub.pending_change ? sub.pending_change.price : sub.price) : null} />}
         </Modal>
       )}
     </>

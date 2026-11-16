@@ -40,6 +40,10 @@ export function loadConfig(env = process.env) {
     asaasApiKey: env.ASAAS_API_KEY || '',
     asaasEnv: env.ASAAS_ENV === 'production' ? 'production' : 'sandbox',
     asaasWebhookToken: env.ASAAS_WEBHOOK_TOKEN || '',
+    asaasPixAuto: env.ASAAS_PIX_AUTOMATICO === '1', // conta do Asaas liberada para o Pix Automático
+    stripeSecretKey: env.STRIPE_SECRET_KEY || '',
+    stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY || '',
+    stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET || '',
     billingEnforce: env.BILLING_ENFORCE === '1',
     metaGraphBase: env.META_GRAPH_BASE || 'https://graph.facebook.com/v21.0',
     // Marketing API (Facebook Ads): versão atual da documentação
