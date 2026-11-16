@@ -138,7 +138,7 @@ export function createBilling({ pool, secretKey, fetchImpl = globalThis.fetch, a
       if (invoice.kind === 'upgrade' && invoice.change) {
         const c = invoice.change;
         await pool.query(`update public.subscriptions set plan_code = $2, connections = $3, price = $4, pending_change = null, updated_at = now() where id = $1`, [sub.id, c.plan, c.connections, c.price]);
-        if (sub.asaas_subscription_id) await asaas(`/subscriptions/${sub.asaas_subscription_id}`, 'POST', { value: c.price, description: `Kobly ${PLANS[c.plan].nome} · ${c.connections} conexão(ões)`, updatePendingPayments: true }).catch(() => {});
+        if (sub.asaas_subscription_id) { await asaas(`/subscriptions/${sub.asaas_subscription_id}`, 'POST', { value: c.price, description: `Kobly ${PLANS[c.plan].nome} · ${c.connections} conexão(ões)`, updatePendingPayments: true }).catch(() => {}); await syncPending(sub.id).catch(() => {}); }
       } else {
         // assinatura (primeira ou renovação): avança o ciclo e aplica a redução marcada
         const start = sub.current_period_end && new Date(sub.current_period_end) > now() ? sub.current_period_end : now();
@@ -185,6 +185,20 @@ export function createBilling({ pool, secretKey, fetchImpl = globalThis.fetch, a
       }
     }
     return { status: 200 };
+  }
+
+  // cobranças da assinatura ainda em aberto: depois de mudar o valor no Asaas, traz o valor e o Pix novos
+  // (a fatura do próximo ciclo pode já ter sido gerada com o QR Code do valor antigo)
+  async function syncPending(subId) {
+    if (!configured()) return;
+    const { rows } = await pool.query(`select id, asaas_payment_id, billing_type from public.invoices where subscription_id = $1 and status = 'pendente' and kind = 'assinatura' and asaas_payment_id is not null`, [subId]);
+    for (const i of rows) {
+      const p = await asaas(`/payments/${i.asaas_payment_id}`).catch(() => null);
+      if (!p) continue;
+      const pix = p.billingType === 'PIX' ? await pixOf(p.id) : { pix_payload: null, pix_image: null };
+      await pool.query(`update public.invoices set value = $2, billing_type = $3, due_date = coalesce($4, due_date), invoice_url = coalesce($5, invoice_url), pix_payload = $6, pix_image = $7 where id = $1`,
+        [i.id, p.value, p.billingType || i.billing_type, p.dueDate || null, p.invoiceUrl || null, pix.pix_payload, pix.pix_image]);
+    }
   }
 
   // consulta o Asaas na hora (a tela pergunta enquanto espera o Pix; não depende só do webhook)
@@ -281,7 +295,7 @@ export function createBilling({ pool, secretKey, fetchImpl = globalThis.fetch, a
         if (pr.pagar < 5) { // diferença pequena demais para cobrar: aplica sem cobrar
           const inv = (await pool.query(`insert into public.invoices (organization_id, subscription_id, kind, description, value, status, change, paid_at) values ($1,$2,'upgrade',$3,0,'paga',$4::jsonb, now()) returning *`, [orgId, s.id, desc, JSON.stringify(change)])).rows[0];
           await pool.query(`update public.subscriptions set plan_code = $2, connections = $3, price = $4, pending_change = null, updated_at = now() where id = $1`, [s.id, q.plan, q.connections, q.price]);
-          if (s.asaas_subscription_id) await asaas(`/subscriptions/${s.asaas_subscription_id}`, 'POST', { value: q.price, description: desc, updatePendingPayments: true }).catch(() => {});
+          if (s.asaas_subscription_id) { await asaas(`/subscriptions/${s.asaas_subscription_id}`, 'POST', { value: q.price, description: desc, updatePendingPayments: true }).catch(() => {}); await syncPending(s.id).catch(() => {}); }
           return { invoice: invView(inv), subscription: subView(await subOf(orgId)), proration: pr };
         }
         const method = body.method === 'PIX' ? 'PIX' : 'CREDIT_CARD';
@@ -311,10 +325,11 @@ export function createBilling({ pool, secretKey, fetchImpl = globalThis.fetch, a
         if (q.price >= Number(s.price) && q.cycle === s.cycle) fail('Esse plano não custa menos. Use "Fazer upgrade".');
         const u = await usage(orgId);
         const novas = connectionsOf(q.plan, q.connections);
-        if (!isAgency(q.plan) && u.total > novas) fail(`Você usa ${u.total} conexão(ões). Desconecte até ficar com ${novas} antes de reduzir.`);
+        if (!isAgency(q.plan) && u.total > novas) fail(`Você usa ${u.total} conexão(ões) e o ${PLANS[q.plan].nome} comporta ${novas}. Escolha ${u.total - novas} para apagar antes de reduzir.`, 'plan_connections');
         const pc = { plan: q.plan, connections: q.connections, price: q.price, cycle: q.cycle };
         await pool.query(`update public.subscriptions set pending_change = $2::jsonb, updated_at = now() where id = $1`, [s.id, JSON.stringify(pc)]);
         if (s.asaas_subscription_id) await asaas(`/subscriptions/${s.asaas_subscription_id}`, 'POST', { value: q.price, cycle: CYCLES[q.cycle].asaas, description: `Kobly ${PLANS[q.plan].nome} · ${CYCLES[q.cycle].nome}`, updatePendingPayments: true });
+        await syncPending(s.id);
         return { subscription: subView(await subOf(orgId)) };
       }
       case 'cancel_downgrade': {
@@ -323,6 +338,7 @@ export function createBilling({ pool, secretKey, fetchImpl = globalThis.fetch, a
         if (!s || !s.pending_change) fail('Não há redução marcada.');
         await pool.query(`update public.subscriptions set pending_change = null, updated_at = now() where id = $1`, [s.id]);
         if (s.asaas_subscription_id) await asaas(`/subscriptions/${s.asaas_subscription_id}`, 'POST', { value: Number(s.price), cycle: CYCLES[s.cycle].asaas, updatePendingPayments: true });
+        await syncPending(s.id);
         return { subscription: subView(await subOf(orgId)) };
       }
       case 'change_card': { // próximas cobranças no cartão novo
@@ -342,6 +358,7 @@ export function createBilling({ pool, secretKey, fetchImpl = globalThis.fetch, a
         if (!s || !s.asaas_subscription_id) fail('Assine um plano primeiro.');
         await asaas(`/subscriptions/${s.asaas_subscription_id}`, 'POST', { billingType: 'PIX', updatePendingPayments: true });
         await pool.query(`update public.subscriptions set billing_type = 'PIX', updated_at = now() where id = $1`, [s.id]);
+        await syncPending(s.id);
         return { subscription: subView(await subOf(orgId)) };
       }
       default: throw new AuthError(400, 'bad_action', 'Ação desconhecida.');

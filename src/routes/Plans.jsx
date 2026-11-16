@@ -338,8 +338,20 @@ function Checkout({ pick, status, onClose, onDone }) {
 }
 
 // ---- upgrade / reduzir ----------------------------------------------------------------------------
-function Change({ pick, sub, onClose, onDone }) {
+// conexões que contam no plano (mesma conta do servidor): WhatsApp por QR Code (todos), API Oficial conectada, Instagram e Messenger
+const KIND_GRUPO = { uazapi: 'WhatsApp (QR Code)', oficial: 'WhatsApp API Oficial', instagram: 'Instagram', messenger: 'Messenger' };
+async function apagarConexao(c) {
+  if (c.kind === 'uazapi') return KoblyApi.uazapi('remove', { id: c.id }, billingOrg());
+  if (c.kind === 'oficial') return KoblyApi.whatsappAccount('disconnect', { account_id: c.id }, billingOrg());
+  return KoblyApi.metaChannels('remove', { id: c.id }, billingOrg());
+}
+
+function Change({ pick, sub, usage, onClose, onDone }) {
   const store = useKobly();
+  const [conns, setConns] = useState(null); // conexões que contam, quando o plano novo comporta menos
+  const [apagar, setApagar] = useState([]);
+  const permitidas = /^agencia/.test(pick.plan) ? Infinity : Number(pick.connections) || 1;
+  const sobra = Math.max(0, ((usage && usage.total) || 0) - permitidas);
   const [q, setQ] = useState(null);
   const [method, setMethod] = useState(sub.card ? 'CARD_SAVED' : 'PIX');
   const [card, setCard] = useState(CARD0);
@@ -349,15 +361,30 @@ function Change({ pick, sub, onClose, onDone }) {
   useEffect(() => { KoblyApi.billing('quote', { plan: pick.plan, connections: pick.connections, cycle: pick.cycle }, billingOrg()).then((r) => (r && !r.error ? setQ(r) : (store.notify('danger', (r && r.error) || 'Não deu para calcular.'), onClose()))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   usePolling(inv, (r) => { setInv(r.invoice); if (r.invoice.status === 'paga') { setDone(true); onDone(); } });
   const up = q && q.upgrade && q.upgrade.direcao === 'upgrade' && pick.cycle === sub.cycle;
+  useEffect(() => {
+    if (!q || up || !sobra) return;
+    KoblyApi.inbox('connections', {}, billingOrg()).then((r) => setConns(((r && r.conexoes) || []).filter((c) => c.kind !== 'oficial' || c.conectado))).catch(() => setConns([]));
+  }, [q, up, sobra]);
+  const faltaEscolher = !up && sobra > 0 ? Math.max(0, sobra - apagar.length) : 0;
   async function go() {
     setBusy(true);
     let r;
     if (up) r = await KoblyApi.billing('upgrade', { plan: pick.plan, connections: pick.connections, method: method === 'PIX' ? 'PIX' : 'CREDIT_CARD', ...(method === 'CARD_NEW' ? cardBody(card) : {}) }, billingOrg());
-    else r = await KoblyApi.billing('downgrade', { plan: pick.plan, connections: pick.connections, cycle: pick.cycle }, billingOrg());
+    else {
+      if (apagar.length) {
+        const nomes = (conns || []).filter((c) => apagar.includes(c.key)).map((c) => c.nome).join(', ');
+        if (!(await askConfirm(`Apagar ${apagar.length} conexão(ões): ${nomes}? Os números saem da Kobly e os fluxos param de usar essas conexões. As conversas já recebidas continuam no Chat ao vivo.`, { title: 'Apagar as conexões?', confirmLabel: `Apagar ${apagar.length} e reduzir` }))) { setBusy(false); return; }
+        for (const c of (conns || []).filter((x) => apagar.includes(x.key))) {
+          const x = await apagarConexao(c);
+          if (x && x.error) { setBusy(false); store.notify('danger', `Não deu para apagar ${c.nome}: ${x.error}`); onDone(); return; }
+        }
+      }
+      r = await KoblyApi.billing('downgrade', { plan: pick.plan, connections: pick.connections, cycle: pick.cycle }, billingOrg());
+    }
     setBusy(false);
     if (r.error) { store.notify('danger', r.error); return; }
     onDone();
-    if (!up) { store.notify('success', `Pronto. A partir de ${dia(sub.renova_em)} você fica no ${pick.nome}.`); onClose(); return; }
+    if (!up) { store.notify('success', `Pronto. A partir de ${dia(sub.renova_em)} você fica no ${pick.nome}${sub.billing_type === 'PIX' ? `, e o próximo Pix já vem com ${money(r.subscription && r.subscription.pending_change ? r.subscription.pending_change.price : q.price)}` : ''}.`); onClose(); return; }
     if (r.invoice.status === 'paga') { setDone(true); return; }
     if (r.invoice.status === 'falhou') { store.notify('danger', 'O cartão foi recusado. Tente outro cartão ou Pix.'); return; }
     setInv(r.invoice);
@@ -367,7 +394,7 @@ function Change({ pick, sub, onClose, onDone }) {
     <Modal open onClose={onClose} title={done ? 'Upgrade feito!' : inv ? 'Pague a diferença com Pix' : up ? `Fazer upgrade para ${pick.nome}` : pick.cycle !== sub.cycle ? `Mudar para o ${CICLOS[pick.cycle].nome}` : `Reduzir para ${pick.nome}`} width={540}
       footer={done ? <Button variant="primary" onClick={onClose}>Fechar</Button>
         : inv ? <Button variant="ghost" onClick={onClose}>Pagar depois</Button>
-          : <><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant="primary" iconLeft={up ? 'arrow-up-circle' : 'calendar'} loading={busy} disabled={!q || busy || (up && method === 'CARD_NEW' && !cardOk(card))} onClick={go}>{!up ? 'Confirmar' : pagar < 5 ? 'Mudar agora' : method === 'PIX' ? 'Gerar Pix' : `Pagar ${money(pagar)}`}</Button></>}>
+          : <><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant={!up && apagar.length ? 'danger' : 'primary'} iconLeft={up ? 'arrow-up-circle' : apagar.length ? 'trash-2' : 'calendar'} loading={busy} disabled={!q || busy || (up && method === 'CARD_NEW' && !cardOk(card)) || faltaEscolher > 0 || (!up && sobra > 0 && !conns)} onClick={go}>{!up ? (apagar.length ? `Apagar ${apagar.length} e reduzir` : 'Confirmar') : pagar < 5 ? 'Mudar agora' : method === 'PIX' ? 'Gerar Pix' : `Pagar ${money(pagar)}`}</Button></>}>
       {done ? <PaidBox title={`Agora você está no ${pick.nome}`} text="As novas conexões e recursos já estão liberados. A data de renovação continua a mesma." />
         : inv ? <PixBox inv={inv} />
           : !q ? <div className="kp-empty">Calculando…</div>
@@ -397,7 +424,30 @@ function Change({ pick, sub, onClose, onDone }) {
                   <div className="ln"><span>A partir de {dia(sub.renova_em)}</span><b>{pick.nome}{/^agencia/.test(pick.plan) ? '' : ` · ${pick.connections} conexão(ões)`}</b></div>
                   <div className="tot"><span style={{ color: 'var(--text-muted)' }}>Próxima cobrança</span><b>{money(q.price)}</b></div>
                 </div>
-                <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>Você continua com tudo do plano atual até o fim do período já pago. Se mudar de ideia, dá para desfazer antes da renovação.</div>
+                <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>Você continua com os recursos do plano atual até o fim do período já pago e não perde nada do que pagou. Se mudar de ideia, dá para desfazer antes da renovação.</div>
+                {sub.billing_type === 'PIX' && <div style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5, display: 'flex', gap: 8 }}><Icon name="qr-code" size={16} style={{ flex: 'none', marginTop: 2, color: '#ff9452' }} /><span>Você paga por <b style={{ color: 'var(--text-strong)' }}>Pix</b>: a próxima cobrança, em {dia(sub.renova_em)}, já vem no valor novo de <b style={{ color: 'var(--text-strong)' }}>{money(q.price)}</b>. Nada é cobrado agora.</span></div>}
+                {sobra > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Banner tone="warning" title="Escolha as conexões para apagar">O {pick.nome}{/^agencia/.test(pick.plan) ? '' : ` com ${permitidas} conexão(ões)`} comporta {permitidas} e você usa {usage.total}. Marque {sobra} para apagar.</Banner>
+                    {!conns ? <div className="kp-empty">Carregando suas conexões…</div> : Object.entries(KIND_GRUPO).map(([kind, titulo]) => {
+                      const lista = conns.filter((c) => c.kind === kind);
+                      if (!lista.length) return null;
+                      return (
+                        <div key={kind}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 6 }}>{titulo} <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({lista.length})</span></div>
+                          <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
+                            {lista.map((c, i) => { const on = apagar.includes(c.key); const cheio = !on && apagar.length >= sobra; return (
+                              <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderTop: i ? '1px solid var(--border-subtle)' : 0, cursor: cheio ? 'not-allowed' : 'pointer', opacity: cheio ? 0.5 : 1, background: on ? 'rgba(251,113,133,.08)' : 'transparent' }}>
+                                <input type="checkbox" checked={on} disabled={cheio} onChange={() => setApagar(on ? apagar.filter((k) => k !== c.key) : [...apagar, c.key])} />
+                                <span style={{ flex: 1, minWidth: 0 }}><b style={{ display: 'block', color: 'var(--text-strong)', fontSize: 14 }}>{c.nome}</b><small style={{ color: 'var(--text-muted)', fontSize: 12 }}>{c.detalhe} · {c.conectado ? 'Conectado' : 'Desconectado'}</small></span>
+                              </label>); })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ fontSize: 13, color: faltaEscolher ? '#fbbf24' : '#34d399', fontWeight: 600 }}>{faltaEscolher ? `Selecione mais ${faltaEscolher} conexão(ões) para caber no plano.` : 'Pronto: as conexões marcadas são apagadas quando você confirmar.'}</div>
+                  </div>
+                )}
               </div>
             )}
     </Modal>
@@ -553,7 +603,7 @@ function ClientBilling() {
       </div>}
 
       {pick && !pick.change && <Checkout pick={pick} status={st} onClose={() => setPick(null)} onDone={load} />}
-      {pick && pick.change && <Change pick={pick} sub={sub} onClose={() => setPick(null)} onDone={load} />}
+      {pick && pick.change && <Change pick={pick} sub={sub} usage={usage} onClose={() => setPick(null)} onDone={load} />}
       {cardModal && <ChangeCard onClose={() => setCardModal(false)} onDone={load} />}
       {payInv && (
         <Modal open onClose={() => setPayInv(null)} title={payInv.status === 'paga' ? 'Pagamento confirmado' : 'Pague com Pix'} width={480} footer={<Button variant="ghost" onClick={() => setPayInv(null)}>Fechar</Button>}>

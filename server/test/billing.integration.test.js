@@ -30,7 +30,10 @@ async function fakeFetch(url, opt = {}) {
     return ok({ id, ...(body.creditCard ? { creditCard: { creditCardToken: 'tok_abc', creditCardNumber: '4242', creditCardBrand: 'VISA' } } : {}) });
   }
   if ((m = path.match(/^\/subscriptions\/([^/]+)\/payments$/))) return ok({ data: Object.values(asaas.payments).filter((p) => p.subscription === m[1]) });
-  if (path.match(/^\/subscriptions\/[^/]+$/)) return ok({ ok: true });
+  if ((m = path.match(/^\/subscriptions\/([^/]+)$/))) { // como o Asaas: updatePendingPayments muda o valor das cobranças em aberto
+    if (body && body.value && body.updatePendingPayments) for (const p of Object.values(asaas.payments)) if (p.subscription === m[1] && p.status === 'PENDING') p.value = body.value;
+    return ok({ ok: true });
+  }
   if ((m = path.match(/^\/payments\/([^/]+)\/pixQrCode$/))) return ok({ payload: `00020126PIX-${m[1]}`, encodedImage: 'iVBORw0KGgo=' });
   if (path === '/payments' && opt.method === 'POST') {
     const pid = `pay_up_${++asaas.n}_${stamp}`;
@@ -127,8 +130,21 @@ test('upgrade no meio do mês: paga só a diferença por Pix e o plano muda quan
 });
 
 test('reduzir plano vale na renovação; atraso deixa inadimplente', { skip }, async () => {
+  // o Pix da próxima mensalidade já foi gerado no valor antigo
+  const sub0 = (await pool.query(`select * from public.subscriptions where organization_id = $1`, [A.org])).rows[0];
+  const p0 = { id: `pay_next_${stamp}`, subscription: sub0.asaas_subscription_id, value: 161, billingType: 'PIX', status: 'PENDING', dueDate: '2026-12-01' };
+  asaas.payments[p0.id] = { ...p0 };
+  await hook('PAYMENT_CREATED', p0);
   const r = await bill.handle(ctx(A.org), A.u, { action: 'downgrade', plan: 'essencial', connections: 2 });
   assert.equal(r.subscription.plan, 'pro'); assert.equal(r.subscription.pending_change.plan, 'essencial');
+  const i0 = (await pool.query(`select value, pix_payload from public.invoices where asaas_payment_id = $1`, [p0.id])).rows[0];
+  assert.equal(Number(i0.value), 84, 'o Pix em aberto passa a cobrar o valor novo');
+  assert.ok(i0.pix_payload, 'com o QR Code de novo');
+  // desfazer volta o valor; reduzir de novo
+  await bill.handle(ctx(A.org), A.u, { action: 'cancel_downgrade' });
+  assert.equal(Number((await pool.query(`select value from public.invoices where asaas_payment_id = $1`, [p0.id])).rows[0].value), 161);
+  await bill.handle(ctx(A.org), A.u, { action: 'downgrade', plan: 'essencial', connections: 2 });
+  delete asaas.payments[p0.id]; await pool.query(`update public.invoices set status = 'cancelada' where asaas_payment_id = $1`, [p0.id]);
   const sub = (await pool.query(`select * from public.subscriptions where organization_id = $1`, [A.org])).rows[0];
   const before = new Date(sub.current_period_end);
   // renovação: o Asaas cria a cobrança do mês seguinte e depois avisa que pagou
