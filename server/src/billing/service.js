@@ -327,6 +327,9 @@ export function createBilling({ pool, secretKey, fetchImpl = globalThis.fetch, a
     let ev; try { ev = JSON.parse(String(raw)); } catch { return { status: 400 }; }
     if (!(await once('stripe', ev.id))) return { status: 200 };
     const o = (ev.data && ev.data.object) || {};
+    // versões novas da API da Stripe: a assinatura da fatura fica em parent.subscription_details
+    if (o.object === 'invoice' && !o.subscription && o.parent && o.parent.subscription_details) o.subscription = o.parent.subscription_details.subscription;
+    if (o.object === 'invoice' && !o.payment_intent && o.payments && o.payments.data && o.payments.data[0]) o.payment_intent = (o.payments.data[0].payment || {}).payment_intent || null;
     if (ev.type === 'invoice.paid') await stripeInvoicePaid(o);
     else if (ev.type === 'invoice.payment_failed') {
       await pool.query(`update public.invoices set status = 'vencida' where stripe_invoice_id = $1 and status = 'pendente' and kind = 'assinatura' and $2 = 'subscription_cycle'`, [o.id, o.billing_reason || '']);
