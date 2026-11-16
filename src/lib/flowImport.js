@@ -67,7 +67,7 @@ export function fromZapData(src) {
   const tt = trigger.type;
   const tdata = tt === 'keyword' ? { source: 'message', mode: 'keywords', keywords: (trigger.keywords || []).filter(Boolean), match: trigger.match === 'exact' ? 'equals' : 'contains' }
     : tt === 'all' ? { source: 'message', mode: 'any' } : { events: ['Pix Gerado'] };
-  if (!['keyword', 'all'].includes(tt)) B.todo.push(`Gatilho: no ZapData era "${tt || 'manual'}". Escolha o gatilho na Kobly.`);
+  if (!['keyword', 'all'].includes(tt)) B.todo.push(`Gatilho: na plataforma de origem era "${tt || 'manual'}". Escolha o gatilho na Kobly.`);
   if (trigger.match === 'not_contains') B.todo.push('Gatilho: "não contém" virou "contém". Confira as palavras.');
   const ini = B.add('ini', 'trigger', tdata, { x: -320, y: 0 });
   const map = new Map(); // ref do ZapData → { entry: ref Kobly, exits: { saídaZapData: [nóKobly, saídaKobly] } }
@@ -175,7 +175,7 @@ export function fromZapData(src) {
   if (blocks[0] && map.get(blocks[0].ref)) ini.next.default = map.get(blocks[0].ref).entry;
   const graph = { version: 1, start: ini.ref, nodes: B.nodes };
   if (!blocks.some((b) => b.position)) autoLayout(graph);
-  return { nome: name || 'Fluxo importado do ZapData', graph, pendencias: [...new Set(B.todo)], origem: 'ZapData' };
+  return { nome: name || 'Fluxo importado', graph, pendencias: [...new Set(B.todo)], origem: 'ZapData' };
 }
 
 // ---- Leona ----------------------------------------------------------------------------
@@ -260,7 +260,7 @@ export function fromLeona(src) {
         continue;
       }
       default: {
-        const label = ({ make_call: 'Ligação', carousel: 'Carrossel', pix: 'Pix', integration: 'Integração', kanban: 'Kanban', leonapay: 'LeonaPay', kieai_integration: 'Gerador IA', chat_controller: 'Controle do chat' })[n.node_type] || n.node_type;
+        const label = ({ make_call: 'Ligação', carousel: 'Carrossel', pix: 'Pix', integration: 'Integração', kanban: 'Kanban', leonapay: 'Pagamento', kieai_integration: 'Gerador IA', chat_controller: 'Controle do chat' })[n.node_type] || n.node_type;
         const k = B.warn(`l${n.id}`, label, 'ainda não existe na Kobly; refaça este passo.', pos);
         chain.push([k, 'default']);
       }
@@ -279,7 +279,7 @@ export function fromLeona(src) {
     const ex = from.exits[key] || from.exits.default;
     if (ex && !ex[0].next[ex[1]]) ex[0].next[ex[1]] = to.entry;
   }
-  return { nome: name || 'Fluxo importado da Leona', graph: { version: 1, start: ini.ref, nodes: B.nodes }, pendencias: [...new Set(B.todo)], origem: 'Leona' };
+  return { nome: name || 'Fluxo importado', graph: { version: 1, start: ini.ref, nodes: B.nodes }, pendencias: [...new Set(B.todo)], origem: 'Leona' };
 }
 
 // Sem posições no arquivo: organiza em colunas pela distância até o gatilho
@@ -299,7 +299,7 @@ export function convertFlowJson(json) {
   const leonaNodes = json && (json.nodes || (json.flow && json.flow.nodes));
   if (Array.isArray(leonaNodes) && leonaNodes.some((n) => n && n.node_type)) return fromLeona(json);
   if (json && (json.fluxo || Array.isArray(json.blocks) || Array.isArray(json.nodes) || (json.flow && (json.flow.nodes || json.flow.blocks)) || json.flow_data)) return fromZapData(json.flow && !json.flow.node_type ? { ...json.flow, name: json.flow.name || json.name } : json);
-  throw new Error('Não reconheci este arquivo. Use um fluxo exportado da Kobly, do ZapData ou da Leona.');
+  throw new Error('Não reconheci este arquivo. Use um fluxo exportado da Kobly ou de outra plataforma de automação.');
 }
 // arquivo .json (um ou vários fluxos) ou .zip (vários .json)
 export async function readFlowFile(file) {

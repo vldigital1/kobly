@@ -746,7 +746,7 @@ function TipRow({ children, icon = 'info', color = '#60a5fa' }) {
   );
 }
 // Conexões do Gatilho: em quais números/contas/Páginas o fluxo vale (mensagem, Instagram) ou por qual número ele envia
-// (checkout). Nenhuma marcada = todas. Igual ao ZapData: cada fluxo escolhe a conexão.
+// (checkout). Nenhuma marcada = todas. Cada fluxo escolhe a conexão.
 const CONN_LOGO = { uazapi: 'qr', oficial: 'oficial', instagram: 'instagram', messenger: 'messenger' };
 function ConnPicker({ d, set, kinds, title, hint }) {
   const { listConnections } = React.useContext(LookupsCtx);
@@ -899,7 +899,7 @@ function TriggerFields({ d, set }) {
   </>);
 }
 
-// ---- Condição (como no ZapData): cartões de regra, E / OU, criar etiqueta ---------------------------
+// ---- Condição: cartões de regra, E / OU, criar etiqueta ---------------------------
 const RULE_META = {
   tag: ['tag', 'Tag'], var: ['braces', 'Variável'], country: ['globe', 'País'], purchased: ['shopping-bag', 'Comprou'],
   window_open: ['message-square', 'Janela de 24 h aberta'], ig_follows: ['instagram', 'Segue o perfil'], weekday: ['calendar', 'Dia da semana'], time_between: ['clock', 'Horário'],

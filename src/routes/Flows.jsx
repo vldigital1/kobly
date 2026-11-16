@@ -16,7 +16,7 @@ const KoblyFlowGraphEditor = React.lazy(() => import('@/routes/FlowGraphEditor.j
 // quantos leads estão em cada um e atalho para criar um fluxo novo do zero. Compartilhar: cada fluxo tem um código e
 // um link de prévia; quem tem o código importa na conta dele (versão mais nova, como rascunho, com etiquetas, e-mails
 // e agentes; o que é da conta — pagamento, Pixel — fica na lista "falta configurar"). Também importa por ARQUIVO
-// (.json ou .zip exportado da Kobly, do ZapData ou da Leona) e baixa os fluxos da conta em arquivo. KoblyFlows
+// (.json ou .zip exportado da Kobly ou de outra plataforma) e baixa os fluxos da conta em arquivo. KoblyFlows
 
 const OPEN_KEY = 'kobly:openflow';
 
@@ -65,7 +65,7 @@ function KoblyFlows() {
     store.notify('success', `Pronto! "${r.nome}" criado com ${r.textos} texto(s)${r.audios ? ` e ${r.audios} áudio(s)` : ''} traduzidos. Revise e publique.`);
     if (r.aviso) store.notify('warning', r.aviso);
   }
-  // ---- compartilhar por código (como no ZapData e na Leona) -------------------------------------
+  // ---- compartilhar por código -------------------------------------
   const [shr, setShr] = useState(null); // { flow, code, link, loading }
   const [imp, setImp] = useState(null); // { code, preview, nome, loading, running, result }
   async function openShare(f, renew = false) {
@@ -109,7 +109,7 @@ function KoblyFlows() {
       try {
         const c = await KoblyApi.createCampaign({ blank: true }, orgId, String(f.nome).slice(0, 80));
         const graph = await resolveTagNames(JSON.parse(JSON.stringify(f.graph)), tags, async (nome) => { const t = await KoblyApi.createTag({ nome, organizationId: orgId }); tags.push(t); return t; });
-        const r = await KoblyApi.flowGraph('save_draft', { campaign_id: c.id, graph, source: 'import', note: `importado do ${f.origem}` }, orgId);
+        const r = await KoblyApi.flowGraph('save_draft', { campaign_id: c.id, graph, source: 'import', note: f.origem === 'Kobly' ? 'importado da Kobly' : 'importado de arquivo' }, orgId);
         done.push(r.error ? { nome: f.nome, erro: r.error } : { nome: f.nome, campaign_id: c.id, pendencias: f.pendencias, origem: f.origem });
       } catch (e) { done.push({ nome: f.nome, erro: (e && e.message) || 'falhou' }); }
     }
@@ -151,6 +151,14 @@ function KoblyFlows() {
     if (r.error) { store.notify('danger', r.error); return; }
     legacy.setData((d) => d.filter((x) => x.id !== c.id));
     store.notify('success', `Campanha "${c.nome}" excluída.`);
+  }
+  async function removeFlow(f) {
+    const ativo = f.status === 'Ativa' || f.leads_ativos > 0;
+    if (!(await askConfirm(`Excluir o fluxo "${f.nome}"?${ativo ? ` Ele para de rodar${f.leads_ativos ? ` e os ${f.leads_ativos} lead(s) que estão nele saem do fluxo` : ''}.` : ''} Todas as versões e o histórico dele são apagados e isso não pode ser desfeito.`))) return;
+    const r = await KoblyApi.deleteCampaign(f.campaign_id);
+    if (r.error) { store.notify('danger', r.error); return; }
+    list.setData((d) => d.filter((x) => x.campaign_id !== f.campaign_id));
+    store.notify('success', `Fluxo "${f.nome}" excluído.`);
   }
   async function toggle(f) {
     const status = f.status === 'Ativa' ? 'Pausada' : 'Ativa';
@@ -201,13 +209,14 @@ function KoblyFlows() {
               ) },
               { key: 'ativos', header: 'Leads no fluxo', align: 'end', render: (r) => <span style={{ fontWeight: 'var(--fw-semibold)', color: r.leads_ativos ? 'var(--text-strong)' : 'var(--text-muted)' }}>{r.leads_ativos}</span> },
               { key: 'total', header: 'Total de leads', align: 'end', render: (r) => r.leads_total },
-              { key: 'acao', header: '', align: 'end', width: 140, render: (r) => (
+              { key: 'acao', header: '', align: 'end', width: 176, render: (r) => (
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                   {canEdit && <IconButton icon={r.status === 'Ativa' ? 'pause' : 'play'} size="sm" aria-label={r.status === 'Ativa' ? 'Pausar fluxo' : 'Ativar fluxo'} onClick={() => toggle(r)} />}
                   {canEdit && <IconButton icon="languages" size="sm" aria-label="Traduzir para outro idioma" onClick={() => openTranslate(r)} />}
                   <IconButton icon="share-2" size="sm" aria-label="Exportar fluxo (código para outra conta)" title="Exportar fluxo" onClick={() => openShare(r)} />
                   <IconButton icon="file-down" size="sm" aria-label="Baixar arquivo do fluxo" title="Baixar arquivo (.json)" onClick={() => download([r])} />
                   <IconButton icon="pencil" size="sm" aria-label="Abrir no editor" onClick={() => openFlow({ id: r.campaign_id, nome: r.nome, empresaId: orgId })} />
+                  {canEdit && <IconButton icon="trash-2" size="sm" variant="danger" aria-label="Excluir fluxo" title="Excluir fluxo" onClick={() => removeFlow(r)} />}
                 </div>
               ) },
             ]}
@@ -310,7 +319,7 @@ function KoblyFlows() {
                   <div style={{ fontWeight: 600, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nome || f.arquivo}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: f.erro ? 'var(--pastel-pink)' : 'var(--text-muted)' }}>{f.erro || `${f.graph.nodes.length} blocos${f.pendencias.length ? ` · ${f.pendencias.length} para configurar` : ''}`}</div>
                 </div>
-                {!f.erro && <Badge tone={f.origem === 'Kobly' ? 'accent' : 'info'}>{f.origem}</Badge>}
+                {!f.erro && <Badge tone={f.origem === 'Kobly' ? 'accent' : 'info'}>{f.origem === 'Kobly' ? 'Kobly' : 'Importado'}</Badge>}
               </label>
             ))}
           </div>
@@ -344,7 +353,7 @@ function KoblyFlows() {
                 <input type="file" accept=".json,.zip,application/json,application/zip" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
                 <Icon name={imp.reading ? 'loader-circle' : 'upload'} size={22} style={{ color: 'var(--text-muted)' }} />
                 <b style={{ color: 'var(--text-strong)' }}>{imp.reading ? 'Lendo o arquivo…' : 'Ou envie o arquivo exportado'}</b>
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Arquivo .zip (vários fluxos) ou .json exportado da Kobly, do ZapData ou da Leona</span>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Arquivo .zip (vários fluxos) ou .json exportado da Kobly ou de outra plataforma de automação</span>
               </label>
             )}
             {imp.fileErr && <Banner tone="danger">{imp.fileErr}</Banner>}
