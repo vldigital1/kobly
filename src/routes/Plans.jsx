@@ -287,7 +287,7 @@ function Checkout({ pick, status, onClose, onDone }) {
   const formas = status.pagamento || {};
   const stripeCard = formas.cartao === 'stripe';
   const pixAuto = formas.pix === 'pix_auto';
-  const [method, setMethod] = useState(formas.pix || !formas.cartao ? 'PIX' : 'CREDIT_CARD');
+  const [method, setMethod] = useState(formas.cartao ? 'CREDIT_CARD' : 'PIX');
   const [stripeCs, setStripeCs] = useState(null); // formulário da Stripe aberto para pagar a 1ª fatura
   const [confirming, setConfirming] = useState(false);
   const [doc, setDoc] = useState('');
@@ -335,8 +335,8 @@ function Checkout({ pick, status, onClose, onDone }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="kp-pay">
-                  {formas.pix !== null && <button type="button" className={method === 'PIX' ? 'on' : ''} onClick={() => setMethod('PIX')}><Icon name="qr-code" size={17} />{pixAuto ? 'Pix Automático' : 'Pix'}</button>}
                   {formas.cartao !== null && <button type="button" className={method === 'CREDIT_CARD' ? 'on' : ''} onClick={() => setMethod('CREDIT_CARD')}><Icon name="credit-card" size={17} />Cartão de crédito</button>}
+                  {formas.pix !== null && <button type="button" className={method === 'PIX' ? 'on' : ''} onClick={() => setMethod('PIX')}><Icon name="qr-code" size={17} />{pixAuto ? 'Pix Automático' : 'Pix'}</button>}
                 </div>
                 {needDoc && (method === 'PIX' || !stripeCard) && <DocumentoField label="CPF ou CNPJ da sua empresa (para a nota)" value={doc} onChange={setDoc} />}
                 {method === 'PIX'
