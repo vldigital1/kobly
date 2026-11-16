@@ -203,8 +203,8 @@ function KoblyFlows() {
               ) },
               { key: 'status', header: 'Situação', render: (r) => (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {r.active_version ? <Badge tone={r.status === 'Ativa' ? 'success' : 'neutral'} dot>{r.status === 'Ativa' ? `Rodando · v${r.active_version}` : `Publicado v${r.active_version} · ${r.status === 'Rascunho' ? 'não ativado' : r.status.toLowerCase()}`}</Badge> : <Badge tone="warning">Não publicado</Badge>}
-                  {r.drafts > 0 && <Badge tone="info">{r.drafts} rascunho{r.drafts > 1 ? 's' : ''}</Badge>}
+                  {r.active_version ? <Badge tone={r.status === 'Ativa' ? 'success' : 'neutral'} dot>{r.status === 'Ativa' ? `Rodando · v${r.active_version}` : `Publicado v${r.active_version} · ${r.status === 'Rascunho' ? 'não ativado' : r.status.toLowerCase()}`}</Badge> : <Badge tone="warning">Rascunho · não publicado</Badge>}
+                  {r.active_version && (r.pending ?? r.drafts > 0) ? <Badge tone="info" title="Você salvou mudanças no editor que ainda não estão no ar. Abra o fluxo e clique em Publicar.">Alterações não publicadas</Badge> : null}
                 </div>
               ) },
               { key: 'ativos', header: 'Leads no fluxo', align: 'end', render: (r) => <span style={{ fontWeight: 'var(--fw-semibold)', color: r.leads_ativos ? 'var(--text-strong)' : 'var(--text-muted)' }}>{r.leads_ativos}</span> },

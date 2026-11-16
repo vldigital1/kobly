@@ -75,6 +75,7 @@ export function createFlowAdmin({ pool, copilot = null, siteUrl = '' }) {
           select c.id as campaign_id, c.nome, c.status_campanha as status, c.updated_at,
                  max(v.version) filter (where v.is_active) as active_version,
                  count(v.id) filter (where v.is_draft)::int as drafts,
+                 (coalesce(max(v.version) filter (where v.is_draft), 0) > coalesce(max(v.version) filter (where v.is_active), 0)) as pending, -- tem rascunho mais novo que a versão no ar
                  max(v.created_at) as last_saved_at,
                  (select count(*)::int from public.flow_executions e where e.flow_id = f.id and e.status in ('running','waiting')) as leads_ativos,
                  (select count(*)::int from public.flow_executions e where e.flow_id = f.id) as leads_total,
