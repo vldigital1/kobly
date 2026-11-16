@@ -45,6 +45,26 @@ function agendaText(s) {
   return null;
 }
 const VARS = ['{{primeiro_nome}}', '{{nome}}', '{{produto}}', '{{valor}}'];
+// lista importada: mesma regra do servidor (telefone com 8+ dígitos; e-mail com @; o resto é o nome)
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+function checkList(text) {
+  const ok = [], bad = [];
+  String(text || '').split(/\r?\n/).forEach((raw, i) => {
+    const parts = raw.split(/[,;\t]/).map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return;
+    if (i === 0 && /telefone|phone|nome|e-?mail/i.test(raw) && !parts.some((p) => p.replace(/\D/g, '').length >= 8)) return; // cabeçalho do modelo
+    const tel = parts.find((p) => /^[+\d\s().-]+$/.test(p) && p.replace(/\D/g, '').length >= 8);
+    const mail = parts.find((p) => EMAIL_RE.test(p));
+    if (tel || mail) ok.push(raw); else bad.push({ linha: i + 1, txt: raw.slice(0, 60) });
+  });
+  return { ok: ok.length, bad };
+}
+const MODELO_CSV = 'telefone;nome;email\n5511999999999;Maria Souza;maria@email.com\n5521988888888;João\n5531977777777\n';
+function baixarModelo() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + MODELO_CSV], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'modelo-lista-kobly.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
 const dur = (n, rate) => { const m = Math.ceil(n / Math.max(1, rate)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
 
 const KB_CSS = `
@@ -122,7 +142,11 @@ const KB_CSS = `
 function KoblyBulkSend() {
   const store = useKobly();
   const { orgId, picker, canEdit } = useTargetOrg();
-  const [data, setData] = useState({ flows: [], emails: [], tags: [], sends: [], loading: true });
+  const [data, setData] = useState({ flows: [], emails: [], tags: [], conexoes: [], sends: [], loading: true });
+  const [conexao, setConexao] = useState('');
+  const [tagBusca, setTagBusca] = useState('');
+  const [validacao, setValidacao] = useState(null);
+  const fileRef = React.useRef(null);
   const [modo, setModo] = useState('fluxo');
   const [campaignId, setCampaignId] = useState('');
   const [emailId, setEmailId] = useState('');
@@ -149,13 +173,17 @@ function KoblyBulkSend() {
 
   const load = useCallback(async () => {
     if (!orgId) return;
-    const [fl, opts, tags, sends] = await Promise.all([
+    const [fl, opts, op, sends] = await Promise.all([
       KoblyApi.flowGraph('list', {}, orgId).catch(() => ({ flows: [] })),
       KoblyApi.getFlowOptions().catch(() => ({ emails: [] })),
-      KoblyApi.getTags().catch(() => []),
+      KoblyApi.bulk('opcoes', {}, orgId).catch(() => ({})),
       KoblyApi.bulk('list', {}, orgId).catch(() => ({ sends: [] })),
     ]);
-    setData({ flows: (fl.flows || []).filter((f) => f.active_version), emails: opts.emails || [], tags: tags || [], sends: sends.sends || [], loading: false, error: sends.error || null });
+    const conexoes = op.conexoes || [];
+    setData({ flows: (fl.flows || []).filter((f) => f.active_version), emails: opts.emails || [], tags: op.tags || [], conexoes, sends: sends.sends || [], loading: false, error: sends.error || null });
+    // um número só: já vem escolhido
+    const on = conexoes.filter((c) => c.conectado);
+    if (on.length === 1) setConexao((c) => c || on[0].key);
   }, [orgId]);
   useEffect(() => { load(); }, [load]);
 
@@ -181,9 +209,13 @@ function KoblyBulkSend() {
   }, [orgId, modo, origem, filtro, lista]);
 
   const contentOk = modo === 'fluxo' ? !!campaignId : modo === 'email' ? !!emailId : texto.trim().length > 0;
+  const conOn = data.conexoes.filter((c) => c.conectado);
+  const precisaNumero = modo !== 'email' && conOn.length > 1;
+  const numeroOk = !precisaNumero || conOn.some((c) => c.key === conexao);
+  const conSel = data.conexoes.find((c) => c.key === conexao);
   const whenOk = agenda === 'agora' ? true : agenda === 'uma_vez' ? new Date(startAt) > new Date() : (startDate && endDate && endDate >= startDate && /^\d\d:\d\d$/.test(sendTime) && new Date(`${endDate}T${sendTime}`) > new Date());
   // agendado por filtro pode começar sem ninguém (os leads chegam até lá)
-  const ready = canEdit && contentOk && whenOk && ((est.total || 0) > 0 || (agenda !== 'agora' && origem === 'filtro'));
+  const ready = canEdit && contentOk && numeroOk && whenOk && ((est.total || 0) > 0 || (agenda !== 'agora' && origem === 'filtro'));
   const nDias = agenda === 'diario' && startDate && endDate && endDate >= startDate ? daysBetween(startDate, endDate) : 0;
   const quandoTxt = agenda === 'uma_vez' ? `em ${brWhen(startAt)}` : agenda === 'diario' ? `todo dia às ${sendTime}, de ${brDay(startDate)} a ${brDay(endDate)} (${nDias} dia${nDias === 1 ? '' : 's'})` : 'agora';
   const fluxo = data.flows.find((f) => f.campaign_id === campaignId);
@@ -191,10 +223,22 @@ function KoblyBulkSend() {
   const preview = texto.replace(/\{\{\s*primeiro_nome\s*\}\}/g, 'Ana').replace(/\{\{\s*nome\s*\}\}/g, 'Ana Souza').replace(/\{\{\s*produto\s*\}\}/g, 'Curso X').replace(/\{\{\s*valor\s*\}\}/g, 'R$ 97,00');
 
   const whenBody = () => (agenda === 'uma_vez' ? { agenda, start_at: startAt } : agenda === 'diario' ? { agenda, start_date: startDate, end_date: endDate, send_time: sendTime } : { agenda });
-  function resetForm() { setLista(''); setNome(''); setEditId(null); setAgenda('agora'); }
+  function resetForm() { setLista(''); setNome(''); setEditId(null); setAgenda('agora'); setValidacao(null); }
+  function importarArquivo(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { store.notify('warning', 'Arquivo grande demais (máx. 2 MB).'); return; }
+    const r = new FileReader();
+    r.onload = () => {
+      const t = String(r.result || '').replace(/^﻿/, '');
+      setLista(t); const v = checkList(t); setValidacao(v);
+      store.notify(v.ok ? 'success' : 'warning', v.ok ? `${v.ok} contato(s) lidos de ${file.name}.` : 'Não achei nenhum telefone ou e-mail nesse arquivo.');
+    };
+    r.readAsText(file, 'utf-8');
+  }
   async function dispatch() {
     setBusy(true);
-    const payload = { modo, campaign_id: campaignId, email_id: emailId, texto, origem, filtro, lista, rate_por_min: rate, nome: nome || undefined, ...whenBody() };
+    const payload = { modo, campaign_id: campaignId, email_id: emailId, texto, origem, filtro, lista, conexao: modo === 'email' ? '' : conexao, rate_por_min: rate, nome: nome || undefined, ...whenBody() };
     const r = editId ? await KoblyApi.bulk('update', { id: editId, ...payload }, orgId) : await KoblyApi.bulk('create', payload, orgId);
     setBusy(false); setConfirmOpen(false);
     if (r.error) { store.notify('danger', r.error); return; }
@@ -213,7 +257,7 @@ function KoblyBulkSend() {
   function edit(s) {
     setEditId(s.id); setModo(s.modo); setNome(s.nome || ''); setRate(s.rate_por_min || 15);
     if (s.modo === 'fluxo') setCampaignId(s.campaign_id || ''); if (s.modo === 'email') setEmailId(s.email_id || ''); if (s.modo === 'whatsapp') setTexto(s.texto || '');
-    setOrigem(s.origem); setTagIds((s.filtro && s.filtro.tag_ids) || []); setEvento((s.filtro && s.filtro.evento) || '');
+    setOrigem(s.origem); setTagIds((s.filtro && s.filtro.tag_ids) || []); setEvento((s.filtro && s.filtro.evento) || ''); setConexao((s.filtro && s.filtro.conexao) || '');
     setAgenda(s.agenda);
     if (s.agenda === 'uma_vez') setStartAt(s.start_local);
     if (s.agenda === 'diario') { setStartDate(s.start_date); setEndDate(s.end_date); setSendTime(s.send_time); }
@@ -334,6 +378,24 @@ function KoblyBulkSend() {
         ) : (
           <Banner tone="info" title="Nenhum e-mail criado ainda">Crie um e-mail no bloco <b>E-mail</b> de um fluxo ou em <b>Integrações → Modelos</b>.</Banner>
         ))}
+
+        {modo !== 'email' && conOn.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>Por qual número vai sair?</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {conOn.map((c) => (
+                <button key={c.key} type="button" className={`kb-chip${conexao === c.key ? ' on' : ''}`} style={{ padding: '9px 14px' }} onClick={() => setConexao(c.key)}>
+                  <ChannelLogo kind={c.kind === 'oficial' ? 'oficial' : 'qr'} size={18} />
+                  <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}><b style={{ fontSize: 13 }}>{c.nome}</b><small style={{ fontSize: 11, opacity: 0.8 }}>{c.detalhe}</small></span>
+                  {conexao === c.key && <Icon name="check" size={14} />}
+                </button>
+              ))}
+            </div>
+            {data.conexoes.length > conOn.length && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{data.conexoes.length - conOn.length} número(s) desconectado(s) não aparecem aqui. Reconecte em Integrações → Conexões.</div>}
+            {precisaNumero && !numeroOk && <div style={{ fontSize: 'var(--text-xs)', color: '#fbbf24' }}>Você tem {conOn.length} números conectados: escolha um para este disparo.</div>}
+            {modo === 'fluxo' && conSel && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>O fluxo inteiro fala com cada contato pelo número <b>{conSel.nome}</b>.</div>}
+          </div>
+        )}
       </div>
 
       {/* 2. para quem */}
@@ -346,22 +408,44 @@ function KoblyBulkSend() {
         {origem === 'filtro' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>Etiquetas (vazio = todos os leads)</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', flex: 1 }}>Contatos com as etiquetas</div>
+                {data.tags.length > 8 && <input className="kb-in" style={{ maxWidth: 220, padding: '7px 10px', fontSize: 13 }} placeholder="Buscar etiqueta…" value={tagBusca} onChange={(e) => setTagBusca(e.target.value)} />}
+              </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className={`kb-chip${!tagIds.length ? ' on' : ''}`} onClick={() => setTagIds([])}>Todos os leads</button>
-                {data.tags.map((t) => { const on = tagIds.includes(t.id); return <button key={t.id} type="button" className={`kb-chip${on ? ' on' : ''}`} onClick={() => setTagIds(on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id])}>{on && <Icon name="check" size={13} />}{t.nome}</button>; })}
+                <button type="button" className={`kb-chip${!tagIds.length ? ' on' : ''}`} onClick={() => setTagIds([])}>{!tagIds.length && <Icon name="check" size={13} />}Todos os contatos</button>
+                {data.tags.filter((t) => !tagBusca.trim() || t.nome.toLowerCase().includes(tagBusca.trim().toLowerCase()) || tagIds.includes(t.id)).map((t) => { const on = tagIds.includes(t.id); return (
+                  <button key={t.id} type="button" className={`kb-chip${on ? ' on' : ''}`} onClick={() => setTagIds(on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id])}>
+                    {on ? <Icon name="check" size={13} /> : <Icon name="tag" size={13} />}{t.nome}<span style={{ fontSize: 11, opacity: 0.7 }}>· {t.total}</span>
+                  </button>); })}
+              </div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 8 }}>
+                {data.tags.length ? (tagIds.length > 1 ? 'Recebe quem tem qualquer uma das etiquetas marcadas.' : 'Toda etiqueta criada nos fluxos, no Chat ao vivo ou em Integrações → Tags aparece aqui.') : 'Nenhuma etiqueta ainda. Crie no bloco Etiquetas de um fluxo, no Chat ao vivo ou em Integrações → Tags.'}
               </div>
             </div>
-            <Select label="Que tiveram este evento no checkout (opcional)" value={evento} onChange={(e) => setEvento(e.target.value)} style={{ maxWidth: 360 }}
-              options={[{ value: '', label: 'Qualquer um' }, ...TIPOS_EVENTO.map((ev) => ({ value: ev, label: ev }))]} />
+            <Select label="Filtro extra: só quem teve este evento no checkout (opcional)" value={evento} onChange={(e) => setEvento(e.target.value)} style={{ maxWidth: 420 }}
+              options={[{ value: '', label: 'Sem filtro de evento' }, ...TIPOS_EVENTO.map((ev) => ({ value: ev, label: ev }))]} />
           </div>
         ) : editId ? (
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Lista colada: os contatos continuam os mesmos.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <textarea className="kb-ta" rows={7} value={lista} onChange={(e) => setLista(e.target.value)}
-              placeholder={'Uma pessoa por linha: nome, telefone e/ou e-mail\nAna Souza, (11) 98888-7777, ana@email.com\nCarlos, 21977776666\nbia@email.com'} />
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Pode colar do Excel ou do Google Planilhas. Quem ainda não é lead é cadastrado automaticamente. Até 5.000 linhas.</div>
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>Telefones (nome opcional)</div>
+            <textarea className="kb-ta" rows={7} value={lista} onChange={(e) => { setLista(e.target.value); setValidacao(null); }}
+              placeholder={'Um contato por linha, com o nome ao lado se quiser\nEx.: 5511999999999;Maria\n5521988888888;João'} />
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', lineHeight: 1.5 }}>Aceita .csv ou .txt, um contato por linha: telefone com DDD e, se quiser, o nome e o e-mail ao lado (separados por ; ou ,). O nome é usado nas variáveis da mensagem. Pode colar do Excel ou do Google Planilhas. Quem ainda não é lead é cadastrado sozinho. Até 5.000 linhas.</div>
+            <input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" style={{ display: 'none' }} onChange={importarArquivo} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Button size="sm" variant="secondary" iconLeft="upload" onClick={() => fileRef.current && fileRef.current.click()}>Importar arquivo</Button>
+              <Button size="sm" variant="ghost" iconLeft="download" onClick={baixarModelo}>Baixar modelo</Button>
+              <Button size="sm" variant="ghost" iconLeft="circle-check" disabled={!lista.trim()} onClick={() => setValidacao(checkList(lista))}>Validar números</Button>
+            </div>
+            {validacao && (
+              <div className="kb-tip" style={validacao.bad.length ? { background: 'rgba(251,191,36,.07)', borderColor: 'rgba(251,191,36,.3)' } : { background: 'rgba(52,211,153,.07)', borderColor: 'rgba(52,211,153,.3)' }}>
+                <Icon name={validacao.bad.length ? 'triangle-alert' : 'circle-check'} size={18} style={{ color: validacao.bad.length ? '#fbbf24' : '#34d399', flex: 'none', marginTop: 2 }} />
+                <span><b>{validacao.ok}</b> contato(s) válidos.{validacao.bad.length ? <> <b>{validacao.bad.length}</b> linha(s) sem telefone ou e-mail ficam de fora: {validacao.bad.slice(0, 5).map((b) => `linha ${b.linha} (“${b.txt}”)`).join(', ')}{validacao.bad.length > 5 ? '…' : ''}</> : ' Tudo certo.'}</span>
+              </div>
+            )}
           </div>
         )}
         <div className="kb-reach">
@@ -516,6 +600,7 @@ function KoblyBulkSend() {
             <div className="kb-step"><i><Icon name={agenda === 'agora' ? 'rocket' : 'calendar'} size={15} /></i><b>{editId ? 'Salvar alterações' : agenda === 'agora' ? 'Confirmar disparo' : 'Confirmar agendamento'}</b></div>
             <div style={{ color: 'var(--text-body)', fontSize: 'var(--text-sm)', lineHeight: 1.6 }}>
               <b>{m.label}</b>{modo === 'fluxo' && fluxo ? `: ${fluxo.nome}` : modo === 'email' && email ? `: ${email.titulo || email.assunto}` : ''}<br />
+              {modo !== 'email' && conSel && <>Pelo número <b>{conSel.nome}</b> ({conSel.detalhe}).<br /></>}
               {agenda === 'agora'
                 ? <>Para <b>{(est.total || 0).toLocaleString('pt-BR')}</b> contato(s), {rate} por minuto (uns {dur(est.total || 0, rate)}).<br /></>
                 : <>Sai <b>{quandoTxt}</b>, {rate} por minuto.{origem === 'filtro' ? <> Hoje o público tem <b>{(est.total || 0).toLocaleString('pt-BR')}</b> contato(s).</> : <> Para <b>{(est.total || 0).toLocaleString('pt-BR')}</b> contato(s).</>}<br /></>}

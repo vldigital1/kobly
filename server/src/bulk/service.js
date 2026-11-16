@@ -3,9 +3,11 @@
 // Cada destinatário vira uma linha com horário próprio (ritmo por minuto) e o tick() envia os vencidos.
 // Agenda: agora, uma vez (dia e hora) ou todo dia num período (no horário escolhido, só para os leads que
 // entraram no público desde o último envio). Horários no fuso de São Paulo.
-//   estimate | create | update | status | list | cancel | pause | resume
+// Número que envia: com mais de um WhatsApp conectado, o disparo escolhe a conexão (fica em filtro.conexao).
+//   opcoes | estimate | create | update | status | list | cancel | pause | resume
 import { AuthError } from '../auth.js';
 import { render, renderHtml } from '../flows/vars.js';
+import { listConnections, parseConnKey } from '../workspace/connections.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MODOS = new Set(['fluxo', 'email', 'whatsapp']);
@@ -97,6 +99,21 @@ export function createBulk({ pool, whatsapp, email, flows }) {
   }
   const localDate = async (ts) => (ts ? (await pool.query(`select to_char($1::timestamptz at time zone '${TZ}', 'YYYY-MM-DD') as d`, [ts])).rows[0].d : null);
 
+  // números de WhatsApp da empresa (QR Code e API Oficial) que podem enviar
+  const waConns = async (orgId) => (await listConnections(pool, orgId)).filter((c) => c.rede === 'whatsapp');
+  // conexão escolhida na tela: tem que ser um WhatsApp desta empresa; vazio = automático (só quando há um número)
+  async function checkConn(orgId, body, modo) {
+    if (modo === 'email') return null;
+    const key = String(body.conexao || '').trim();
+    const conns = await waConns(orgId);
+    if (!key) { if (conns.filter((c) => c.conectado).length > 1) fail('Escolha por qual número o disparo vai sair.'); return null; }
+    const c = conns.find((x) => x.key === key);
+    if (!c || !parseConnKey(key)) fail('Esse número não é desta conta.');
+    if (!c.conectado) fail(`O número ${c.nome} está desconectado. Reconecte em Integrações → Conexões ou escolha outro.`);
+    return key;
+  }
+  const withConn = (filtro, conexao) => ({ ...(filtro || {}), ...(conexao ? { conexao } : {}) });
+
   async function checkContent(orgId, body, modo) {
     if (modo === 'fluxo') {
       if (!UUID.test(String(body.campaign_id || ''))) fail('Escolha o fluxo que vai ser disparado.');
@@ -116,6 +133,12 @@ export function createBulk({ pool, whatsapp, email, flows }) {
   async function handle(ctx, user, body) {
     const orgId = ctx.orgId;
     switch (body.action) {
+      case 'opcoes': { // etiquetas (com quantos contatos cada uma tem) e números que podem enviar
+        const tags = (await pool.query(`select t.id, t.nome, count(lt.lead_id)::int as total from public.tags t
+            left join public.lead_tags lt on lt.tag_id = t.id where t.organization_id = $1 group by t.id order by lower(t.nome)`, [orgId])).rows;
+        const conexoes = (await waConns(orgId)).map((c) => ({ key: c.key, kind: c.kind, nome: c.nome, detalhe: c.detalhe, conectado: c.conectado }));
+        return { tags, conexoes };
+      }
       case 'list': {
         const { rows } = await pool.query(`select b.id, b.nome, b.modo, b.origem, b.status, b.total, b.enviados, b.falhados, b.pulados, b.rate_por_min, b.created_at, b.finished_at,
             b.agenda, b.start_at, b.end_date::text as end_date, to_char(b.send_time, 'HH24:MI') as send_time, b.next_run_at, b.last_run_at, b.runs,
@@ -188,6 +211,7 @@ export function createBulk({ pool, whatsapp, email, flows }) {
         if (!['agendado', 'pausado'].includes(b.status)) fail('Só dá para editar disparos agendados ou pausados.');
         if (b.agenda === 'agora') fail('Esse disparo já saiu.');
         await checkContent(orgId, body, b.modo);
+        const conexao = await checkConn(orgId, body, b.modo);
         const ag = await parseAgenda({ ...body, agenda: body.agenda || b.agenda }, b.origem);
         if (ag.agenda === 'agora') fail('Escolha uma data para o disparo.');
         const rate = Math.min(600, Math.max(1, Math.round(Number(body.rate_por_min) || b.rate_por_min)));
@@ -195,7 +219,7 @@ export function createBulk({ pool, whatsapp, email, flows }) {
         await pool.query(`update public.bulk_sends set nome = $2, campaign_id = $3, email_id = $4, texto = $5, filtro = $6::jsonb, rate_por_min = $7,
             agenda = $8, start_at = $9, end_date = $10, send_time = $11, next_run_at = $12, status = case when status = 'pausado' then 'pausado' else 'agendado' end where id = $1`,
           [b.id, nome, b.modo === 'fluxo' ? body.campaign_id : null, b.modo === 'email' ? body.email_id : null, b.modo === 'whatsapp' ? String(body.texto).trim() : null,
-            JSON.stringify(b.origem === 'manual' ? {} : (body.filtro || b.filtro || {})), rate, ag.agenda, ag.start_at, ag.end_date, ag.send_time, ag.next_run_at]);
+            JSON.stringify(withConn(b.origem === 'manual' ? {} : (body.filtro || b.filtro || {}), conexao)), rate, ag.agenda, ag.start_at, ag.end_date, ag.send_time, ag.next_run_at]);
         if (b.origem === 'manual' && b.runs === 0) await respace(b.id, rate, '$3::timestamptz', [ag.next_run_at]);
         return { ok: true };
       }
@@ -203,6 +227,7 @@ export function createBulk({ pool, whatsapp, email, flows }) {
         editor(ctx);
         const modo = MODOS.has(body.modo) ? body.modo : fail('Escolha o que vai ser disparado.');
         await checkContent(orgId, body, modo);
+        const conexao = await checkConn(orgId, body, modo);
         const rate = Math.min(600, Math.max(1, Math.round(Number(body.rate_por_min) || 30)));
         const ag = await parseAgenda(body, body.origem === 'manual' ? 'manual' : 'filtro');
         if (ag.agenda !== 'agora' && body.origem !== 'manual') { // o público é montado na hora de sair (pega quem chegar até lá)
@@ -211,7 +236,7 @@ export function createBulk({ pool, whatsapp, email, flows }) {
               agenda, start_at, end_date, send_time, next_run_at)
             values ($1, $2, $3, 'filtro', $4, $5, $6, $7, $8::jsonb, 'agendado', 0, $9, (select id from public.profiles where auth_id = $10 limit 1), $11, $12, $13, $14, $15) returning id`,
             [orgId, modo === 'email' ? 'email' : 'Whatsapp', modo, nome, modo === 'fluxo' ? body.campaign_id : null, modo === 'email' ? body.email_id : null,
-              modo === 'whatsapp' ? String(body.texto).trim() : null, JSON.stringify(body.filtro || {}), rate, user && user.id, ag.agenda, ag.start_at, ag.end_date, ag.send_time, ag.next_run_at])).rows[0];
+              modo === 'whatsapp' ? String(body.texto).trim() : null, JSON.stringify(withConn(body.filtro, conexao)), rate, user && user.id, ag.agenda, ag.start_at, ag.end_date, ag.send_time, ag.next_run_at])).rows[0];
           return { ok: true, id: b.id, total: 0, agendado: true, next_run_at: ag.next_run_at };
         }
         let leadIds;
@@ -231,7 +256,7 @@ export function createBulk({ pool, whatsapp, email, flows }) {
           values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $13, $10, $11, (select id from public.profiles where auth_id = $12 limit 1), $14, $15, $15) returning id`,
           [orgId, modo === 'email' ? 'email' : 'Whatsapp', modo, body.origem === 'manual' ? 'manual' : 'filtro', nome,
             modo === 'fluxo' ? body.campaign_id : null, modo === 'email' ? body.email_id : null, modo === 'whatsapp' ? String(body.texto).trim() : null,
-            JSON.stringify(body.origem === 'manual' ? {} : (body.filtro || {})), leadIds.length, rate, user && user.id, agendado ? 'agendado' : 'enviando', ag.agenda, ag.start_at])).rows[0];
+            JSON.stringify(withConn(body.origem === 'manual' ? {} : body.filtro, conexao)), leadIds.length, rate, user && user.id, agendado ? 'agendado' : 'enviando', ag.agenda, ag.start_at])).rows[0];
         // um destinatário a cada 60/ritmo segundos
         await pool.query(`insert into public.bulk_send_recipients (bulk_send_id, organization_id, lead_id, run_at)
           select $1, $2, x.id, coalesce($5::timestamptz, now()) + make_interval(secs => (x.n - 1) * 60.0 / $4)
@@ -243,14 +268,15 @@ export function createBulk({ pool, whatsapp, email, flows }) {
   }
 
   async function sendOne(job, lead) {
+    const conexao = (job.filtro && job.filtro.conexao) || null; // número escolhido no disparo
     if (job.modo === 'fluxo') {
-      const r = await flows.startForLead({ orgId: job.organization_id, campaignId: job.campaign_id, leadId: lead.id, tipo: 'Disparo em massa' });
+      const r = await flows.startForLead({ orgId: job.organization_id, campaignId: job.campaign_id, leadId: lead.id, tipo: 'Disparo em massa', variables: conexao ? { _conexao: conexao } : {} });
       return r.started ? { ok: true } : { skip: r.reason || 'já está no fluxo' };
     }
     const ctx = { lead, vars: {}, agora: new Date(), evento: {} };
     if (job.modo === 'whatsapp') {
       if (lead.whatsapp_opt_out) return { skip: 'pediu para não receber WhatsApp' };
-      const out = await whatsapp.sendTextTo(job.organization_id, { to: lead.telefone, text: render(job.texto, ctx) });
+      const out = await whatsapp.sendTextTo(job.organization_id, { to: lead.telefone, text: render(job.texto, ctx), ...(parseConnKey(conexao) ? { via: parseConnKey(conexao) } : {}) });
       return { ok: true, id: out && out.id };
     }
     const em = (await pool.query(`select assunto, corpo_html, remetente from public.emails where id = $1`, [job.email_id])).rows[0];
